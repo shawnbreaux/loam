@@ -77,6 +77,21 @@ simulator favouring feedback.
 These are results of a simplified model with assumed soil factors, not field measurements; see
 [docs/SIMULATOR.md](docs/SIMULATOR.md) for every assumption and limitation.
 
+## Field tools
+
+Loam works with the equipment on a real test site through files and simple streams, with no vendor SDKs:
+LandXML next-pass surfaces for **Cat Grade with 3D** (and Trimble, Topcon, Leica), `.agd` design grids for
+**OpenGrade3D**, field folders for **AgOpenGPS**, survey CSVs from **Emlid Reach**, NMEA from any RTK
+receiver, and LAS/PCD scans from a **DJI Zenmuse L2** or **Livox Mid-360**. See
+[docs/FIELD.md](docs/FIELD.md) for the commands, the coordinate setup and what cannot be connected
+(Cat Command, closed retrofit kits).
+
+```bash
+loam terrain site.loam scan.las --world-origin 600000,3812000          # grid a lidar scan
+loam export  site.loam --to landxml -o next.xml --ground scan.las --world-origin 600000,3812000
+loam score   site.loam rover.csv --zone pad --world-origin 600000,3812000
+```
+
 ## Repository layout
 
 | Path | Purpose |
@@ -89,14 +104,18 @@ These are results of a simplified model with assumed soil factors, not field mea
 | `loam/sim.py` | Closed-loop reference simulator with a volume ledger |
 | `loam/rng.py` | Specified counter-based RNG, reproducible in any language |
 | `loam/wire.py` | Loam Wire message builders |
+| `loam/grid.py`, `loam/geo.py` | The site height grid; placing it on WGS84 and projected coordinates |
+| `loam/pointcloud.py` | Streaming LAS and PCD readers (DJI L2, Livox Mid-360) and gridding |
+| `loam/survey.py` | Emlid/RTK survey CSV, NMEA GGA to Wire state, scoring against design |
+| `loam/target.py`, `loam/export.py` | Next-pass surface; LandXML (Cat Grade 3D), OpenGrade3D `.agd`, AgOpenGPS field folder |
 | `examples/` | Example program and surfaces, comparison plot, Monte Carlo study |
-| `tests/` | 88 tests: language, I/O, simulator invariants, memory/handle retention, property-based parser fuzzing |
+| `tests/` | 108 tests: language, I/O, simulator invariants, field adapters, memory bounds, property-based parser fuzzing |
 
 ## Development
 
 ```bash
 pip install -e ".[dev]"
-pytest -q --cov=loam          # 88 tests, about 35 s; branch coverage about 88 %
+pytest -q --cov=loam          # 108 tests, about 40 s
 ruff check loam tests examples
 mypy loam
 python examples/study.py      # about 1 min on 2 cores; rewrites results/

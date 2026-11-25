@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import contextlib
 import json
-import os
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import IO, Any
@@ -34,9 +33,9 @@ from . import ast as ast_
 from . import wire
 from .checker import OP_CAP, Model
 from .evaluate import Context, evaluate
-from .landxml import rasterize, read_tin
+from .grid import SiteGrid, polygon_mask  # noqa: F401  (polygon_mask re-exported)
 from .rng import CounterRNG
-from .units import FT, Quantity, length_unit_si
+from .units import FT, Quantity
 
 Grid = NDArray[np.float64]
 Mask = NDArray[np.bool_]
@@ -86,19 +85,6 @@ def in_window(t: float, w: tuple[float, float]) -> bool:
     return w[0] <= t < w[1]
 
 
-def polygon_mask(poly: list, xs: Grid, ys: Grid) -> Mask:
-    """Even-odd point-in-polygon test at cell centres."""
-    gx, gy = np.meshgrid(xs, ys)
-    inside = np.zeros(gx.shape, bool)
-    for k in range(len(poly)):
-        (x1, y1), (x2, y2) = poly[k], poly[(k + 1) % len(poly)]
-        crosses = (y1 > gy) != (y2 > gy)
-        with np.errstate(divide="ignore", invalid="ignore"):
-            xint = (x2 - x1) * (gy - y1) / (y2 - y1) + x1
-        inside ^= crosses & (gx < xint)
-    return inside
-
-
 @dataclass
 class Machine:
     name: str
@@ -143,34 +129,22 @@ class Sim(Context):
         self.wire_seq = 0
         site = model.site
         self.site_name: str = site["name"]
-        self.unit: str = site.get("units", "ft")
-        self.u = length_unit_si(self.unit)          # metres per site unit
-        self.cell = (site.get("grid") or Quantity(1, self.unit)).to(self.unit)
-        polys = [site["boundary"]["polygon"]] if "polygon" in (site.get("boundary") or {}) else []
-        polys += [z["area"]["polygon"] for z in model.zones.values() if "polygon" in (z.get("area") or {})]
-        if not polys:
-            raise ValueError("the simulator needs a site boundary or zone polygons")
-        pts = np.array([p for poly in polys for p in poly], float)
-        (self.x0, self.y0), (x1, y1) = pts.min(0), pts.max(0)
-        self.nx = int(np.ceil((x1 - self.x0) / self.cell))
-        self.ny = int(np.ceil((y1 - self.y0) / self.cell))
-        self.xs = self.x0 + (np.arange(self.nx) + 0.5) * self.cell
-        self.ys = self.y0 + (np.arange(self.ny) + 0.5) * self.cell
-        self.area = self.cell ** 2
+        g = self.grid = SiteGrid(model, base_dir)
+        self.unit, self.u, self.cell = g.unit, g.u, g.cell
+        self.x0, self.y0, self.nx, self.ny, self.xs, self.ys, self.area = g.x0, g.y0, g.nx, g.ny, g.xs, g.ys, g.area
+        x1, y1 = g.x1, g.y1
         ex = site.get("existing") or {}
         if "file" not in ex:
             raise ValueError("the simulator needs an existing-ground surface file as ground truth")
-        self.design = self._surface(site["design"], base_dir)
-        self.z = self._surface(ex, base_dir)
+        self.design = g.surface(site["design"])
+        self.z = g.surface(ex)
         self.z_start = self.z.copy()
         zeros = lambda: np.zeros_like(self.z)  # noqa: E731
         self.loose = zeros()
-        self.masks: dict[str, Mask | None] = {}
         for name, zd in model.zones.items():
-            a = zd.get("area") or {}
-            if "polygon" not in a and "where" not in a:
+            if "polygon" not in (zd.get("area") or {}) and "where" not in (zd.get("area") or {}):
                 raise ValueError(f"zone '{name}': the simulator supports polygon and 'where' areas")
-            self.masks[name] = polygon_mask(a["polygon"], self.xs, self.ys) if "polygon" in a else None
+        self.masks: dict[str, Mask | None] = g.masks
         self.stock: dict[str, float] = {}
         self.stock_xy: dict[str, tuple[float, float]] = {}
         for name, sp in model.stockpiles.items():
@@ -212,42 +186,8 @@ class Sim(Context):
         self.probe_count = self.order_seq = 0
 
     # -- setup -----------------------------------------------------------
-    def _surface(self, spec: dict, base_dir: str) -> Grid:
-        if spec.get("format") != "landxml":
-            raise ValueError(f"the simulator reads LandXML surfaces; got format {spec.get('format')}")
-        path = spec["file"] if os.path.isabs(spec["file"]) else os.path.join(base_dir, spec["file"])
-        pts, faces, _ = read_tin(path, spec.get("surface"))
-        z = rasterize(pts, faces, self.x0, self.y0, self.cell, self.nx, self.ny)
-        if np.isnan(z).any():
-            raise ValueError(f"{path}: surface does not cover the whole site grid")
-        return z
-
     def _exclusion(self) -> Mask:
-        """Cells no order may touch: exclusion zones grown by their buffer (square dilation)."""
-        ex = np.zeros((self.ny, self.nx), bool)
-        for name, z in self.m.zones.items():
-            if z.get("role") != "exclusion":
-                continue
-            mk = self.mask(name)
-            b = int(np.ceil(z["buffer"].to(self.unit) / self.cell)) if z.get("buffer") else 0
-            grown = mk.copy()
-            for dj in range(-b, b + 1):
-                for di in range(-b, b + 1):
-                    grown |= np.roll(np.roll(mk, dj, 0), di, 1) & self._valid_shift(dj, di)
-            ex |= grown
-        return ex
-
-    def _valid_shift(self, dj: int, di: int) -> Mask:
-        v = np.ones((self.ny, self.nx), bool)
-        if dj > 0:
-            v[:dj] = False
-        elif dj < 0:
-            v[dj:] = False
-        if di > 0:
-            v[:, :di] = False
-        elif di < 0:
-            v[:, di:] = False
-        return v
+        return self.grid.exclusion(self.mask)
 
     # -- small helpers ---------------------------------------------------
     def log(self, msg: str) -> None:

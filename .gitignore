@@ -5,3 +5,4 @@ build/
 dist/
 *.png.tmp
 plan.json
+.coverage

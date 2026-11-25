@@ -148,6 +148,7 @@ Loam Wire is the JSON-over-MQTT layer that carries orders to machines and state 
 Conventions:
 
 - Positions are in the site CRS and units. Every other quantity is SI: metres, seconds, m/s, m³.
+- `pose.heading` is in radians, counter-clockwise from the site +x axis (the VDA 5050 convention). A state may add `pose.z` (site units) and a `gnss` object (`fix`, `sats`, `hdop`, `age`).
 - A new `orderId` replaces the machine's current order; a higher `orderUpdateId` amends it.
 - **Fail-safe heartbeat:** a machine that hears no `safety` heartbeat for 3 s stops on its own and reports `safetyState: "stopped"`.
 - Every message carries `version`, `headerId` (increasing per sender) and a UTC `timestamp`.

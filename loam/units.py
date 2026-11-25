@@ -19,6 +19,7 @@ UNITS: dict[str, tuple[str, float]] = {
     "m": ("length", 1.0),
     "in": ("length", FT / 12),
     "ft": ("length", FT),
+    "usft": ("length", 1200 / 3937),        # US survey foot (State Plane grids)
     "yd": ("length", 3 * FT),
     # area
     "ft2": ("area", FT**2),

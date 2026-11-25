@@ -80,29 +80,50 @@ def rasterize(pts: np.ndarray, faces: np.ndarray, x0: float, y0: float, cell: fl
     return z
 
 
-def write_grid_tin(path: str, name: str, xs: np.ndarray, ys: np.ndarray, z: np.ndarray,
-                   units: str = "foot") -> None:
-    """Write a regular grid of elevations (z[j, i] at xs[i], ys[j]) as a LandXML TIN."""
+LINEAR_UNITS = {"ft": "foot", "foot": "foot", "usft": "USSurveyFoot", "m": "meter", "meter": "meter"}
+
+
+def grid_tin(xs: np.ndarray, ys: np.ndarray, z: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Triangulate a regular grid (z[j, i] at xs[i], ys[j]). Cells with a NaN corner get no faces."""
+    ny, nx = z.shape
+    gx, gy = np.meshgrid(xs, ys)
+    pts = np.column_stack([gx.ravel(), gy.ravel(), z.ravel()])
+    k = np.arange(nx * ny).reshape(ny, nx)
+    a, b, c, d = k[:-1, :-1].ravel(), k[:-1, 1:].ravel(), k[1:, 1:].ravel(), k[1:, :-1].ravel()
+    faces = np.stack([np.column_stack([a, b, c]), np.column_stack([a, c, d])], 1).reshape(-1, 3)  # per cell
+    faces = faces[np.isfinite(pts[faces, 2]).all(1)]
+    used = np.unique(faces)
+    remap = np.full(len(pts), -1)
+    remap[used] = np.arange(len(used))
+    return pts[used], remap[faces]
+
+
+def write_tin(path: str, name: str, pts: np.ndarray, faces: np.ndarray, units: str = "ft", digits: int = 3) -> None:
+    """Write a TIN surface (pts[N] as x, y, z; faces[M] as point indices) to LandXML 1.2."""
+    linear = LINEAR_UNITS.get(units)
+    if linear is None:
+        raise ValueError(f"no LandXML unit for {units!r}")
+    imperial = linear != "meter"
     lx = ET.Element("LandXML", {"xmlns": "http://www.landxml.org/schema/LandXML-1.2", "version": "1.2"})
     u = ET.SubElement(lx, "Units")
-    ET.SubElement(u, "Imperial" if units == "foot" else "Metric",
-                  {"linearUnit": units, "areaUnit": "squareFoot" if units == "foot" else "squareMeter",
-                   "volumeUnit": "cubicYard" if units == "foot" else "cubicMeter"})
-    surfs = ET.SubElement(lx, "Surfaces")
-    s = ET.SubElement(surfs, "Surface", {"name": name})
+    ET.SubElement(u, "Imperial" if imperial else "Metric",
+                  {"linearUnit": linear, "areaUnit": "squareFoot" if imperial else "squareMeter",
+                   "volumeUnit": "cubicYard" if imperial else "cubicMeter"})
+    s = ET.SubElement(ET.SubElement(lx, "Surfaces"), "Surface", {"name": name})
     d = ET.SubElement(s, "Definition", {"surfType": "TIN"})
-    pnts = ET.SubElement(d, "Pnts")
-    fcs = ET.SubElement(d, "Faces")
-    ny, nx = z.shape
-    def pid(i: int, j: int) -> str:
-        return str(j * nx + i + 1)
-    for j in range(ny):
-        for i in range(nx):
-            p = ET.SubElement(pnts, "P", {"id": pid(i, j)})
-            p.text = f"{ys[j]:.3f} {xs[i]:.3f} {z[j, i]:.3f}"
-    for j in range(ny - 1):
-        for i in range(nx - 1):
-            ET.SubElement(fcs, "F").text = f"{pid(i, j)} {pid(i + 1, j)} {pid(i + 1, j + 1)}"
-            ET.SubElement(fcs, "F").text = f"{pid(i, j)} {pid(i + 1, j + 1)} {pid(i, j + 1)}"
+    pnts, fcs = ET.SubElement(d, "Pnts"), ET.SubElement(d, "Faces")
+    for k, (x, y, z) in enumerate(pts):
+        ET.SubElement(pnts, "P", {"id": str(k + 1)}).text = f"{y:.{digits}f} {x:.{digits}f} {z:.{digits}f}"
+    for a, b, c in faces:
+        ET.SubElement(fcs, "F").text = f"{a + 1} {b + 1} {c + 1}"
     ET.indent(lx)
     ET.ElementTree(lx).write(path, encoding="utf-8", xml_declaration=True)
+
+
+def write_grid_tin(path: str, name: str, xs: np.ndarray, ys: np.ndarray, z: np.ndarray,
+                   units: str = "ft") -> None:
+    """Write a regular grid of elevations (z[j, i] at xs[i], ys[j]) as a LandXML TIN; NaN cells are left out."""
+    pts, faces = grid_tin(xs, ys, z)
+    if not len(faces):
+        raise ValueError("nothing to write: the grid has no complete cells")
+    write_tin(path, name, pts, faces, units)
