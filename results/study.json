@@ -1,0 +1,10085 @@
+{
+ "seeds": 50,
+ "rows": [
+  {
+   "exp": "A",
+   "seed": 0,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.84,
+   "p95": 0.2513,
+   "mean": -0.0688,
+   "seen_in_tol": 96.75,
+   "minutes": 99.5,
+   "import": 32.35,
+   "finished": true,
+   "ledger": 2.1600499167107046e-12,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 0,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.91,
+   "p95": 0.0611,
+   "mean": 0.0033,
+   "seen_in_tol": 98.86,
+   "minutes": 136.25,
+   "import": 88.66,
+   "finished": true,
+   "ledger": -4.774847184307873e-12,
+   "replans": 3
+  },
+  {
+   "exp": "A",
+   "seed": 1,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.56,
+   "p95": 0.2513,
+   "mean": -0.0689,
+   "seen_in_tol": 96.76,
+   "minutes": 99.5,
+   "import": 32.31,
+   "finished": true,
+   "ledger": -1.4949819160392508e-11,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 1,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.94,
+   "p95": 0.0611,
+   "mean": 0.0033,
+   "seen_in_tol": 98.72,
+   "minutes": 136.25,
+   "import": 87.93,
+   "finished": true,
+   "ledger": -2.1600499167107046e-12,
+   "replans": 3
+  },
+  {
+   "exp": "A",
+   "seed": 2,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.86,
+   "p95": 0.252,
+   "mean": -0.069,
+   "seen_in_tol": 96.78,
+   "minutes": 99.5,
+   "import": 32.26,
+   "finished": true,
+   "ledger": 2.0122570276726037e-11,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 2,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.44,
+   "p95": 0.0642,
+   "mean": 0.0013,
+   "seen_in_tol": 98.2,
+   "minutes": 134.75,
+   "import": 86.2,
+   "finished": true,
+   "ledger": -1.2960299500264227e-11,
+   "replans": 2
+  },
+  {
+   "exp": "A",
+   "seed": 3,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.99,
+   "p95": 0.2514,
+   "mean": -0.0692,
+   "seen_in_tol": 96.71,
+   "minutes": 98.25,
+   "import": 32.13,
+   "finished": true,
+   "ledger": 1.2136069926782511e-11,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 3,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.53,
+   "p95": 0.0643,
+   "mean": 0.0019,
+   "seen_in_tol": 98.38,
+   "minutes": 134.0,
+   "import": 86.65,
+   "finished": true,
+   "ledger": -1.807620719773695e-11,
+   "replans": 2
+  },
+  {
+   "exp": "A",
+   "seed": 4,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.71,
+   "p95": 0.2518,
+   "mean": -0.069,
+   "seen_in_tol": 96.85,
+   "minutes": 97.0,
+   "import": 32.23,
+   "finished": true,
+   "ledger": 2.6574298317427747e-11,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 4,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.87,
+   "p95": 0.0602,
+   "mean": 0.0032,
+   "seen_in_tol": 98.67,
+   "minutes": 136.25,
+   "import": 87.22,
+   "finished": true,
+   "ledger": 1.9554136088117957e-11,
+   "replans": 3
+  },
+  {
+   "exp": "A",
+   "seed": 5,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.44,
+   "p95": 0.2535,
+   "mean": -0.0691,
+   "seen_in_tol": 96.84,
+   "minutes": 98.25,
+   "import": 32.15,
+   "finished": true,
+   "ledger": 9.777068044058979e-12,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 5,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.9,
+   "p95": 0.0626,
+   "mean": 0.0036,
+   "seen_in_tol": 98.68,
+   "minutes": 131.0,
+   "import": 86.56,
+   "finished": true,
+   "ledger": 1.0459189070388675e-11,
+   "replans": 3
+  },
+  {
+   "exp": "A",
+   "seed": 6,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.63,
+   "p95": 0.2496,
+   "mean": -0.069,
+   "seen_in_tol": 96.74,
+   "minutes": 97.0,
+   "import": 32.24,
+   "finished": true,
+   "ledger": -8.72546479513403e-12,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 6,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.84,
+   "p95": 0.0622,
+   "mean": 0.0019,
+   "seen_in_tol": 98.65,
+   "minutes": 130.5,
+   "import": 82.92,
+   "finished": true,
+   "ledger": 1.318767317570746e-11,
+   "replans": 3
+  },
+  {
+   "exp": "A",
+   "seed": 7,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 62.04,
+   "p95": 0.2526,
+   "mean": -0.0691,
+   "seen_in_tol": 96.79,
+   "minutes": 98.25,
+   "import": 32.18,
+   "finished": true,
+   "ledger": 7.87281351222191e-12,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 7,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.88,
+   "p95": 0.0616,
+   "mean": 0.0035,
+   "seen_in_tol": 98.63,
+   "minutes": 135.75,
+   "import": 88.63,
+   "finished": true,
+   "ledger": -6.0254023992456496e-12,
+   "replans": 3
+  },
+  {
+   "exp": "A",
+   "seed": 8,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.46,
+   "p95": 0.2525,
+   "mean": -0.069,
+   "seen_in_tol": 96.8,
+   "minutes": 99.5,
+   "import": 32.22,
+   "finished": true,
+   "ledger": -4.462208380573429e-12,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 8,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.83,
+   "p95": 0.0627,
+   "mean": 0.0028,
+   "seen_in_tol": 98.66,
+   "minutes": 131.0,
+   "import": 84.12,
+   "finished": true,
+   "ledger": 9.094947017729282e-12,
+   "replans": 3
+  },
+  {
+   "exp": "A",
+   "seed": 9,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.5,
+   "p95": 0.2512,
+   "mean": -0.0689,
+   "seen_in_tol": 96.85,
+   "minutes": 98.25,
+   "import": 32.32,
+   "finished": true,
+   "ledger": 1.1141310096718371e-11,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 9,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.52,
+   "p95": 0.0631,
+   "mean": 0.0025,
+   "seen_in_tol": 98.42,
+   "minutes": 133.5,
+   "import": 85.56,
+   "finished": true,
+   "ledger": -3.410605131648481e-12,
+   "replans": 2
+  },
+  {
+   "exp": "A",
+   "seed": 10,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.26,
+   "p95": 0.2518,
+   "mean": -0.0688,
+   "seen_in_tol": 96.81,
+   "minutes": 97.0,
+   "import": 32.38,
+   "finished": true,
+   "ledger": -5.6274984672199935e-12,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 10,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.46,
+   "p95": 0.0631,
+   "mean": 0.0023,
+   "seen_in_tol": 98.54,
+   "minutes": 133.5,
+   "import": 84.52,
+   "finished": true,
+   "ledger": -1.3415046851150692e-11,
+   "replans": 2
+  },
+  {
+   "exp": "A",
+   "seed": 11,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.87,
+   "p95": 0.2532,
+   "mean": -0.069,
+   "seen_in_tol": 96.83,
+   "minutes": 99.5,
+   "import": 32.25,
+   "finished": true,
+   "ledger": -1.1311840353300795e-11,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 11,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.86,
+   "p95": 0.0629,
+   "mean": 0.003,
+   "seen_in_tol": 98.59,
+   "minutes": 131.0,
+   "import": 83.63,
+   "finished": true,
+   "ledger": 6.821210263296962e-12,
+   "replans": 3
+  },
+  {
+   "exp": "A",
+   "seed": 12,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.66,
+   "p95": 0.2527,
+   "mean": -0.069,
+   "seen_in_tol": 96.8,
+   "minutes": 98.25,
+   "import": 32.22,
+   "finished": true,
+   "ledger": 2.5011104298755527e-12,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 12,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.46,
+   "p95": 0.0639,
+   "mean": 0.002,
+   "seen_in_tol": 98.08,
+   "minutes": 132.5,
+   "import": 84.88,
+   "finished": true,
+   "ledger": 1.2050804798491299e-11,
+   "replans": 2
+  },
+  {
+   "exp": "A",
+   "seed": 13,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 62.22,
+   "p95": 0.2519,
+   "mean": -0.0687,
+   "seen_in_tol": 96.83,
+   "minutes": 97.0,
+   "import": 32.42,
+   "finished": true,
+   "ledger": -4.263256414560601e-12,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 13,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.9,
+   "p95": 0.0605,
+   "mean": 0.0028,
+   "seen_in_tol": 98.88,
+   "minutes": 136.25,
+   "import": 85.99,
+   "finished": true,
+   "ledger": -1.1937117960769683e-11,
+   "replans": 3
+  },
+  {
+   "exp": "A",
+   "seed": 14,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.54,
+   "p95": 0.2516,
+   "mean": -0.069,
+   "seen_in_tol": 96.78,
+   "minutes": 99.5,
+   "import": 32.25,
+   "finished": true,
+   "ledger": 5.286437954055145e-12,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 14,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.43,
+   "p95": 0.0637,
+   "mean": 0.002,
+   "seen_in_tol": 98.34,
+   "minutes": 134.0,
+   "import": 85.29,
+   "finished": true,
+   "ledger": 2.0236257114447653e-11,
+   "replans": 2
+  },
+  {
+   "exp": "A",
+   "seed": 15,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.54,
+   "p95": 0.2519,
+   "mean": -0.0693,
+   "seen_in_tol": 96.78,
+   "minutes": 97.0,
+   "import": 32.04,
+   "finished": true,
+   "ledger": 2.9274360713316128e-12,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 15,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.49,
+   "p95": 0.0622,
+   "mean": 0.0022,
+   "seen_in_tol": 98.41,
+   "minutes": 133.0,
+   "import": 84.07,
+   "finished": true,
+   "ledger": 6.0254023992456496e-12,
+   "replans": 2
+  },
+  {
+   "exp": "A",
+   "seed": 16,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.5,
+   "p95": 0.2521,
+   "mean": -0.0689,
+   "seen_in_tol": 96.77,
+   "minutes": 98.25,
+   "import": 32.29,
+   "finished": true,
+   "ledger": -1.0999201549566351e-11,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 16,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.39,
+   "p95": 0.0644,
+   "mean": 0.0008,
+   "seen_in_tol": 98.29,
+   "minutes": 136.5,
+   "import": 83.1,
+   "finished": true,
+   "ledger": -2.034994395216927e-11,
+   "replans": 2
+  },
+  {
+   "exp": "A",
+   "seed": 17,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.57,
+   "p95": 0.2505,
+   "mean": -0.0691,
+   "seen_in_tol": 96.77,
+   "minutes": 100.75,
+   "import": 32.18,
+   "finished": true,
+   "ledger": -7.44648787076585e-12,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 17,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.84,
+   "p95": 0.0614,
+   "mean": 0.003,
+   "seen_in_tol": 98.56,
+   "minutes": 135.75,
+   "import": 88.69,
+   "finished": true,
+   "ledger": -2.546585164964199e-11,
+   "replans": 3
+  },
+  {
+   "exp": "A",
+   "seed": 18,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.68,
+   "p95": 0.2537,
+   "mean": -0.0689,
+   "seen_in_tol": 96.79,
+   "minutes": 98.25,
+   "import": 32.28,
+   "finished": true,
+   "ledger": 8.01492205937393e-12,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 18,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.89,
+   "p95": 0.062,
+   "mean": 0.0022,
+   "seen_in_tol": 98.81,
+   "minutes": 131.0,
+   "import": 83.2,
+   "finished": true,
+   "ledger": 3.410605131648481e-13,
+   "replans": 3
+  },
+  {
+   "exp": "A",
+   "seed": 19,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.74,
+   "p95": 0.2504,
+   "mean": -0.0689,
+   "seen_in_tol": 96.84,
+   "minutes": 98.25,
+   "import": 32.29,
+   "finished": true,
+   "ledger": -7.105427357601002e-13,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 19,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.88,
+   "p95": 0.0618,
+   "mean": 0.003,
+   "seen_in_tol": 98.79,
+   "minutes": 136.25,
+   "import": 87.44,
+   "finished": true,
+   "ledger": 1.7621459846850485e-11,
+   "replans": 3
+  },
+  {
+   "exp": "A",
+   "seed": 20,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.88,
+   "p95": 0.2526,
+   "mean": -0.0691,
+   "seen_in_tol": 96.72,
+   "minutes": 99.5,
+   "import": 32.19,
+   "finished": true,
+   "ledger": -4.575895218295045e-12,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 20,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.49,
+   "p95": 0.0617,
+   "mean": 0.002,
+   "seen_in_tol": 98.38,
+   "minutes": 134.0,
+   "import": 84.03,
+   "finished": true,
+   "ledger": 2.9558577807620168e-12,
+   "replans": 2
+  },
+  {
+   "exp": "A",
+   "seed": 21,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.44,
+   "p95": 0.2528,
+   "mean": -0.0691,
+   "seen_in_tol": 96.77,
+   "minutes": 98.25,
+   "import": 32.17,
+   "finished": true,
+   "ledger": -1.2249756764504127e-11,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 21,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.88,
+   "p95": 0.0612,
+   "mean": 0.0029,
+   "seen_in_tol": 98.42,
+   "minutes": 135.75,
+   "import": 88.55,
+   "finished": true,
+   "ledger": -2.3874235921539366e-12,
+   "replans": 3
+  },
+  {
+   "exp": "A",
+   "seed": 22,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.9,
+   "p95": 0.2523,
+   "mean": -0.0692,
+   "seen_in_tol": 96.79,
+   "minutes": 97.0,
+   "import": 32.15,
+   "finished": true,
+   "ledger": -2.4868995751603507e-11,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 22,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.88,
+   "p95": 0.0608,
+   "mean": 0.0024,
+   "seen_in_tol": 98.75,
+   "minutes": 132.5,
+   "import": 82.89,
+   "finished": true,
+   "ledger": -2.0463630789890885e-11,
+   "replans": 2
+  },
+  {
+   "exp": "A",
+   "seed": 23,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.49,
+   "p95": 0.2524,
+   "mean": -0.0695,
+   "seen_in_tol": 96.77,
+   "minutes": 98.25,
+   "import": 31.93,
+   "finished": true,
+   "ledger": -1.3642420526593924e-12,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 23,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.83,
+   "p95": 0.0615,
+   "mean": 0.0031,
+   "seen_in_tol": 98.8,
+   "minutes": 136.75,
+   "import": 88.34,
+   "finished": true,
+   "ledger": 3.183231456205249e-12,
+   "replans": 3
+  },
+  {
+   "exp": "A",
+   "seed": 24,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 62.06,
+   "p95": 0.2525,
+   "mean": -0.0691,
+   "seen_in_tol": 96.77,
+   "minutes": 99.5,
+   "import": 32.17,
+   "finished": true,
+   "ledger": 6.338041202980094e-12,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 24,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.49,
+   "p95": 0.0632,
+   "mean": 0.0019,
+   "seen_in_tol": 98.39,
+   "minutes": 133.0,
+   "import": 84.01,
+   "finished": true,
+   "ledger": -9.549694368615746e-12,
+   "replans": 2
+  },
+  {
+   "exp": "A",
+   "seed": 25,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 62.13,
+   "p95": 0.2509,
+   "mean": -0.069,
+   "seen_in_tol": 96.84,
+   "minutes": 98.25,
+   "import": 32.27,
+   "finished": true,
+   "ledger": -5.229594535194337e-12,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 25,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.89,
+   "p95": 0.061,
+   "mean": 0.0027,
+   "seen_in_tol": 98.76,
+   "minutes": 136.25,
+   "import": 86.06,
+   "finished": true,
+   "ledger": -3.410605131648481e-12,
+   "replans": 3
+  },
+  {
+   "exp": "A",
+   "seed": 26,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.86,
+   "p95": 0.2527,
+   "mean": -0.0688,
+   "seen_in_tol": 96.76,
+   "minutes": 97.0,
+   "import": 32.38,
+   "finished": true,
+   "ledger": 1.5575096767861396e-11,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 26,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.91,
+   "p95": 0.062,
+   "mean": 0.0029,
+   "seen_in_tol": 98.63,
+   "minutes": 130.5,
+   "import": 83.76,
+   "finished": true,
+   "ledger": 7.048583938740194e-12,
+   "replans": 3
+  },
+  {
+   "exp": "A",
+   "seed": 27,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.53,
+   "p95": 0.2522,
+   "mean": -0.0692,
+   "seen_in_tol": 96.8,
+   "minutes": 95.75,
+   "import": 32.09,
+   "finished": true,
+   "ledger": -9.663381206337363e-13,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 27,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.89,
+   "p95": 0.0612,
+   "mean": 0.0028,
+   "seen_in_tol": 98.53,
+   "minutes": 132.5,
+   "import": 84.16,
+   "finished": true,
+   "ledger": -1.2164491636212915e-11,
+   "replans": 2
+  },
+  {
+   "exp": "A",
+   "seed": 28,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.42,
+   "p95": 0.2499,
+   "mean": -0.069,
+   "seen_in_tol": 96.83,
+   "minutes": 97.0,
+   "import": 32.27,
+   "finished": true,
+   "ledger": -1.3642420526593924e-12,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 28,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.89,
+   "p95": 0.0616,
+   "mean": 0.0034,
+   "seen_in_tol": 98.78,
+   "minutes": 135.75,
+   "import": 88.31,
+   "finished": true,
+   "ledger": -2.6147972675971687e-12,
+   "replans": 3
+  },
+  {
+   "exp": "A",
+   "seed": 29,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.58,
+   "p95": 0.2518,
+   "mean": -0.069,
+   "seen_in_tol": 96.76,
+   "minutes": 99.5,
+   "import": 32.25,
+   "finished": true,
+   "ledger": -6.338041202980094e-12,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 29,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.86,
+   "p95": 0.0625,
+   "mean": 0.0018,
+   "seen_in_tol": 98.43,
+   "minutes": 131.0,
+   "import": 84.54,
+   "finished": true,
+   "ledger": 2.8421709430404007e-12,
+   "replans": 3
+  },
+  {
+   "exp": "A",
+   "seed": 30,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.66,
+   "p95": 0.2504,
+   "mean": -0.0687,
+   "seen_in_tol": 96.82,
+   "minutes": 98.25,
+   "import": 32.41,
+   "finished": true,
+   "ledger": 1.057287590811029e-11,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 30,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.52,
+   "p95": 0.0634,
+   "mean": 0.0016,
+   "seen_in_tol": 98.28,
+   "minutes": 134.75,
+   "import": 84.62,
+   "finished": true,
+   "ledger": -5.229594535194337e-12,
+   "replans": 2
+  },
+  {
+   "exp": "A",
+   "seed": 31,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.64,
+   "p95": 0.2493,
+   "mean": -0.0688,
+   "seen_in_tol": 96.82,
+   "minutes": 97.0,
+   "import": 32.39,
+   "finished": true,
+   "ledger": 5.8264504332328215e-12,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 31,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.82,
+   "p95": 0.0633,
+   "mean": 0.002,
+   "seen_in_tol": 98.41,
+   "minutes": 131.0,
+   "import": 84.41,
+   "finished": true,
+   "ledger": -3.353761712787673e-11,
+   "replans": 3
+  },
+  {
+   "exp": "A",
+   "seed": 32,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.79,
+   "p95": 0.2518,
+   "mean": -0.0688,
+   "seen_in_tol": 96.79,
+   "minutes": 98.25,
+   "import": 32.38,
+   "finished": true,
+   "ledger": 1.4722445484949276e-11,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 32,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.49,
+   "p95": 0.0625,
+   "mean": 0.0022,
+   "seen_in_tol": 98.31,
+   "minutes": 133.5,
+   "import": 85.31,
+   "finished": true,
+   "ledger": 1.2960299500264227e-11,
+   "replans": 2
+  },
+  {
+   "exp": "A",
+   "seed": 33,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.86,
+   "p95": 0.2509,
+   "mean": -0.0692,
+   "seen_in_tol": 96.81,
+   "minutes": 98.25,
+   "import": 32.11,
+   "finished": true,
+   "ledger": -1.9980461729574017e-11,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 33,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.86,
+   "p95": 0.0622,
+   "mean": 0.0029,
+   "seen_in_tol": 98.64,
+   "minutes": 130.5,
+   "import": 84.39,
+   "finished": true,
+   "ledger": 1.4097167877480388e-11,
+   "replans": 3
+  },
+  {
+   "exp": "A",
+   "seed": 34,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.69,
+   "p95": 0.251,
+   "mean": -0.0689,
+   "seen_in_tol": 96.78,
+   "minutes": 98.25,
+   "import": 32.29,
+   "finished": true,
+   "ledger": 2.4215296434704214e-11,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 34,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.86,
+   "p95": 0.0601,
+   "mean": 0.0029,
+   "seen_in_tol": 98.6,
+   "minutes": 136.25,
+   "import": 86.95,
+   "finished": true,
+   "ledger": 1.5006662579253316e-11,
+   "replans": 3
+  },
+  {
+   "exp": "A",
+   "seed": 35,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.61,
+   "p95": 0.2509,
+   "mean": -0.0692,
+   "seen_in_tol": 96.76,
+   "minutes": 98.25,
+   "import": 32.16,
+   "finished": true,
+   "ledger": 1.3386625141720288e-11,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 35,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.51,
+   "p95": 0.063,
+   "mean": 0.002,
+   "seen_in_tol": 98.22,
+   "minutes": 134.0,
+   "import": 86.27,
+   "finished": true,
+   "ledger": -1.057287590811029e-11,
+   "replans": 2
+  },
+  {
+   "exp": "A",
+   "seed": 36,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.6,
+   "p95": 0.2509,
+   "mean": -0.069,
+   "seen_in_tol": 96.8,
+   "minutes": 98.25,
+   "import": 32.26,
+   "finished": true,
+   "ledger": 2.5579538487363607e-13,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 36,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.85,
+   "p95": 0.0604,
+   "mean": 0.003,
+   "seen_in_tol": 98.95,
+   "minutes": 135.75,
+   "import": 87.4,
+   "finished": true,
+   "ledger": 8.981260180007666e-12,
+   "replans": 3
+  },
+  {
+   "exp": "A",
+   "seed": 37,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.4,
+   "p95": 0.2546,
+   "mean": -0.0693,
+   "seen_in_tol": 96.76,
+   "minutes": 99.5,
+   "import": 32.05,
+   "finished": true,
+   "ledger": 1.0032863428932615e-11,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 37,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.48,
+   "p95": 0.0632,
+   "mean": 0.0018,
+   "seen_in_tol": 98.56,
+   "minutes": 134.0,
+   "import": 84.4,
+   "finished": true,
+   "ledger": 6.480149750132114e-12,
+   "replans": 2
+  },
+  {
+   "exp": "A",
+   "seed": 38,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.73,
+   "p95": 0.2513,
+   "mean": -0.069,
+   "seen_in_tol": 96.81,
+   "minutes": 99.5,
+   "import": 32.21,
+   "finished": true,
+   "ledger": -1.1141310096718371e-11,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 38,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.88,
+   "p95": 0.0625,
+   "mean": 0.0034,
+   "seen_in_tol": 98.61,
+   "minutes": 136.25,
+   "import": 88.86,
+   "finished": true,
+   "ledger": -4.206412995699793e-12,
+   "replans": 3
+  },
+  {
+   "exp": "A",
+   "seed": 39,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.66,
+   "p95": 0.2499,
+   "mean": -0.0689,
+   "seen_in_tol": 96.84,
+   "minutes": 98.25,
+   "import": 32.31,
+   "finished": true,
+   "ledger": -1.2079226507921703e-11,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 39,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.91,
+   "p95": 0.0622,
+   "mean": 0.0027,
+   "seen_in_tol": 98.67,
+   "minutes": 130.0,
+   "import": 83.85,
+   "finished": true,
+   "ledger": 5.002220859751105e-12,
+   "replans": 3
+  },
+  {
+   "exp": "A",
+   "seed": 40,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.42,
+   "p95": 0.2535,
+   "mean": -0.0692,
+   "seen_in_tol": 96.82,
+   "minutes": 98.25,
+   "import": 32.13,
+   "finished": true,
+   "ledger": -3.353761712787673e-12,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 40,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.53,
+   "p95": 0.0616,
+   "mean": 0.0018,
+   "seen_in_tol": 98.36,
+   "minutes": 133.0,
+   "import": 83.49,
+   "finished": true,
+   "ledger": 3.296918293926865e-12,
+   "replans": 2
+  },
+  {
+   "exp": "A",
+   "seed": 41,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.57,
+   "p95": 0.2509,
+   "mean": -0.0692,
+   "seen_in_tol": 96.8,
+   "minutes": 98.25,
+   "import": 32.13,
+   "finished": true,
+   "ledger": -1.7024603948812e-11,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 41,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.51,
+   "p95": 0.0629,
+   "mean": 0.002,
+   "seen_in_tol": 98.1,
+   "minutes": 132.5,
+   "import": 83.94,
+   "finished": true,
+   "ledger": -1.77351466845721e-11,
+   "replans": 2
+  },
+  {
+   "exp": "A",
+   "seed": 42,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.89,
+   "p95": 0.2502,
+   "mean": -0.0687,
+   "seen_in_tol": 96.79,
+   "minutes": 98.25,
+   "import": 32.41,
+   "finished": true,
+   "ledger": 1.864464138634503e-11,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 42,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.51,
+   "p95": 0.0627,
+   "mean": 0.0015,
+   "seen_in_tol": 98.3,
+   "minutes": 135.25,
+   "import": 84.76,
+   "finished": true,
+   "ledger": -1.2505552149377763e-12,
+   "replans": 2
+  },
+  {
+   "exp": "A",
+   "seed": 43,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.78,
+   "p95": 0.2523,
+   "mean": -0.0693,
+   "seen_in_tol": 96.75,
+   "minutes": 99.5,
+   "import": 32.06,
+   "finished": true,
+   "ledger": 1.2533973858808167e-11,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 43,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.52,
+   "p95": 0.0621,
+   "mean": 0.002,
+   "seen_in_tol": 98.54,
+   "minutes": 133.5,
+   "import": 83.96,
+   "finished": true,
+   "ledger": -2.1600499167107046e-12,
+   "replans": 2
+  },
+  {
+   "exp": "A",
+   "seed": 44,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.59,
+   "p95": 0.2528,
+   "mean": -0.0691,
+   "seen_in_tol": 96.75,
+   "minutes": 98.25,
+   "import": 32.17,
+   "finished": true,
+   "ledger": -9.094947017729282e-13,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 44,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.56,
+   "p95": 0.0619,
+   "mean": 0.0017,
+   "seen_in_tol": 98.39,
+   "minutes": 133.0,
+   "import": 83.46,
+   "finished": true,
+   "ledger": 4.547473508864641e-13,
+   "replans": 2
+  },
+  {
+   "exp": "A",
+   "seed": 45,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.16,
+   "p95": 0.2514,
+   "mean": -0.0688,
+   "seen_in_tol": 96.83,
+   "minutes": 99.5,
+   "import": 32.37,
+   "finished": true,
+   "ledger": -5.144329406903125e-12,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 45,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.51,
+   "p95": 0.0599,
+   "mean": -0.0002,
+   "seen_in_tol": 98.72,
+   "minutes": 134.75,
+   "import": 79.34,
+   "finished": true,
+   "ledger": -1.2278178473934531e-11,
+   "replans": 3
+  },
+  {
+   "exp": "A",
+   "seed": 46,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.72,
+   "p95": 0.2513,
+   "mean": -0.0691,
+   "seen_in_tol": 96.87,
+   "minutes": 99.5,
+   "import": 32.17,
+   "finished": true,
+   "ledger": 3.240074875066057e-12,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 46,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.54,
+   "p95": 0.0628,
+   "mean": 0.002,
+   "seen_in_tol": 98.46,
+   "minutes": 133.5,
+   "import": 83.79,
+   "finished": true,
+   "ledger": 1.1368683772161603e-12,
+   "replans": 2
+  },
+  {
+   "exp": "A",
+   "seed": 47,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.9,
+   "p95": 0.2511,
+   "mean": -0.069,
+   "seen_in_tol": 96.83,
+   "minutes": 98.25,
+   "import": 32.26,
+   "finished": true,
+   "ledger": 9.123368727159686e-12,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 47,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.44,
+   "p95": 0.0637,
+   "mean": 0.0018,
+   "seen_in_tol": 98.29,
+   "minutes": 134.75,
+   "import": 84.74,
+   "finished": true,
+   "ledger": 2.0463630789890885e-12,
+   "replans": 2
+  },
+  {
+   "exp": "A",
+   "seed": 48,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 62.02,
+   "p95": 0.2529,
+   "mean": -0.0687,
+   "seen_in_tol": 96.75,
+   "minutes": 98.25,
+   "import": 32.41,
+   "finished": true,
+   "ledger": 7.133849067031406e-12,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 48,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.91,
+   "p95": 0.0607,
+   "mean": 0.0029,
+   "seen_in_tol": 98.79,
+   "minutes": 135.75,
+   "import": 87.31,
+   "finished": true,
+   "ledger": 1.9326762412674725e-12,
+   "replans": 3
+  },
+  {
+   "exp": "A",
+   "seed": 49,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.46,
+   "p95": 0.2505,
+   "mean": -0.0687,
+   "seen_in_tol": 96.76,
+   "minutes": 98.25,
+   "import": 32.4,
+   "finished": true,
+   "ledger": 3.609557097661309e-12,
+   "replans": 0
+  },
+  {
+   "exp": "A",
+   "seed": 49,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.89,
+   "p95": 0.0628,
+   "mean": 0.0039,
+   "seen_in_tol": 98.58,
+   "minutes": 135.5,
+   "import": 87.03,
+   "finished": true,
+   "ledger": -1.5916157281026244e-11,
+   "replans": 3
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 0,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.84,
+   "p95": 0.2513,
+   "mean": -0.0688,
+   "seen_in_tol": 96.75,
+   "minutes": 96.5,
+   "import": 32.35,
+   "finished": true,
+   "ledger": 2.1600499167107046e-12,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 0,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.44,
+   "p95": 0.0645,
+   "mean": 0.0011,
+   "seen_in_tol": 98.16,
+   "minutes": 117.25,
+   "import": 85.89,
+   "finished": true,
+   "ledger": -8.29913915367797e-12,
+   "replans": 2
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 1,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.56,
+   "p95": 0.2513,
+   "mean": -0.0689,
+   "seen_in_tol": 96.76,
+   "minutes": 96.5,
+   "import": 32.31,
+   "finished": true,
+   "ledger": -1.4949819160392508e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 1,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.28,
+   "p95": 0.0655,
+   "mean": 0.001,
+   "seen_in_tol": 97.97,
+   "minutes": 118.5,
+   "import": 85.07,
+   "finished": true,
+   "ledger": 3.979039320256561e-12,
+   "replans": 2
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 2,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.86,
+   "p95": 0.252,
+   "mean": -0.069,
+   "seen_in_tol": 96.78,
+   "minutes": 96.5,
+   "import": 32.26,
+   "finished": true,
+   "ledger": 2.0122570276726037e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 2,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.88,
+   "p95": 0.0625,
+   "mean": 0.0037,
+   "seen_in_tol": 98.46,
+   "minutes": 118.75,
+   "import": 86.21,
+   "finished": true,
+   "ledger": -1.830358087318018e-11,
+   "replans": 2
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 3,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.99,
+   "p95": 0.2514,
+   "mean": -0.0692,
+   "seen_in_tol": 96.71,
+   "minutes": 95.25,
+   "import": 32.13,
+   "finished": true,
+   "ledger": 1.2136069926782511e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 3,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.17,
+   "p95": 0.0662,
+   "mean": 0.0009,
+   "seen_in_tol": 97.86,
+   "minutes": 117.75,
+   "import": 86.21,
+   "finished": true,
+   "ledger": -1.5688783605583012e-11,
+   "replans": 2
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 4,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.71,
+   "p95": 0.2518,
+   "mean": -0.069,
+   "seen_in_tol": 96.85,
+   "minutes": 94.0,
+   "import": 32.23,
+   "finished": true,
+   "ledger": 2.6574298317427747e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 4,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.28,
+   "p95": 0.0643,
+   "mean": 0.0009,
+   "seen_in_tol": 98.07,
+   "minutes": 117.0,
+   "import": 84.44,
+   "finished": true,
+   "ledger": 1.7621459846850485e-11,
+   "replans": 2
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 5,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.44,
+   "p95": 0.2535,
+   "mean": -0.0691,
+   "seen_in_tol": 96.84,
+   "minutes": 95.25,
+   "import": 32.15,
+   "finished": true,
+   "ledger": 9.777068044058979e-12,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 5,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.42,
+   "p95": 0.0649,
+   "mean": 0.0017,
+   "seen_in_tol": 98.17,
+   "minutes": 116.75,
+   "import": 86.47,
+   "finished": true,
+   "ledger": 1.1823431123048067e-11,
+   "replans": 2
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 6,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.63,
+   "p95": 0.2496,
+   "mean": -0.069,
+   "seen_in_tol": 96.74,
+   "minutes": 94.0,
+   "import": 32.24,
+   "finished": true,
+   "ledger": -8.72546479513403e-12,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 6,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.51,
+   "p95": 0.0616,
+   "mean": 0.0018,
+   "seen_in_tol": 98.52,
+   "minutes": 115.25,
+   "import": 83.63,
+   "finished": true,
+   "ledger": 1.318767317570746e-11,
+   "replans": 2
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 7,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 62.04,
+   "p95": 0.2526,
+   "mean": -0.0691,
+   "seen_in_tol": 96.79,
+   "minutes": 95.25,
+   "import": 32.18,
+   "finished": true,
+   "ledger": 7.87281351222191e-12,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 7,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.39,
+   "p95": 0.0643,
+   "mean": 0.0016,
+   "seen_in_tol": 98.36,
+   "minutes": 117.0,
+   "import": 85.9,
+   "finished": true,
+   "ledger": -1.4097167877480388e-11,
+   "replans": 2
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 8,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.46,
+   "p95": 0.2525,
+   "mean": -0.069,
+   "seen_in_tol": 96.8,
+   "minutes": 96.5,
+   "import": 32.22,
+   "finished": true,
+   "ledger": -4.462208380573429e-12,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 8,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.46,
+   "p95": 0.0641,
+   "mean": 0.0017,
+   "seen_in_tol": 98.33,
+   "minutes": 115.75,
+   "import": 85.8,
+   "finished": true,
+   "ledger": 1.3415046851150692e-11,
+   "replans": 2
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 9,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.5,
+   "p95": 0.2512,
+   "mean": -0.0689,
+   "seen_in_tol": 96.85,
+   "minutes": 95.25,
+   "import": 32.32,
+   "finished": true,
+   "ledger": 1.1141310096718371e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 9,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.29,
+   "p95": 0.0651,
+   "mean": 0.0013,
+   "seen_in_tol": 97.81,
+   "minutes": 117.25,
+   "import": 85.56,
+   "finished": true,
+   "ledger": -3.296918293926865e-12,
+   "replans": 2
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 10,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.26,
+   "p95": 0.2518,
+   "mean": -0.0688,
+   "seen_in_tol": 96.81,
+   "minutes": 94.0,
+   "import": 32.38,
+   "finished": true,
+   "ledger": -5.6274984672199935e-12,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 10,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 98.6,
+   "p95": 0.068,
+   "mean": -0.0007,
+   "seen_in_tol": 97.51,
+   "minutes": 118.5,
+   "import": 83.99,
+   "finished": true,
+   "ledger": -1.5575096767861396e-11,
+   "replans": 2
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 11,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.87,
+   "p95": 0.2532,
+   "mean": -0.069,
+   "seen_in_tol": 96.83,
+   "minutes": 96.5,
+   "import": 32.25,
+   "finished": true,
+   "ledger": -1.1311840353300795e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 11,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.52,
+   "p95": 0.0637,
+   "mean": 0.0019,
+   "seen_in_tol": 98.41,
+   "minutes": 115.25,
+   "import": 85.47,
+   "finished": true,
+   "ledger": 7.275957614183426e-12,
+   "replans": 2
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 12,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.66,
+   "p95": 0.2527,
+   "mean": -0.069,
+   "seen_in_tol": 96.8,
+   "minutes": 95.25,
+   "import": 32.22,
+   "finished": true,
+   "ledger": 2.5011104298755527e-12,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 12,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.88,
+   "p95": 0.0618,
+   "mean": 0.0028,
+   "seen_in_tol": 98.61,
+   "minutes": 118.0,
+   "import": 84.28,
+   "finished": true,
+   "ledger": 1.659827830735594e-11,
+   "replans": 3
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 13,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 62.22,
+   "p95": 0.2519,
+   "mean": -0.0687,
+   "seen_in_tol": 96.83,
+   "minutes": 94.0,
+   "import": 32.42,
+   "finished": true,
+   "ledger": -4.263256414560601e-12,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 13,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.32,
+   "p95": 0.0631,
+   "mean": 0.0007,
+   "seen_in_tol": 98.19,
+   "minutes": 116.75,
+   "import": 83.14,
+   "finished": true,
+   "ledger": -1.2732925824820995e-11,
+   "replans": 2
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 14,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.54,
+   "p95": 0.2516,
+   "mean": -0.069,
+   "seen_in_tol": 96.78,
+   "minutes": 96.5,
+   "import": 32.25,
+   "finished": true,
+   "ledger": 5.286437954055145e-12,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 14,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.25,
+   "p95": 0.0656,
+   "mean": 0.001,
+   "seen_in_tol": 97.99,
+   "minutes": 117.25,
+   "import": 85.27,
+   "finished": true,
+   "ledger": 1.750777300912887e-11,
+   "replans": 2
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 15,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.54,
+   "p95": 0.2519,
+   "mean": -0.0693,
+   "seen_in_tol": 96.78,
+   "minutes": 94.0,
+   "import": 32.04,
+   "finished": true,
+   "ledger": 2.9274360713316128e-12,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 15,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 98.66,
+   "p95": 0.0686,
+   "mean": -0.0006,
+   "seen_in_tol": 97.41,
+   "minutes": 118.25,
+   "import": 83.57,
+   "finished": true,
+   "ledger": 3.183231456205249e-12,
+   "replans": 2
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 16,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.5,
+   "p95": 0.2521,
+   "mean": -0.0689,
+   "seen_in_tol": 96.77,
+   "minutes": 95.25,
+   "import": 32.29,
+   "finished": true,
+   "ledger": -1.0999201549566351e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 16,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.5,
+   "p95": 0.0616,
+   "mean": 0.0014,
+   "seen_in_tol": 98.4,
+   "minutes": 120.75,
+   "import": 83.11,
+   "finished": true,
+   "ledger": -2.091837814077735e-11,
+   "replans": 2
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 17,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.57,
+   "p95": 0.2505,
+   "mean": -0.0691,
+   "seen_in_tol": 96.77,
+   "minutes": 97.75,
+   "import": 32.18,
+   "finished": true,
+   "ledger": -7.44648787076585e-12,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 17,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.19,
+   "p95": 0.0657,
+   "mean": 0.0015,
+   "seen_in_tol": 97.92,
+   "minutes": 117.25,
+   "import": 85.59,
+   "finished": true,
+   "ledger": -2.9103830456733704e-11,
+   "replans": 2
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 18,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.68,
+   "p95": 0.2537,
+   "mean": -0.0689,
+   "seen_in_tol": 96.79,
+   "minutes": 95.25,
+   "import": 32.28,
+   "finished": true,
+   "ledger": 8.01492205937393e-12,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 18,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.46,
+   "p95": 0.0633,
+   "mean": 0.0026,
+   "seen_in_tol": 98.26,
+   "minutes": 115.0,
+   "import": 84.91,
+   "finished": true,
+   "ledger": 4.547473508864641e-13,
+   "replans": 2
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 19,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.74,
+   "p95": 0.2504,
+   "mean": -0.0689,
+   "seen_in_tol": 96.84,
+   "minutes": 95.25,
+   "import": 32.29,
+   "finished": true,
+   "ledger": -7.105427357601002e-13,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 19,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.33,
+   "p95": 0.065,
+   "mean": 0.0012,
+   "seen_in_tol": 98.24,
+   "minutes": 117.5,
+   "import": 84.51,
+   "finished": true,
+   "ledger": 1.1254996934439987e-11,
+   "replans": 2
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 20,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.88,
+   "p95": 0.2526,
+   "mean": -0.0691,
+   "seen_in_tol": 96.72,
+   "minutes": 96.5,
+   "import": 32.19,
+   "finished": true,
+   "ledger": -4.575895218295045e-12,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 20,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 98.66,
+   "p95": 0.068,
+   "mean": -0.0009,
+   "seen_in_tol": 97.4,
+   "minutes": 117.75,
+   "import": 83.4,
+   "finished": true,
+   "ledger": 3.637978807091713e-12,
+   "replans": 2
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 21,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.44,
+   "p95": 0.2528,
+   "mean": -0.0691,
+   "seen_in_tol": 96.77,
+   "minutes": 95.25,
+   "import": 32.17,
+   "finished": true,
+   "ledger": -1.2249756764504127e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 21,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.23,
+   "p95": 0.0653,
+   "mean": 0.0012,
+   "seen_in_tol": 98.2,
+   "minutes": 116.0,
+   "import": 85.41,
+   "finished": true,
+   "ledger": 1.1368683772161603e-12,
+   "replans": 2
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 22,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.9,
+   "p95": 0.2523,
+   "mean": -0.0692,
+   "seen_in_tol": 96.79,
+   "minutes": 94.0,
+   "import": 32.15,
+   "finished": true,
+   "ledger": -2.4868995751603507e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 22,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.38,
+   "p95": 0.0634,
+   "mean": 0.0009,
+   "seen_in_tol": 98.25,
+   "minutes": 118.0,
+   "import": 82.75,
+   "finished": true,
+   "ledger": -1.77351466845721e-11,
+   "replans": 2
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 23,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 61.49,
+   "p95": 0.2524,
+   "mean": -0.0695,
+   "seen_in_tol": 96.77,
+   "minutes": 95.25,
+   "import": 31.93,
+   "finished": true,
+   "ledger": -1.3642420526593924e-12,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 23,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.26,
+   "p95": 0.0654,
+   "mean": 0.0007,
+   "seen_in_tol": 98.06,
+   "minutes": 116.5,
+   "import": 85.59,
+   "finished": true,
+   "ledger": 1.2505552149377763e-12,
+   "replans": 2
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 24,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 62.06,
+   "p95": 0.2525,
+   "mean": -0.0691,
+   "seen_in_tol": 96.77,
+   "minutes": 96.5,
+   "import": 32.17,
+   "finished": true,
+   "ledger": 6.338041202980094e-12,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:wrong",
+   "seed": 24,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.87,
+   "p95": 0.0614,
+   "mean": 0.003,
+   "seen_in_tol": 98.65,
+   "minutes": 118.25,
+   "import": 84.16,
+   "finished": true,
+   "ledger": -1.4097167877480388e-11,
+   "replans": 3
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 0,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 93.18,
+   "p95": 0.1162,
+   "mean": -0.003,
+   "seen_in_tol": 96.75,
+   "minutes": 101.75,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -2.6261659513693303e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 0,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 99.38,
+   "p95": 0.0612,
+   "mean": -0.0035,
+   "seen_in_tol": 98.32,
+   "minutes": 113.5,
+   "import": 76.76,
+   "finished": true,
+   "ledger": 5.6843418860808015e-12,
+   "replans": 1
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 1,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 92.92,
+   "p95": 0.1174,
+   "mean": -0.003,
+   "seen_in_tol": 96.76,
+   "minutes": 102.5,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -9.777068044058979e-12,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 1,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 99.31,
+   "p95": 0.061,
+   "mean": -0.0029,
+   "seen_in_tol": 98.36,
+   "minutes": 116.25,
+   "import": 76.79,
+   "finished": true,
+   "ledger": -3.0809133022557944e-11,
+   "replans": 1
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 2,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 93.15,
+   "p95": 0.1178,
+   "mean": -0.003,
+   "seen_in_tol": 96.78,
+   "minutes": 100.0,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -1.2278178473934531e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 2,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 99.84,
+   "p95": 0.058,
+   "mean": -0.0005,
+   "seen_in_tol": 99.01,
+   "minutes": 112.75,
+   "import": 77.65,
+   "finished": true,
+   "ledger": -3.069544618483633e-12,
+   "replans": 1
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 3,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 93.29,
+   "p95": 0.1169,
+   "mean": -0.003,
+   "seen_in_tol": 96.71,
+   "minutes": 100.75,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -2.5011104298755527e-12,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 3,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 99.4,
+   "p95": 0.0612,
+   "mean": -0.0025,
+   "seen_in_tol": 98.47,
+   "minutes": 115.0,
+   "import": 76.8,
+   "finished": true,
+   "ledger": 7.275957614183426e-12,
+   "replans": 1
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 4,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 93.14,
+   "p95": 0.1167,
+   "mean": -0.003,
+   "seen_in_tol": 96.85,
+   "minutes": 99.0,
+   "import": 75.21,
+   "finished": true,
+   "ledger": 1.48929757415317e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 4,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 99.84,
+   "p95": 0.0589,
+   "mean": -0.0002,
+   "seen_in_tol": 98.94,
+   "minutes": 112.75,
+   "import": 78.09,
+   "finished": true,
+   "ledger": -1.659827830735594e-11,
+   "replans": 2
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 5,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 93.17,
+   "p95": 0.1157,
+   "mean": -0.003,
+   "seen_in_tol": 96.84,
+   "minutes": 102.0,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -5.4569682106375694e-12,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 5,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 99.08,
+   "p95": 0.0621,
+   "mean": -0.0053,
+   "seen_in_tol": 98.04,
+   "minutes": 115.75,
+   "import": 76.19,
+   "finished": true,
+   "ledger": -5.9117155615240335e-12,
+   "replans": 1
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 6,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 93.12,
+   "p95": 0.1172,
+   "mean": -0.003,
+   "seen_in_tol": 96.74,
+   "minutes": 100.5,
+   "import": 75.21,
+   "finished": true,
+   "ledger": 1.716671249596402e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 6,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 99.82,
+   "p95": 0.0603,
+   "mean": -0.0006,
+   "seen_in_tol": 98.88,
+   "minutes": 112.25,
+   "import": 77.61,
+   "finished": true,
+   "ledger": -1.1027623258996755e-11,
+   "replans": 1
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 7,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 93.45,
+   "p95": 0.1147,
+   "mean": -0.003,
+   "seen_in_tol": 96.79,
+   "minutes": 99.0,
+   "import": 75.21,
+   "finished": true,
+   "ledger": 2.6261659513693303e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 7,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 99.88,
+   "p95": 0.059,
+   "mean": -0.0,
+   "seen_in_tol": 98.95,
+   "minutes": 111.75,
+   "import": 78.02,
+   "finished": true,
+   "ledger": -1.1254996934439987e-11,
+   "replans": 2
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 8,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 92.89,
+   "p95": 0.1171,
+   "mean": -0.003,
+   "seen_in_tol": 96.8,
+   "minutes": 102.0,
+   "import": 75.21,
+   "finished": true,
+   "ledger": 2.1600499167107046e-12,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 8,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 99.36,
+   "p95": 0.0617,
+   "mean": -0.003,
+   "seen_in_tol": 98.39,
+   "minutes": 115.75,
+   "import": 76.78,
+   "finished": true,
+   "ledger": -1.4551915228366852e-11,
+   "replans": 1
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 9,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 92.96,
+   "p95": 0.1192,
+   "mean": -0.003,
+   "seen_in_tol": 96.85,
+   "minutes": 99.0,
+   "import": 75.21,
+   "finished": true,
+   "ledger": 1.432454155292362e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 9,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 99.87,
+   "p95": 0.0602,
+   "mean": -0.0005,
+   "seen_in_tol": 99.02,
+   "minutes": 112.75,
+   "import": 77.71,
+   "finished": true,
+   "ledger": 5.4569682106375694e-12,
+   "replans": 2
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 10,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 92.91,
+   "p95": 0.118,
+   "mean": -0.003,
+   "seen_in_tol": 96.81,
+   "minutes": 99.0,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -1.1141310096718371e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 10,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 99.86,
+   "p95": 0.0597,
+   "mean": -0.0004,
+   "seen_in_tol": 98.94,
+   "minutes": 112.25,
+   "import": 77.76,
+   "finished": true,
+   "ledger": 1.1027623258996755e-11,
+   "replans": 2
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 11,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 93.36,
+   "p95": 0.1154,
+   "mean": -0.003,
+   "seen_in_tol": 96.83,
+   "minutes": 99.0,
+   "import": 75.21,
+   "finished": true,
+   "ledger": 6.252776074688882e-12,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 11,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 99.9,
+   "p95": 0.0587,
+   "mean": -0.0002,
+   "seen_in_tol": 98.92,
+   "minutes": 113.75,
+   "import": 78.17,
+   "finished": true,
+   "ledger": -6.139089236967266e-12,
+   "replans": 2
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 12,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 93.09,
+   "p95": 0.1178,
+   "mean": -0.003,
+   "seen_in_tol": 96.8,
+   "minutes": 100.5,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -1.1482370609883219e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 12,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 99.74,
+   "p95": 0.0602,
+   "mean": -0.0003,
+   "seen_in_tol": 98.68,
+   "minutes": 113.25,
+   "import": 77.82,
+   "finished": true,
+   "ledger": -1.318767317570746e-11,
+   "replans": 1
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 13,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 93.45,
+   "p95": 0.113,
+   "mean": -0.003,
+   "seen_in_tol": 96.83,
+   "minutes": 100.25,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -8.29913915367797e-12,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 13,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 99.79,
+   "p95": 0.0593,
+   "mean": -0.0005,
+   "seen_in_tol": 98.65,
+   "minutes": 113.0,
+   "import": 77.68,
+   "finished": true,
+   "ledger": -3.979039320256561e-12,
+   "replans": 1
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 14,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 92.97,
+   "p95": 0.1171,
+   "mean": -0.003,
+   "seen_in_tol": 96.78,
+   "minutes": 102.25,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -3.296918293926865e-12,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 14,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 99.89,
+   "p95": 0.0586,
+   "mean": -0.0002,
+   "seen_in_tol": 98.94,
+   "minutes": 117.5,
+   "import": 78.11,
+   "finished": true,
+   "ledger": -6.0254023992456496e-12,
+   "replans": 2
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 15,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 93.03,
+   "p95": 0.1158,
+   "mean": -0.003,
+   "seen_in_tol": 96.78,
+   "minutes": 101.5,
+   "import": 75.21,
+   "finished": true,
+   "ledger": 6.0254023992456496e-12,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 15,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 99.37,
+   "p95": 0.0606,
+   "mean": -0.0032,
+   "seen_in_tol": 98.39,
+   "minutes": 115.25,
+   "import": 76.78,
+   "finished": true,
+   "ledger": 5.343281372915953e-12,
+   "replans": 1
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 16,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 93.01,
+   "p95": 0.1184,
+   "mean": -0.003,
+   "seen_in_tol": 96.77,
+   "minutes": 100.25,
+   "import": 75.21,
+   "finished": true,
+   "ledger": 0.0,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 16,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 99.78,
+   "p95": 0.0604,
+   "mean": -0.0006,
+   "seen_in_tol": 98.64,
+   "minutes": 113.0,
+   "import": 77.63,
+   "finished": true,
+   "ledger": -6.480149750132114e-12,
+   "replans": 1
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 17,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 93.19,
+   "p95": 0.1151,
+   "mean": -0.003,
+   "seen_in_tol": 96.77,
+   "minutes": 102.25,
+   "import": 75.21,
+   "finished": true,
+   "ledger": 2.9558577807620168e-12,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 17,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 99.34,
+   "p95": 0.0613,
+   "mean": -0.0034,
+   "seen_in_tol": 98.42,
+   "minutes": 116.5,
+   "import": 76.65,
+   "finished": true,
+   "ledger": 1.0231815394945443e-12,
+   "replans": 1
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 18,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 93.06,
+   "p95": 0.1164,
+   "mean": -0.003,
+   "seen_in_tol": 96.79,
+   "minutes": 100.25,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -1.2050804798491299e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 18,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 99.37,
+   "p95": 0.0613,
+   "mean": -0.0027,
+   "seen_in_tol": 98.52,
+   "minutes": 114.0,
+   "import": 76.86,
+   "finished": true,
+   "ledger": -8.86757334228605e-12,
+   "replans": 1
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 19,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 92.86,
+   "p95": 0.1166,
+   "mean": -0.003,
+   "seen_in_tol": 96.84,
+   "minutes": 102.25,
+   "import": 75.21,
+   "finished": true,
+   "ledger": 2.2737367544323206e-13,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 19,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 99.18,
+   "p95": 0.0622,
+   "mean": -0.0054,
+   "seen_in_tol": 98.17,
+   "minutes": 115.5,
+   "import": 76.18,
+   "finished": true,
+   "ledger": -1.7394086171407253e-11,
+   "replans": 1
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 20,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 93.23,
+   "p95": 0.1156,
+   "mean": -0.003,
+   "seen_in_tol": 96.72,
+   "minutes": 101.75,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -7.389644451905042e-12,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 20,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 99.43,
+   "p95": 0.0612,
+   "mean": -0.0031,
+   "seen_in_tol": 98.48,
+   "minutes": 114.5,
+   "import": 76.83,
+   "finished": true,
+   "ledger": -3.410605131648481e-12,
+   "replans": 1
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 21,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 92.91,
+   "p95": 0.1178,
+   "mean": -0.003,
+   "seen_in_tol": 96.77,
+   "minutes": 100.0,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -1.375610736431554e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 21,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 99.92,
+   "p95": 0.0585,
+   "mean": -0.0003,
+   "seen_in_tol": 99.01,
+   "minutes": 112.25,
+   "import": 77.78,
+   "finished": true,
+   "ledger": -1.0686562745831907e-11,
+   "replans": 1
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 22,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 93.23,
+   "p95": 0.1167,
+   "mean": -0.003,
+   "seen_in_tol": 96.79,
+   "minutes": 100.25,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -7.617018127348274e-12,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 22,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 99.83,
+   "p95": 0.0592,
+   "mean": -0.0002,
+   "seen_in_tol": 98.76,
+   "minutes": 112.5,
+   "import": 77.96,
+   "finished": true,
+   "ledger": -3.637978807091713e-12,
+   "replans": 1
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 23,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 92.9,
+   "p95": 0.1182,
+   "mean": -0.003,
+   "seen_in_tol": 96.77,
+   "minutes": 101.75,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -6.821210263296962e-12,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 23,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 99.14,
+   "p95": 0.0621,
+   "mean": -0.0052,
+   "seen_in_tol": 98.12,
+   "minutes": 114.5,
+   "import": 76.13,
+   "finished": true,
+   "ledger": -1.1482370609883219e-11,
+   "replans": 1
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 24,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 92.96,
+   "p95": 0.1168,
+   "mean": -0.003,
+   "seen_in_tol": 96.77,
+   "minutes": 101.25,
+   "import": 75.21,
+   "finished": true,
+   "ledger": 6.59383658785373e-12,
+   "replans": 0
+  },
+  {
+   "exp": "B:noise:right",
+   "seed": 24,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 99.83,
+   "p95": 0.06,
+   "mean": -0.0001,
+   "seen_in_tol": 98.82,
+   "minutes": 113.5,
+   "import": 77.9,
+   "finished": true,
+   "ledger": 5.5706550483591855e-12,
+   "replans": 1
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 0,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 65.38,
+   "p95": 0.2518,
+   "mean": -0.0688,
+   "seen_in_tol": 96.75,
+   "minutes": 96.5,
+   "import": 32.35,
+   "finished": true,
+   "ledger": 8.168399290298112e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 0,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.46,
+   "p95": 0.057,
+   "mean": 0.0008,
+   "seen_in_tol": 98.62,
+   "minutes": 117.25,
+   "import": 86.73,
+   "finished": true,
+   "ledger": -4.865796654485166e-11,
+   "replans": 2
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 1,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 65.33,
+   "p95": 0.2512,
+   "mean": -0.0689,
+   "seen_in_tol": 96.76,
+   "minutes": 96.5,
+   "import": 32.31,
+   "finished": true,
+   "ledger": 8.043343768804334e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 1,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.54,
+   "p95": 0.0547,
+   "mean": 0.0016,
+   "seen_in_tol": 98.94,
+   "minutes": 118.75,
+   "import": 83.42,
+   "finished": true,
+   "ledger": 1.1618794815149158e-10,
+   "replans": 2
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 2,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 65.33,
+   "p95": 0.251,
+   "mean": -0.069,
+   "seen_in_tol": 96.78,
+   "minutes": 96.5,
+   "import": 32.26,
+   "finished": true,
+   "ledger": 8.196820999728516e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 2,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.34,
+   "p95": 0.058,
+   "mean": 0.0005,
+   "seen_in_tol": 98.66,
+   "minutes": 117.25,
+   "import": 86.13,
+   "finished": true,
+   "ledger": -2.9331204132176936e-11,
+   "replans": 2
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 3,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 65.32,
+   "p95": 0.2515,
+   "mean": -0.0692,
+   "seen_in_tol": 96.71,
+   "minutes": 95.25,
+   "import": 32.13,
+   "finished": true,
+   "ledger": 8.15418843558291e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 3,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.98,
+   "p95": 0.054,
+   "mean": 0.0037,
+   "seen_in_tol": 99.24,
+   "minutes": 118.0,
+   "import": 85.48,
+   "finished": true,
+   "ledger": -5.525180313270539e-11,
+   "replans": 3
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 4,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 65.24,
+   "p95": 0.2507,
+   "mean": -0.069,
+   "seen_in_tol": 96.85,
+   "minutes": 94.0,
+   "import": 32.23,
+   "finished": true,
+   "ledger": 8.139977580867708e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 4,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.59,
+   "p95": 0.0543,
+   "mean": 0.0019,
+   "seen_in_tol": 99.06,
+   "minutes": 116.5,
+   "import": 84.1,
+   "finished": true,
+   "ledger": 1.1743850336642936e-10,
+   "replans": 2
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 5,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 65.34,
+   "p95": 0.2511,
+   "mean": -0.0691,
+   "seen_in_tol": 96.84,
+   "minutes": 95.25,
+   "import": 32.15,
+   "finished": true,
+   "ledger": 8.08881850389298e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 5,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.56,
+   "p95": 0.0549,
+   "mean": 0.0018,
+   "seen_in_tol": 99.0,
+   "minutes": 117.25,
+   "import": 85.15,
+   "finished": true,
+   "ledger": 5.4569682106375694e-11,
+   "replans": 2
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 6,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 65.4,
+   "p95": 0.2506,
+   "mean": -0.069,
+   "seen_in_tol": 96.74,
+   "minutes": 94.0,
+   "import": 32.24,
+   "finished": true,
+   "ledger": 8.196820999728516e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 6,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.62,
+   "p95": 0.0543,
+   "mean": 0.0015,
+   "seen_in_tol": 99.02,
+   "minutes": 115.0,
+   "import": 83.5,
+   "finished": true,
+   "ledger": -5.411493475548923e-11,
+   "replans": 2
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 7,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 65.27,
+   "p95": 0.2523,
+   "mean": -0.0691,
+   "seen_in_tol": 96.79,
+   "minutes": 95.25,
+   "import": 32.18,
+   "finished": true,
+   "ledger": 8.031975085032173e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 7,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.53,
+   "p95": 0.0565,
+   "mean": 0.0019,
+   "seen_in_tol": 98.79,
+   "minutes": 116.5,
+   "import": 85.77,
+   "finished": true,
+   "ledger": -2.2737367544323206e-11,
+   "replans": 2
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 8,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 65.35,
+   "p95": 0.2527,
+   "mean": -0.069,
+   "seen_in_tol": 96.8,
+   "minutes": 96.5,
+   "import": 32.22,
+   "finished": true,
+   "ledger": 8.188294486899395e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 8,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.59,
+   "p95": 0.0553,
+   "mean": 0.0019,
+   "seen_in_tol": 98.88,
+   "minutes": 116.0,
+   "import": 85.89,
+   "finished": true,
+   "ledger": 1.716671249596402e-11,
+   "replans": 2
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 9,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 65.31,
+   "p95": 0.2519,
+   "mean": -0.0689,
+   "seen_in_tol": 96.85,
+   "minutes": 95.25,
+   "import": 32.32,
+   "finished": true,
+   "ledger": 8.074607649177779e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 9,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.49,
+   "p95": 0.0549,
+   "mean": 0.0013,
+   "seen_in_tol": 98.84,
+   "minutes": 118.5,
+   "import": 84.54,
+   "finished": true,
+   "ledger": 7.014477887423709e-11,
+   "replans": 2
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 10,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 65.44,
+   "p95": 0.2521,
+   "mean": -0.0688,
+   "seen_in_tol": 96.81,
+   "minutes": 94.0,
+   "import": 32.38,
+   "finished": true,
+   "ledger": 8.111555871437304e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 10,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.44,
+   "p95": 0.0562,
+   "mean": 0.0015,
+   "seen_in_tol": 98.67,
+   "minutes": 118.5,
+   "import": 85.32,
+   "finished": true,
+   "ledger": 8.265033102361485e-11,
+   "replans": 2
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 11,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 65.37,
+   "p95": 0.2512,
+   "mean": -0.069,
+   "seen_in_tol": 96.83,
+   "minutes": 96.5,
+   "import": 32.25,
+   "finished": true,
+   "ledger": 8.168399290298112e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 11,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.4,
+   "p95": 0.0552,
+   "mean": 0.0014,
+   "seen_in_tol": 98.67,
+   "minutes": 117.0,
+   "import": 83.98,
+   "finished": true,
+   "ledger": -2.7284841053187847e-11,
+   "replans": 2
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 12,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 65.33,
+   "p95": 0.2511,
+   "mean": -0.069,
+   "seen_in_tol": 96.8,
+   "minutes": 95.25,
+   "import": 32.22,
+   "finished": true,
+   "ledger": 8.265033102361485e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 12,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.56,
+   "p95": 0.0559,
+   "mean": 0.0022,
+   "seen_in_tol": 98.83,
+   "minutes": 116.0,
+   "import": 85.56,
+   "finished": true,
+   "ledger": 3.9335645851679146e-11,
+   "replans": 2
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 13,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 65.48,
+   "p95": 0.2498,
+   "mean": -0.0687,
+   "seen_in_tol": 96.83,
+   "minutes": 94.0,
+   "import": 32.42,
+   "finished": true,
+   "ledger": 8.148504093696829e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 13,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 96.63,
+   "p95": 0.0763,
+   "mean": 0.0056,
+   "seen_in_tol": 95.22,
+   "minutes": 101.5,
+   "import": 80.79,
+   "finished": true,
+   "ledger": -1.864464138634503e-11,
+   "replans": 1
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 14,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 65.14,
+   "p95": 0.252,
+   "mean": -0.069,
+   "seen_in_tol": 96.78,
+   "minutes": 96.5,
+   "import": 32.25,
+   "finished": true,
+   "ledger": 8.08881850389298e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 14,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.59,
+   "p95": 0.0544,
+   "mean": 0.0017,
+   "seen_in_tol": 98.96,
+   "minutes": 117.25,
+   "import": 83.74,
+   "finished": true,
+   "ledger": 8.628830983070657e-11,
+   "replans": 2
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 15,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 65.22,
+   "p95": 0.251,
+   "mean": -0.0693,
+   "seen_in_tol": 96.78,
+   "minutes": 94.0,
+   "import": 32.04,
+   "finished": true,
+   "ledger": 8.131451068038587e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 15,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.04,
+   "p95": 0.0577,
+   "mean": -0.0004,
+   "seen_in_tol": 98.38,
+   "minutes": 118.25,
+   "import": 82.98,
+   "finished": true,
+   "ledger": -8.185452315956354e-12,
+   "replans": 2
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 16,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 65.28,
+   "p95": 0.2518,
+   "mean": -0.0689,
+   "seen_in_tol": 96.77,
+   "minutes": 95.25,
+   "import": 32.29,
+   "finished": true,
+   "ledger": 7.975131666171364e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 16,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.47,
+   "p95": 0.0563,
+   "mean": 0.0008,
+   "seen_in_tol": 98.85,
+   "minutes": 118.5,
+   "import": 83.54,
+   "finished": true,
+   "ledger": 3.115019353572279e-11,
+   "replans": 2
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 17,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 65.09,
+   "p95": 0.2506,
+   "mean": -0.0691,
+   "seen_in_tol": 96.77,
+   "minutes": 97.75,
+   "import": 32.18,
+   "finished": true,
+   "ledger": 8.176925803127233e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 17,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.62,
+   "p95": 0.0559,
+   "mean": 0.0029,
+   "seen_in_tol": 98.96,
+   "minutes": 115.75,
+   "import": 85.54,
+   "finished": true,
+   "ledger": -5.002220859751105e-11,
+   "replans": 2
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 18,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 65.33,
+   "p95": 0.2505,
+   "mean": -0.0689,
+   "seen_in_tol": 96.79,
+   "minutes": 95.25,
+   "import": 32.28,
+   "finished": true,
+   "ledger": 8.202505341614597e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 18,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.56,
+   "p95": 0.0546,
+   "mean": 0.0025,
+   "seen_in_tol": 98.99,
+   "minutes": 116.0,
+   "import": 85.24,
+   "finished": true,
+   "ledger": -5.03632691106759e-11,
+   "replans": 2
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 19,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 65.36,
+   "p95": 0.2507,
+   "mean": -0.0689,
+   "seen_in_tol": 96.84,
+   "minutes": 95.25,
+   "import": 32.29,
+   "finished": true,
+   "ledger": 7.977973837114405e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 19,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.65,
+   "p95": 0.0554,
+   "mean": 0.0023,
+   "seen_in_tol": 99.0,
+   "minutes": 117.75,
+   "import": 84.84,
+   "finished": true,
+   "ledger": 8.58335624798201e-11,
+   "replans": 2
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 20,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 65.33,
+   "p95": 0.2534,
+   "mean": -0.0691,
+   "seen_in_tol": 96.72,
+   "minutes": 96.5,
+   "import": 32.19,
+   "finished": true,
+   "ledger": 8.060396794462577e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 20,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.48,
+   "p95": 0.0559,
+   "mean": 0.0014,
+   "seen_in_tol": 98.81,
+   "minutes": 117.75,
+   "import": 84.54,
+   "finished": true,
+   "ledger": 3.512923285597935e-11,
+   "replans": 2
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 21,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 65.15,
+   "p95": 0.2518,
+   "mean": -0.0691,
+   "seen_in_tol": 96.77,
+   "minutes": 95.25,
+   "import": 32.17,
+   "finished": true,
+   "ledger": 8.122924555209465e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 21,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.44,
+   "p95": 0.0564,
+   "mean": 0.0013,
+   "seen_in_tol": 98.81,
+   "minutes": 117.75,
+   "import": 84.58,
+   "finished": true,
+   "ledger": -7.150902092689648e-11,
+   "replans": 2
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 22,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 65.09,
+   "p95": 0.2533,
+   "mean": -0.0691,
+   "seen_in_tol": 96.79,
+   "minutes": 94.0,
+   "import": 32.15,
+   "finished": true,
+   "ledger": 8.100187187665142e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 22,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 96.67,
+   "p95": 0.0752,
+   "mean": 0.0051,
+   "seen_in_tol": 95.28,
+   "minutes": 102.25,
+   "import": 80.5,
+   "finished": true,
+   "ledger": 1.226680979016237e-10,
+   "replans": 1
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 23,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 65.39,
+   "p95": 0.2532,
+   "mean": -0.0695,
+   "seen_in_tol": 96.77,
+   "minutes": 95.25,
+   "import": 31.93,
+   "finished": true,
+   "ledger": 8.174083632184193e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 23,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 96.46,
+   "p95": 0.082,
+   "mean": 0.0079,
+   "seen_in_tol": 95.03,
+   "minutes": 101.25,
+   "import": 82.36,
+   "finished": true,
+   "ledger": 9.094947017729282e-12,
+   "replans": 1
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 24,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 65.58,
+   "p95": 0.2518,
+   "mean": -0.0691,
+   "seen_in_tol": 96.77,
+   "minutes": 96.5,
+   "import": 32.17,
+   "finished": true,
+   "ledger": 8.137135409924667e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:wrong",
+   "seed": 24,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 100.0,
+   "p95": 0.0527,
+   "mean": 0.0031,
+   "seen_in_tol": 99.27,
+   "minutes": 118.25,
+   "import": 83.82,
+   "finished": true,
+   "ledger": 3.035438567167148e-11,
+   "replans": 3
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 0,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 96.78,
+   "p95": 0.0657,
+   "mean": -0.003,
+   "seen_in_tol": 96.75,
+   "minutes": 101.75,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -9.936229616869241e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 0,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 96.78,
+   "p95": 0.0657,
+   "mean": -0.003,
+   "seen_in_tol": 95.67,
+   "minutes": 101.75,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -9.936229616869241e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 1,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 96.79,
+   "p95": 0.065,
+   "mean": -0.003,
+   "seen_in_tol": 96.76,
+   "minutes": 102.5,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -9.958966984413564e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 1,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 96.79,
+   "p95": 0.065,
+   "mean": -0.003,
+   "seen_in_tol": 95.77,
+   "minutes": 102.5,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -9.958966984413564e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 2,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 96.79,
+   "p95": 0.0652,
+   "mean": -0.003,
+   "seen_in_tol": 96.78,
+   "minutes": 100.0,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -9.92486093309708e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 2,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 96.79,
+   "p95": 0.0652,
+   "mean": -0.003,
+   "seen_in_tol": 96.28,
+   "minutes": 100.0,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -9.92486093309708e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 3,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 96.79,
+   "p95": 0.0641,
+   "mean": -0.003,
+   "seen_in_tol": 96.71,
+   "minutes": 100.75,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -9.913492249324918e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 3,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 96.79,
+   "p95": 0.0641,
+   "mean": -0.003,
+   "seen_in_tol": 95.81,
+   "minutes": 100.75,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -9.913492249324918e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 4,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 96.79,
+   "p95": 0.0655,
+   "mean": -0.003,
+   "seen_in_tol": 96.85,
+   "minutes": 99.0,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -9.902123565552756e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 4,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 99.99,
+   "p95": 0.0495,
+   "mean": 0.0,
+   "seen_in_tol": 99.64,
+   "minutes": 112.75,
+   "import": 77.96,
+   "finished": true,
+   "ledger": -9.868017514236271e-11,
+   "replans": 2
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 5,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 96.77,
+   "p95": 0.0651,
+   "mean": -0.003,
+   "seen_in_tol": 96.84,
+   "minutes": 102.0,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -9.822542779147625e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 5,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 96.77,
+   "p95": 0.0651,
+   "mean": -0.003,
+   "seen_in_tol": 95.52,
+   "minutes": 102.0,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -9.822542779147625e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 6,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 96.79,
+   "p95": 0.066,
+   "mean": -0.003,
+   "seen_in_tol": 96.74,
+   "minutes": 100.5,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -9.879386198008433e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 6,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 96.79,
+   "p95": 0.066,
+   "mean": -0.003,
+   "seen_in_tol": 96.19,
+   "minutes": 100.5,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -9.879386198008433e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 7,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 96.79,
+   "p95": 0.0645,
+   "mean": -0.003,
+   "seen_in_tol": 96.79,
+   "minutes": 99.0,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -9.913492249324918e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 7,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 99.99,
+   "p95": 0.0503,
+   "mean": 0.0001,
+   "seen_in_tol": 99.45,
+   "minutes": 112.75,
+   "import": 77.85,
+   "finished": true,
+   "ledger": -9.947598300641403e-11,
+   "replans": 2
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 8,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 96.79,
+   "p95": 0.0646,
+   "mean": -0.003,
+   "seen_in_tol": 96.8,
+   "minutes": 102.0,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -9.981704351957887e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 8,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 96.79,
+   "p95": 0.0646,
+   "mean": -0.003,
+   "seen_in_tol": 95.6,
+   "minutes": 102.0,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -9.981704351957887e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 9,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 96.76,
+   "p95": 0.0661,
+   "mean": -0.003,
+   "seen_in_tol": 96.85,
+   "minutes": 99.0,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -9.981704351957887e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 9,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 99.99,
+   "p95": 0.0493,
+   "mean": 0.0002,
+   "seen_in_tol": 99.53,
+   "minutes": 112.75,
+   "import": 77.92,
+   "finished": true,
+   "ledger": -1.0027179087046534e-10,
+   "replans": 2
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 10,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 96.81,
+   "p95": 0.065,
+   "mean": -0.003,
+   "seen_in_tol": 96.81,
+   "minutes": 99.0,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -9.913492249324918e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 10,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 99.99,
+   "p95": 0.0493,
+   "mean": -0.0001,
+   "seen_in_tol": 99.5,
+   "minutes": 113.75,
+   "import": 77.86,
+   "finished": true,
+   "ledger": -9.902123565552756e-11,
+   "replans": 2
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 11,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 96.79,
+   "p95": 0.0655,
+   "mean": -0.003,
+   "seen_in_tol": 96.83,
+   "minutes": 99.0,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -9.92486093309708e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 11,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 100.0,
+   "p95": 0.0492,
+   "mean": -0.0001,
+   "seen_in_tol": 99.46,
+   "minutes": 113.25,
+   "import": 78.01,
+   "finished": true,
+   "ledger": -9.890754881780595e-11,
+   "replans": 2
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 12,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 96.76,
+   "p95": 0.0657,
+   "mean": -0.003,
+   "seen_in_tol": 96.8,
+   "minutes": 100.5,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -9.936229616869241e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 12,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 96.76,
+   "p95": 0.0657,
+   "mean": -0.003,
+   "seen_in_tol": 96.19,
+   "minutes": 100.5,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -9.936229616869241e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 13,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 96.78,
+   "p95": 0.0649,
+   "mean": -0.003,
+   "seen_in_tol": 96.83,
+   "minutes": 100.25,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -9.85664883046411e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 13,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 96.78,
+   "p95": 0.0649,
+   "mean": -0.003,
+   "seen_in_tol": 96.31,
+   "minutes": 100.25,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -9.85664883046411e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 14,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 96.81,
+   "p95": 0.0652,
+   "mean": -0.003,
+   "seen_in_tol": 96.78,
+   "minutes": 102.25,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -9.902123565552756e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 14,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 96.81,
+   "p95": 0.0652,
+   "mean": -0.003,
+   "seen_in_tol": 95.51,
+   "minutes": 102.25,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -9.902123565552756e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 15,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 96.81,
+   "p95": 0.064,
+   "mean": -0.003,
+   "seen_in_tol": 96.78,
+   "minutes": 101.5,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -9.970335668185726e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 15,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 96.81,
+   "p95": 0.064,
+   "mean": -0.003,
+   "seen_in_tol": 95.75,
+   "minutes": 101.5,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -9.970335668185726e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 16,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 96.77,
+   "p95": 0.0656,
+   "mean": -0.003,
+   "seen_in_tol": 96.77,
+   "minutes": 100.25,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -1.0049916454590857e-10,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 16,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 96.77,
+   "p95": 0.0656,
+   "mean": -0.003,
+   "seen_in_tol": 96.11,
+   "minutes": 100.25,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -1.0049916454590857e-10,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 17,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 96.79,
+   "p95": 0.0638,
+   "mean": -0.003,
+   "seen_in_tol": 96.77,
+   "minutes": 102.25,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -9.936229616869241e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 17,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 96.79,
+   "p95": 0.0638,
+   "mean": -0.003,
+   "seen_in_tol": 95.62,
+   "minutes": 102.25,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -9.936229616869241e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 18,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 96.8,
+   "p95": 0.0653,
+   "mean": -0.003,
+   "seen_in_tol": 96.79,
+   "minutes": 100.25,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -9.981704351957887e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 18,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 96.8,
+   "p95": 0.0653,
+   "mean": -0.003,
+   "seen_in_tol": 95.84,
+   "minutes": 100.25,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -9.981704351957887e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 19,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 96.78,
+   "p95": 0.0646,
+   "mean": -0.003,
+   "seen_in_tol": 96.84,
+   "minutes": 102.25,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -9.970335668185726e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 19,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 96.78,
+   "p95": 0.0646,
+   "mean": -0.003,
+   "seen_in_tol": 95.59,
+   "minutes": 102.25,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -9.970335668185726e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 20,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 96.81,
+   "p95": 0.0656,
+   "mean": -0.003,
+   "seen_in_tol": 96.72,
+   "minutes": 101.75,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -9.902123565552756e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 20,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 96.81,
+   "p95": 0.0656,
+   "mean": -0.003,
+   "seen_in_tol": 95.8,
+   "minutes": 101.75,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -9.902123565552756e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 21,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 96.76,
+   "p95": 0.065,
+   "mean": -0.003,
+   "seen_in_tol": 96.77,
+   "minutes": 100.0,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -9.981704351957887e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 21,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 96.76,
+   "p95": 0.065,
+   "mean": -0.003,
+   "seen_in_tol": 96.32,
+   "minutes": 100.0,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -9.981704351957887e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 22,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 96.78,
+   "p95": 0.0645,
+   "mean": -0.003,
+   "seen_in_tol": 96.79,
+   "minutes": 100.25,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -9.913492249324918e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 22,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 96.78,
+   "p95": 0.0645,
+   "mean": -0.003,
+   "seen_in_tol": 96.24,
+   "minutes": 100.25,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -9.913492249324918e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 23,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 96.81,
+   "p95": 0.064,
+   "mean": -0.003,
+   "seen_in_tol": 96.77,
+   "minutes": 101.75,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -9.890754881780595e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 23,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 96.81,
+   "p95": 0.064,
+   "mean": -0.003,
+   "seen_in_tol": 95.51,
+   "minutes": 101.75,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -9.890754881780595e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 24,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 96.81,
+   "p95": 0.0643,
+   "mean": -0.003,
+   "seen_in_tol": 96.77,
+   "minutes": 101.25,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -9.890754881780595e-11,
+   "replans": 0
+  },
+  {
+   "exp": "B:quiet:right",
+   "seed": 24,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.3,
+    "keep": 0.7,
+    "cut_error": 0.0,
+    "finish_error_m": 0.0
+   },
+   "beliefs": {
+    "swell": 1.3,
+    "keep": 0.7
+   },
+   "in_tol": 96.81,
+   "p95": 0.0643,
+   "mean": -0.003,
+   "seen_in_tol": 96.42,
+   "minutes": 101.25,
+   "import": 75.21,
+   "finished": true,
+   "ledger": -9.890754881780595e-11,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.60",
+   "seed": 0,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.6,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 51.26,
+   "p95": 0.6601,
+   "mean": -0.1871,
+   "seen_in_tol": 96.75,
+   "minutes": 96.5,
+   "import": 32.35,
+   "finished": true,
+   "ledger": -2.8194335754960775e-11,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.60",
+   "seed": 0,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.6,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.83,
+   "p95": 0.0586,
+   "mean": 0.0007,
+   "seen_in_tol": 98.78,
+   "minutes": 134.25,
+   "import": 184.93,
+   "finished": true,
+   "ledger": -1.2732925824820995e-11,
+   "replans": 4
+  },
+  {
+   "exp": "C:0.60",
+   "seed": 1,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.6,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 51.19,
+   "p95": 0.6628,
+   "mean": -0.1871,
+   "seen_in_tol": 96.76,
+   "minutes": 96.5,
+   "import": 32.31,
+   "finished": true,
+   "ledger": -1.6370904631912708e-11,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.60",
+   "seed": 1,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.6,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.87,
+   "p95": 0.0589,
+   "mean": 0.0009,
+   "seen_in_tol": 98.95,
+   "minutes": 128.25,
+   "import": 183.34,
+   "finished": true,
+   "ledger": 8.526512829121202e-12,
+   "replans": 3
+  },
+  {
+   "exp": "C:0.60",
+   "seed": 2,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.6,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 51.32,
+   "p95": 0.6613,
+   "mean": -0.1872,
+   "seen_in_tol": 96.78,
+   "minutes": 96.5,
+   "import": 32.26,
+   "finished": true,
+   "ledger": -3.637978807091713e-12,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.60",
+   "seed": 2,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.6,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.11,
+   "p95": 0.0636,
+   "mean": -0.0009,
+   "seen_in_tol": 98.08,
+   "minutes": 131.5,
+   "import": 184.24,
+   "finished": true,
+   "ledger": 3.410605131648481e-12,
+   "replans": 3
+  },
+  {
+   "exp": "C:0.60",
+   "seed": 3,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.6,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 51.26,
+   "p95": 0.6618,
+   "mean": -0.1874,
+   "seen_in_tol": 96.71,
+   "minutes": 95.25,
+   "import": 32.13,
+   "finished": true,
+   "ledger": 2.2737367544323206e-12,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.60",
+   "seed": 3,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.6,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.36,
+   "p95": 0.0608,
+   "mean": -0.0011,
+   "seen_in_tol": 98.45,
+   "minutes": 132.75,
+   "import": 183.59,
+   "finished": true,
+   "ledger": 4.888534022029489e-12,
+   "replans": 3
+  },
+  {
+   "exp": "C:0.60",
+   "seed": 4,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.6,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 51.34,
+   "p95": 0.6618,
+   "mean": -0.1872,
+   "seen_in_tol": 96.85,
+   "minutes": 94.0,
+   "import": 32.23,
+   "finished": true,
+   "ledger": 1.8189894035458565e-11,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.60",
+   "seed": 4,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.6,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.88,
+   "p95": 0.0582,
+   "mean": 0.0,
+   "seen_in_tol": 98.94,
+   "minutes": 128.25,
+   "import": 183.18,
+   "finished": true,
+   "ledger": 3.603872755775228e-11,
+   "replans": 4
+  },
+  {
+   "exp": "C:0.60",
+   "seed": 5,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.6,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 51.05,
+   "p95": 0.6614,
+   "mean": -0.1872,
+   "seen_in_tol": 96.84,
+   "minutes": 95.25,
+   "import": 32.15,
+   "finished": true,
+   "ledger": -7.73070496506989e-12,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.60",
+   "seed": 5,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.6,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.85,
+   "p95": 0.059,
+   "mean": 0.0009,
+   "seen_in_tol": 98.97,
+   "minutes": 127.75,
+   "import": 184.39,
+   "finished": true,
+   "ledger": -2.2396307031158358e-11,
+   "replans": 4
+  },
+  {
+   "exp": "C:0.60",
+   "seed": 6,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.6,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 51.02,
+   "p95": 0.6601,
+   "mean": -0.1873,
+   "seen_in_tol": 96.74,
+   "minutes": 94.0,
+   "import": 32.24,
+   "finished": true,
+   "ledger": 1.4097167877480388e-11,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.60",
+   "seed": 6,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.6,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.09,
+   "p95": 0.0622,
+   "mean": -0.0049,
+   "seen_in_tol": 98.04,
+   "minutes": 125.75,
+   "import": 179.34,
+   "finished": true,
+   "ledger": -1.77351466845721e-11,
+   "replans": 3
+  },
+  {
+   "exp": "C:0.60",
+   "seed": 7,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.6,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 51.71,
+   "p95": 0.6637,
+   "mean": -0.1873,
+   "seen_in_tol": 96.79,
+   "minutes": 95.25,
+   "import": 32.18,
+   "finished": true,
+   "ledger": 1.0913936421275139e-11,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.60",
+   "seed": 7,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.6,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.89,
+   "p95": 0.0592,
+   "mean": 0.0001,
+   "seen_in_tol": 98.83,
+   "minutes": 127.75,
+   "import": 183.28,
+   "finished": true,
+   "ledger": -1.3528733688872308e-11,
+   "replans": 4
+  },
+  {
+   "exp": "C:0.60",
+   "seed": 8,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.6,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 51.06,
+   "p95": 0.6629,
+   "mean": -0.1872,
+   "seen_in_tol": 96.8,
+   "minutes": 96.5,
+   "import": 32.22,
+   "finished": true,
+   "ledger": 5.002220859751105e-12,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.60",
+   "seed": 8,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.6,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.87,
+   "p95": 0.0586,
+   "mean": 0.0005,
+   "seen_in_tol": 98.96,
+   "minutes": 128.25,
+   "import": 183.91,
+   "finished": true,
+   "ledger": -3.410605131648481e-12,
+   "replans": 4
+  },
+  {
+   "exp": "C:0.60",
+   "seed": 9,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.6,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 51.03,
+   "p95": 0.662,
+   "mean": -0.1871,
+   "seen_in_tol": 96.85,
+   "minutes": 95.25,
+   "import": 32.32,
+   "finished": true,
+   "ledger": 1.0459189070388675e-11,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.60",
+   "seed": 9,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.6,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.88,
+   "p95": 0.0591,
+   "mean": 0.0001,
+   "seen_in_tol": 98.87,
+   "minutes": 128.75,
+   "import": 182.94,
+   "finished": true,
+   "ledger": 5.7980287238024175e-12,
+   "replans": 3
+  },
+  {
+   "exp": "C:0.65",
+   "seed": 0,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.65,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 53.09,
+   "p95": 0.497,
+   "mean": -0.1409,
+   "seen_in_tol": 96.75,
+   "minutes": 96.5,
+   "import": 32.35,
+   "finished": true,
+   "ledger": -3.296918293926865e-11,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.65",
+   "seed": 0,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.65,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.44,
+   "p95": 0.0615,
+   "mean": -0.0008,
+   "seen_in_tol": 98.47,
+   "minutes": 121.75,
+   "import": 137.18,
+   "finished": true,
+   "ledger": 1.3869794202037156e-11,
+   "replans": 3
+  },
+  {
+   "exp": "C:0.65",
+   "seed": 1,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.65,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 53.02,
+   "p95": 0.4986,
+   "mean": -0.1409,
+   "seen_in_tol": 96.76,
+   "minutes": 96.5,
+   "import": 32.31,
+   "finished": true,
+   "ledger": -1.750777300912887e-11,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.65",
+   "seed": 1,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.65,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.44,
+   "p95": 0.0612,
+   "mean": -0.0008,
+   "seen_in_tol": 98.46,
+   "minutes": 119.5,
+   "import": 136.8,
+   "finished": true,
+   "ledger": -7.844391802791506e-12,
+   "replans": 3
+  },
+  {
+   "exp": "C:0.65",
+   "seed": 2,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.65,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 53.26,
+   "p95": 0.4975,
+   "mean": -0.141,
+   "seen_in_tol": 96.78,
+   "minutes": 96.5,
+   "import": 32.26,
+   "finished": true,
+   "ledger": 9.094947017729282e-13,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.65",
+   "seed": 2,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.65,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.88,
+   "p95": 0.0598,
+   "mean": 0.002,
+   "seen_in_tol": 98.96,
+   "minutes": 123.0,
+   "import": 139.0,
+   "finished": true,
+   "ledger": -4.774847184307873e-12,
+   "replans": 4
+  },
+  {
+   "exp": "C:0.65",
+   "seed": 3,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.65,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 53.15,
+   "p95": 0.498,
+   "mean": -0.1412,
+   "seen_in_tol": 96.71,
+   "minutes": 95.25,
+   "import": 32.13,
+   "finished": true,
+   "ledger": 3.865352482534945e-12,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.65",
+   "seed": 3,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.65,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.86,
+   "p95": 0.0594,
+   "mean": 0.0014,
+   "seen_in_tol": 98.89,
+   "minutes": 123.25,
+   "import": 138.31,
+   "finished": true,
+   "ledger": -1.318767317570746e-11,
+   "replans": 4
+  },
+  {
+   "exp": "C:0.65",
+   "seed": 4,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.65,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 53.14,
+   "p95": 0.4984,
+   "mean": -0.141,
+   "seen_in_tol": 96.85,
+   "minutes": 94.0,
+   "import": 32.23,
+   "finished": true,
+   "ledger": 1.4551915228366852e-11,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.65",
+   "seed": 4,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.65,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.86,
+   "p95": 0.059,
+   "mean": -0.0003,
+   "seen_in_tol": 99.04,
+   "minutes": 122.5,
+   "import": 136.64,
+   "finished": true,
+   "ledger": -8.29913915367797e-12,
+   "replans": 4
+  },
+  {
+   "exp": "C:0.65",
+   "seed": 5,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.65,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 52.88,
+   "p95": 0.4983,
+   "mean": -0.1411,
+   "seen_in_tol": 96.84,
+   "minutes": 95.25,
+   "import": 32.15,
+   "finished": true,
+   "ledger": -2.2737367544323206e-12,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.65",
+   "seed": 5,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.65,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.18,
+   "p95": 0.0629,
+   "mean": -0.0018,
+   "seen_in_tol": 98.23,
+   "minutes": 122.25,
+   "import": 137.39,
+   "finished": true,
+   "ledger": -1.3415046851150692e-11,
+   "replans": 3
+  },
+  {
+   "exp": "C:0.65",
+   "seed": 6,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.65,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 52.81,
+   "p95": 0.4955,
+   "mean": -0.1411,
+   "seen_in_tol": 96.74,
+   "minutes": 94.0,
+   "import": 32.24,
+   "finished": true,
+   "ledger": 1.3415046851150692e-11,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.65",
+   "seed": 6,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.65,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.32,
+   "p95": 0.0609,
+   "mean": -0.0042,
+   "seen_in_tol": 98.5,
+   "minutes": 120.25,
+   "import": 134.09,
+   "finished": true,
+   "ledger": 3.296918293926865e-12,
+   "replans": 3
+  },
+  {
+   "exp": "C:0.65",
+   "seed": 7,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.65,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 53.36,
+   "p95": 0.5,
+   "mean": -0.1411,
+   "seen_in_tol": 96.79,
+   "minutes": 95.25,
+   "import": 32.18,
+   "finished": true,
+   "ledger": 1.2505552149377763e-11,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.65",
+   "seed": 7,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.65,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.51,
+   "p95": 0.0608,
+   "mean": -0.0013,
+   "seen_in_tol": 98.5,
+   "minutes": 121.25,
+   "import": 136.73,
+   "finished": true,
+   "ledger": -8.071765478234738e-12,
+   "replans": 3
+  },
+  {
+   "exp": "C:0.65",
+   "seed": 8,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.65,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 52.88,
+   "p95": 0.4991,
+   "mean": -0.1411,
+   "seen_in_tol": 96.8,
+   "minutes": 96.5,
+   "import": 32.22,
+   "finished": true,
+   "ledger": 3.637978807091713e-12,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.65",
+   "seed": 8,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.65,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.13,
+   "p95": 0.0639,
+   "mean": -0.0018,
+   "seen_in_tol": 98.28,
+   "minutes": 122.75,
+   "import": 137.13,
+   "finished": true,
+   "ledger": 2.546585164964199e-11,
+   "replans": 3
+  },
+  {
+   "exp": "C:0.65",
+   "seed": 9,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.65,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 52.91,
+   "p95": 0.4982,
+   "mean": -0.1409,
+   "seen_in_tol": 96.85,
+   "minutes": 95.25,
+   "import": 32.32,
+   "finished": true,
+   "ledger": 7.503331289626658e-12,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.65",
+   "seed": 9,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.65,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.17,
+   "p95": 0.0629,
+   "mean": -0.0017,
+   "seen_in_tol": 98.16,
+   "minutes": 121.75,
+   "import": 136.62,
+   "finished": true,
+   "ledger": 3.410605131648481e-13,
+   "replans": 3
+  },
+  {
+   "exp": "C:0.70",
+   "seed": 0,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 57.15,
+   "p95": 0.3373,
+   "mean": -0.0947,
+   "seen_in_tol": 96.75,
+   "minutes": 96.5,
+   "import": 32.35,
+   "finished": true,
+   "ledger": -2.2168933355715126e-11,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.70",
+   "seed": 0,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.91,
+   "p95": 0.0584,
+   "mean": 0.0008,
+   "seen_in_tol": 99.02,
+   "minutes": 117.25,
+   "import": 98.81,
+   "finished": true,
+   "ledger": -5.115907697472721e-12,
+   "replans": 3
+  },
+  {
+   "exp": "C:0.70",
+   "seed": 1,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 56.99,
+   "p95": 0.3394,
+   "mean": -0.0947,
+   "seen_in_tol": 96.76,
+   "minutes": 96.5,
+   "import": 32.31,
+   "finished": true,
+   "ledger": -1.5006662579253316e-11,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.70",
+   "seed": 1,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.94,
+   "p95": 0.059,
+   "mean": 0.0,
+   "seen_in_tol": 99.11,
+   "minutes": 117.25,
+   "import": 97.64,
+   "finished": true,
+   "ledger": -1.2846612662542611e-11,
+   "replans": 3
+  },
+  {
+   "exp": "C:0.70",
+   "seed": 2,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 57.17,
+   "p95": 0.3391,
+   "mean": -0.0948,
+   "seen_in_tol": 96.78,
+   "minutes": 96.5,
+   "import": 32.26,
+   "finished": true,
+   "ledger": 5.115907697472721e-12,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.70",
+   "seed": 2,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.35,
+   "p95": 0.061,
+   "mean": -0.0018,
+   "seen_in_tol": 98.3,
+   "minutes": 119.75,
+   "import": 98.45,
+   "finished": true,
+   "ledger": -1.3642420526593924e-12,
+   "replans": 2
+  },
+  {
+   "exp": "C:0.70",
+   "seed": 3,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 57.1,
+   "p95": 0.3392,
+   "mean": -0.0951,
+   "seen_in_tol": 96.71,
+   "minutes": 95.25,
+   "import": 32.13,
+   "finished": true,
+   "ledger": 3.865352482534945e-12,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.70",
+   "seed": 3,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.89,
+   "p95": 0.0597,
+   "mean": 0.0013,
+   "seen_in_tol": 98.91,
+   "minutes": 117.25,
+   "import": 99.38,
+   "finished": true,
+   "ledger": 1.057287590811029e-11,
+   "replans": 2
+  },
+  {
+   "exp": "C:0.70",
+   "seed": 4,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 57.14,
+   "p95": 0.3391,
+   "mean": -0.0949,
+   "seen_in_tol": 96.85,
+   "minutes": 94.0,
+   "import": 32.23,
+   "finished": true,
+   "ledger": 1.9554136088117957e-11,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.70",
+   "seed": 4,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.88,
+   "p95": 0.0581,
+   "mean": -0.0001,
+   "seen_in_tol": 98.87,
+   "minutes": 117.75,
+   "import": 97.67,
+   "finished": true,
+   "ledger": 1.1368683772161603e-12,
+   "replans": 3
+  },
+  {
+   "exp": "C:0.70",
+   "seed": 5,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 56.73,
+   "p95": 0.3404,
+   "mean": -0.0949,
+   "seen_in_tol": 96.84,
+   "minutes": 95.25,
+   "import": 32.15,
+   "finished": true,
+   "ledger": 3.410605131648481e-13,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.70",
+   "seed": 5,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.88,
+   "p95": 0.0584,
+   "mean": 0.0007,
+   "seen_in_tol": 98.86,
+   "minutes": 117.75,
+   "import": 99.12,
+   "finished": true,
+   "ledger": 3.637978807091713e-12,
+   "replans": 3
+  },
+  {
+   "exp": "C:0.70",
+   "seed": 6,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 56.96,
+   "p95": 0.3375,
+   "mean": -0.0949,
+   "seen_in_tol": 96.74,
+   "minutes": 94.0,
+   "import": 32.24,
+   "finished": true,
+   "ledger": 1.8417267710901797e-11,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.70",
+   "seed": 6,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.35,
+   "p95": 0.0607,
+   "mean": -0.0042,
+   "seen_in_tol": 98.44,
+   "minutes": 116.5,
+   "import": 94.95,
+   "finished": true,
+   "ledger": -1.2960299500264227e-11,
+   "replans": 2
+  },
+  {
+   "exp": "C:0.70",
+   "seed": 7,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 57.55,
+   "p95": 0.3405,
+   "mean": -0.095,
+   "seen_in_tol": 96.79,
+   "minutes": 95.25,
+   "import": 32.18,
+   "finished": true,
+   "ledger": 2.0122570276726037e-11,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.70",
+   "seed": 7,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.93,
+   "p95": 0.059,
+   "mean": 0.0007,
+   "seen_in_tol": 98.96,
+   "minutes": 117.5,
+   "import": 98.88,
+   "finished": true,
+   "ledger": 9.208633855450898e-12,
+   "replans": 3
+  },
+  {
+   "exp": "C:0.70",
+   "seed": 8,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 56.88,
+   "p95": 0.34,
+   "mean": -0.0949,
+   "seen_in_tol": 96.8,
+   "minutes": 96.5,
+   "import": 32.22,
+   "finished": true,
+   "ledger": 6.707523425575346e-12,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.70",
+   "seed": 8,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.11,
+   "p95": 0.0637,
+   "mean": -0.0037,
+   "seen_in_tol": 98.09,
+   "minutes": 117.0,
+   "import": 97.02,
+   "finished": true,
+   "ledger": -2.0122570276726037e-11,
+   "replans": 2
+  },
+  {
+   "exp": "C:0.70",
+   "seed": 9,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 56.88,
+   "p95": 0.3389,
+   "mean": -0.0947,
+   "seen_in_tol": 96.85,
+   "minutes": 95.25,
+   "import": 32.32,
+   "finished": true,
+   "ledger": 1.8417267710901797e-11,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.70",
+   "seed": 9,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.7,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.85,
+   "p95": 0.0602,
+   "mean": 0.0006,
+   "seen_in_tol": 98.74,
+   "minutes": 119.25,
+   "import": 98.1,
+   "finished": true,
+   "ledger": -4.092726157978177e-12,
+   "replans": 2
+  },
+  {
+   "exp": "C:0.75",
+   "seed": 0,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.75,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 69.73,
+   "p95": 0.1834,
+   "mean": -0.0485,
+   "seen_in_tol": 96.75,
+   "minutes": 96.5,
+   "import": 32.35,
+   "finished": true,
+   "ledger": -3.328182174300309e-11,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.75",
+   "seed": 0,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.75,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.92,
+   "p95": 0.0581,
+   "mean": -0.0001,
+   "seen_in_tol": 99.01,
+   "minutes": 112.5,
+   "import": 64.06,
+   "finished": true,
+   "ledger": -1.0686562745831907e-11,
+   "replans": 2
+  },
+  {
+   "exp": "C:0.75",
+   "seed": 1,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.75,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 69.42,
+   "p95": 0.1848,
+   "mean": -0.0486,
+   "seen_in_tol": 96.76,
+   "minutes": 96.5,
+   "import": 32.31,
+   "finished": true,
+   "ledger": -2.100364326906856e-11,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.75",
+   "seed": 1,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.75,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.87,
+   "p95": 0.0582,
+   "mean": 0.0002,
+   "seen_in_tol": 99.04,
+   "minutes": 113.0,
+   "import": 64.05,
+   "finished": true,
+   "ledger": -3.8539837987627834e-11,
+   "replans": 2
+  },
+  {
+   "exp": "C:0.75",
+   "seed": 2,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.75,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 69.56,
+   "p95": 0.1851,
+   "mean": -0.0486,
+   "seen_in_tol": 96.78,
+   "minutes": 96.5,
+   "import": 32.26,
+   "finished": true,
+   "ledger": 8.526512829121202e-13,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.75",
+   "seed": 2,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.75,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.84,
+   "p95": 0.0579,
+   "mean": -0.0005,
+   "seen_in_tol": 98.91,
+   "minutes": 112.5,
+   "import": 63.13,
+   "finished": true,
+   "ledger": 6.252776074688882e-12,
+   "replans": 2
+  },
+  {
+   "exp": "C:0.75",
+   "seed": 3,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.75,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 69.86,
+   "p95": 0.1848,
+   "mean": -0.0489,
+   "seen_in_tol": 96.71,
+   "minutes": 95.25,
+   "import": 32.13,
+   "finished": true,
+   "ledger": -1.6200374375330284e-12,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.75",
+   "seed": 3,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.75,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.88,
+   "p95": 0.059,
+   "mean": 0.0009,
+   "seen_in_tol": 98.88,
+   "minutes": 113.5,
+   "import": 64.47,
+   "finished": true,
+   "ledger": 0.0,
+   "replans": 2
+  },
+  {
+   "exp": "C:0.75",
+   "seed": 4,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.75,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 69.69,
+   "p95": 0.1844,
+   "mean": -0.0487,
+   "seen_in_tol": 96.85,
+   "minutes": 94.0,
+   "import": 32.23,
+   "finished": true,
+   "ledger": 1.3272938303998671e-11,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.75",
+   "seed": 4,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.75,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.58,
+   "p95": 0.0594,
+   "mean": -0.0012,
+   "seen_in_tol": 98.78,
+   "minutes": 114.0,
+   "import": 63.0,
+   "finished": true,
+   "ledger": -1.0118128557223827e-11,
+   "replans": 2
+  },
+  {
+   "exp": "C:0.75",
+   "seed": 5,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.75,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 68.91,
+   "p95": 0.1867,
+   "mean": -0.0488,
+   "seen_in_tol": 96.84,
+   "minutes": 95.25,
+   "import": 32.15,
+   "finished": true,
+   "ledger": -9.549694368615746e-12,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.75",
+   "seed": 5,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.75,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.6,
+   "p95": 0.06,
+   "mean": 0.0,
+   "seen_in_tol": 98.47,
+   "minutes": 114.25,
+   "import": 64.82,
+   "finished": true,
+   "ledger": 2.5011104298755527e-12,
+   "replans": 2
+  },
+  {
+   "exp": "C:0.75",
+   "seed": 6,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.75,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 69.23,
+   "p95": 0.1832,
+   "mean": -0.0487,
+   "seen_in_tol": 96.74,
+   "minutes": 94.0,
+   "import": 32.24,
+   "finished": true,
+   "ledger": 1.4296119843493216e-11,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.75",
+   "seed": 6,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.75,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.86,
+   "p95": 0.0585,
+   "mean": -0.0003,
+   "seen_in_tol": 99.08,
+   "minutes": 112.5,
+   "import": 63.26,
+   "finished": true,
+   "ledger": -5.9117155615240335e-12,
+   "replans": 2
+  },
+  {
+   "exp": "C:0.75",
+   "seed": 7,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.75,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 69.85,
+   "p95": 0.1857,
+   "mean": -0.0488,
+   "seen_in_tol": 96.79,
+   "minutes": 95.25,
+   "import": 32.18,
+   "finished": true,
+   "ledger": 1.7905676941154525e-11,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.75",
+   "seed": 7,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.75,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.92,
+   "p95": 0.0577,
+   "mean": -0.0004,
+   "seen_in_tol": 99.14,
+   "minutes": 112.5,
+   "import": 63.18,
+   "finished": true,
+   "ledger": 8.640199666842818e-12,
+   "replans": 2
+  },
+  {
+   "exp": "C:0.75",
+   "seed": 8,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.75,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 69.21,
+   "p95": 0.1855,
+   "mean": -0.0487,
+   "seen_in_tol": 96.8,
+   "minutes": 96.5,
+   "import": 32.22,
+   "finished": true,
+   "ledger": 0.0,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.75",
+   "seed": 8,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.75,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.56,
+   "p95": 0.0592,
+   "mean": -0.001,
+   "seen_in_tol": 98.7,
+   "minutes": 114.25,
+   "import": 63.44,
+   "finished": true,
+   "ledger": 3.979039320256561e-12,
+   "replans": 2
+  },
+  {
+   "exp": "C:0.75",
+   "seed": 9,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.75,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 69.21,
+   "p95": 0.1845,
+   "mean": -0.0485,
+   "seen_in_tol": 96.85,
+   "minutes": 95.25,
+   "import": 32.32,
+   "finished": true,
+   "ledger": 1.6399326341343112e-11,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.75",
+   "seed": 9,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.75,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.29,
+   "p95": 0.0601,
+   "mean": -0.0009,
+   "seen_in_tol": 98.41,
+   "minutes": 110.5,
+   "import": 64.06,
+   "finished": true,
+   "ledger": -1.4779288903810084e-12,
+   "replans": 2
+  },
+  {
+   "exp": "C:0.80",
+   "seed": 0,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.8,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 93.21,
+   "p95": 0.1158,
+   "mean": -0.0023,
+   "seen_in_tol": 96.75,
+   "minutes": 96.5,
+   "import": 32.35,
+   "finished": true,
+   "ledger": -3.524291969370097e-11,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.80",
+   "seed": 0,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.8,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.69,
+   "p95": 0.0596,
+   "mean": -0.0004,
+   "seen_in_tol": 98.78,
+   "minutes": 109.75,
+   "import": 34.1,
+   "finished": true,
+   "ledger": 3.296918293926865e-12,
+   "replans": 1
+  },
+  {
+   "exp": "C:0.80",
+   "seed": 1,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.8,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 93.16,
+   "p95": 0.1172,
+   "mean": -0.0024,
+   "seen_in_tol": 96.76,
+   "minutes": 96.5,
+   "import": 32.31,
+   "finished": true,
+   "ledger": -2.6943780540023e-11,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.80",
+   "seed": 1,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.8,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.83,
+   "p95": 0.0595,
+   "mean": -0.0002,
+   "seen_in_tol": 98.78,
+   "minutes": 109.25,
+   "import": 34.22,
+   "finished": true,
+   "ledger": -3.501554601825774e-11,
+   "replans": 1
+  },
+  {
+   "exp": "C:0.80",
+   "seed": 2,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.8,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 93.31,
+   "p95": 0.1152,
+   "mean": -0.0025,
+   "seen_in_tol": 96.78,
+   "minutes": 96.5,
+   "import": 32.26,
+   "finished": true,
+   "ledger": -1.0459189070388675e-11,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.80",
+   "seed": 2,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.8,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.83,
+   "p95": 0.06,
+   "mean": -0.0004,
+   "seen_in_tol": 98.97,
+   "minutes": 109.25,
+   "import": 34.07,
+   "finished": true,
+   "ledger": -2.6147972675971687e-12,
+   "replans": 1
+  },
+  {
+   "exp": "C:0.80",
+   "seed": 3,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.8,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 93.24,
+   "p95": 0.1171,
+   "mean": -0.0027,
+   "seen_in_tol": 96.71,
+   "minutes": 95.25,
+   "import": 32.13,
+   "finished": true,
+   "ledger": -8.29913915367797e-12,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.80",
+   "seed": 3,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.8,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.84,
+   "p95": 0.0593,
+   "mean": -0.0005,
+   "seen_in_tol": 98.81,
+   "minutes": 107.5,
+   "import": 33.97,
+   "finished": true,
+   "ledger": -6.934897101018578e-12,
+   "replans": 1
+  },
+  {
+   "exp": "C:0.80",
+   "seed": 4,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.8,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 93.2,
+   "p95": 0.1159,
+   "mean": -0.0025,
+   "seen_in_tol": 96.85,
+   "minutes": 94.0,
+   "import": 32.23,
+   "finished": true,
+   "ledger": 6.252776074688882e-12,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.80",
+   "seed": 4,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.8,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.54,
+   "p95": 0.0617,
+   "mean": -0.0013,
+   "seen_in_tol": 98.67,
+   "minutes": 106.75,
+   "import": 34.03,
+   "finished": true,
+   "ledger": -2.0463630789890885e-11,
+   "replans": 1
+  },
+  {
+   "exp": "C:0.80",
+   "seed": 5,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.8,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 93.01,
+   "p95": 0.118,
+   "mean": -0.0026,
+   "seen_in_tol": 96.84,
+   "minutes": 95.25,
+   "import": 32.15,
+   "finished": true,
+   "ledger": -1.716671249596402e-11,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.80",
+   "seed": 5,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.8,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.88,
+   "p95": 0.0593,
+   "mean": 0.0,
+   "seen_in_tol": 98.91,
+   "minutes": 108.5,
+   "import": 34.06,
+   "finished": true,
+   "ledger": -1.5916157281026244e-11,
+   "replans": 1
+  },
+  {
+   "exp": "C:0.80",
+   "seed": 6,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.8,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 92.98,
+   "p95": 0.1172,
+   "mean": -0.0025,
+   "seen_in_tol": 96.74,
+   "minutes": 94.0,
+   "import": 32.24,
+   "finished": true,
+   "ledger": 3.637978807091713e-12,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.80",
+   "seed": 6,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.8,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.84,
+   "p95": 0.0603,
+   "mean": 0.0002,
+   "seen_in_tol": 98.89,
+   "minutes": 107.75,
+   "import": 34.01,
+   "finished": true,
+   "ledger": -1.9326762412674725e-11,
+   "replans": 2
+  },
+  {
+   "exp": "C:0.80",
+   "seed": 7,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.8,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 93.55,
+   "p95": 0.1127,
+   "mean": -0.0026,
+   "seen_in_tol": 96.79,
+   "minutes": 95.25,
+   "import": 32.18,
+   "finished": true,
+   "ledger": 5.7980287238024175e-12,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.80",
+   "seed": 7,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.8,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.88,
+   "p95": 0.0591,
+   "mean": 0.0004,
+   "seen_in_tol": 98.89,
+   "minutes": 108.0,
+   "import": 34.06,
+   "finished": true,
+   "ledger": -9.890754881780595e-12,
+   "replans": 1
+  },
+  {
+   "exp": "C:0.80",
+   "seed": 8,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.8,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 92.94,
+   "p95": 0.1182,
+   "mean": -0.0025,
+   "seen_in_tol": 96.8,
+   "minutes": 96.5,
+   "import": 32.22,
+   "finished": true,
+   "ledger": -4.206412995699793e-12,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.80",
+   "seed": 8,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.8,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.78,
+   "p95": 0.0605,
+   "mean": 0.0001,
+   "seen_in_tol": 98.83,
+   "minutes": 108.75,
+   "import": 34.07,
+   "finished": true,
+   "ledger": -9.094947017729282e-12,
+   "replans": 1
+  },
+  {
+   "exp": "C:0.80",
+   "seed": 9,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.8,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 92.94,
+   "p95": 0.1185,
+   "mean": -0.0024,
+   "seen_in_tol": 96.85,
+   "minutes": 95.25,
+   "import": 32.32,
+   "finished": true,
+   "ledger": 4.092726157978177e-12,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.80",
+   "seed": 9,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.8,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.87,
+   "p95": 0.0589,
+   "mean": 0.0004,
+   "seen_in_tol": 98.93,
+   "minutes": 107.5,
+   "import": 34.18,
+   "finished": true,
+   "ledger": -1.7053025658242404e-12,
+   "replans": 1
+  },
+  {
+   "exp": "C:0.85",
+   "seed": 0,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.85,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 69.47,
+   "p95": 0.1879,
+   "mean": 0.0439,
+   "seen_in_tol": 96.75,
+   "minutes": 96.5,
+   "import": 32.35,
+   "finished": true,
+   "ledger": -3.0240698833949864e-11,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.85",
+   "seed": 0,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.85,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.89,
+   "p95": 0.0598,
+   "mean": 0.0004,
+   "seen_in_tol": 99.05,
+   "minutes": 106.25,
+   "import": 10.21,
+   "finished": true,
+   "ledger": 1.5347723092418164e-11,
+   "replans": 2
+  },
+  {
+   "exp": "C:0.85",
+   "seed": 1,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.85,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 69.59,
+   "p95": 0.1872,
+   "mean": 0.0438,
+   "seen_in_tol": 96.76,
+   "minutes": 96.5,
+   "import": 32.31,
+   "finished": true,
+   "ledger": -1.5916157281026244e-11,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.85",
+   "seed": 1,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.85,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.76,
+   "p95": 0.0601,
+   "mean": -0.0003,
+   "seen_in_tol": 98.94,
+   "minutes": 106.0,
+   "import": 9.46,
+   "finished": true,
+   "ledger": -3.2514435588382185e-11,
+   "replans": 2
+  },
+  {
+   "exp": "C:0.85",
+   "seed": 2,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.85,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 69.74,
+   "p95": 0.1867,
+   "mean": 0.0437,
+   "seen_in_tol": 96.78,
+   "minutes": 96.5,
+   "import": 32.26,
+   "finished": true,
+   "ledger": 1.8189894035458565e-12,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.85",
+   "seed": 2,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.85,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.79,
+   "p95": 0.0589,
+   "mean": -0.0005,
+   "seen_in_tol": 98.89,
+   "minutes": 106.75,
+   "import": 9.13,
+   "finished": true,
+   "ledger": 0.0,
+   "replans": 2
+  },
+  {
+   "exp": "C:0.85",
+   "seed": 3,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.85,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 69.28,
+   "p95": 0.1876,
+   "mean": 0.0435,
+   "seen_in_tol": 96.71,
+   "minutes": 95.25,
+   "import": 32.13,
+   "finished": true,
+   "ledger": 3.865352482534945e-12,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.85",
+   "seed": 3,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.85,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.81,
+   "p95": 0.0589,
+   "mean": 0.001,
+   "seen_in_tol": 98.84,
+   "minutes": 105.5,
+   "import": 10.47,
+   "finished": true,
+   "ledger": 7.389644451905042e-12,
+   "replans": 2
+  },
+  {
+   "exp": "C:0.85",
+   "seed": 4,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.85,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 69.45,
+   "p95": 0.1859,
+   "mean": 0.0437,
+   "seen_in_tol": 96.85,
+   "minutes": 94.0,
+   "import": 32.23,
+   "finished": true,
+   "ledger": 1.4551915228366852e-11,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.85",
+   "seed": 4,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.85,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.91,
+   "p95": 0.0596,
+   "mean": -0.0001,
+   "seen_in_tol": 98.89,
+   "minutes": 105.5,
+   "import": 9.3,
+   "finished": true,
+   "ledger": -2.5011104298755527e-12,
+   "replans": 2
+  },
+  {
+   "exp": "C:0.85",
+   "seed": 5,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.85,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 69.89,
+   "p95": 0.1847,
+   "mean": 0.0435,
+   "seen_in_tol": 96.84,
+   "minutes": 95.25,
+   "import": 32.15,
+   "finished": true,
+   "ledger": -4.092726157978177e-12,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.85",
+   "seed": 5,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.85,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.9,
+   "p95": 0.0587,
+   "mean": 0.0006,
+   "seen_in_tol": 98.91,
+   "minutes": 106.25,
+   "import": 10.6,
+   "finished": true,
+   "ledger": 5.9117155615240335e-12,
+   "replans": 2
+  },
+  {
+   "exp": "C:0.85",
+   "seed": 6,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.85,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 69.23,
+   "p95": 0.1885,
+   "mean": 0.0437,
+   "seen_in_tol": 96.74,
+   "minutes": 94.0,
+   "import": 32.24,
+   "finished": true,
+   "ledger": 1.9554136088117957e-11,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.85",
+   "seed": 6,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.85,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.91,
+   "p95": 0.0595,
+   "mean": 0.0002,
+   "seen_in_tol": 98.77,
+   "minutes": 106.0,
+   "import": 9.57,
+   "finished": true,
+   "ledger": -1.2391865311656147e-11,
+   "replans": 2
+  },
+  {
+   "exp": "C:0.85",
+   "seed": 7,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.85,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 69.96,
+   "p95": 0.1861,
+   "mean": 0.0436,
+   "seen_in_tol": 96.79,
+   "minutes": 95.25,
+   "import": 32.18,
+   "finished": true,
+   "ledger": 1.8189894035458565e-11,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.85",
+   "seed": 7,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.85,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.89,
+   "p95": 0.0591,
+   "mean": -0.0003,
+   "seen_in_tol": 98.77,
+   "minutes": 106.0,
+   "import": 8.82,
+   "finished": true,
+   "ledger": 7.503331289626658e-12,
+   "replans": 2
+  },
+  {
+   "exp": "C:0.85",
+   "seed": 8,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.85,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 69.58,
+   "p95": 0.1875,
+   "mean": 0.0436,
+   "seen_in_tol": 96.8,
+   "minutes": 96.5,
+   "import": 32.22,
+   "finished": true,
+   "ledger": 4.774847184307873e-12,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.85",
+   "seed": 8,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.85,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.55,
+   "p95": 0.061,
+   "mean": -0.001,
+   "seen_in_tol": 98.7,
+   "minutes": 105.5,
+   "import": 9.51,
+   "finished": true,
+   "ledger": 7.275957614183426e-12,
+   "replans": 2
+  },
+  {
+   "exp": "C:0.85",
+   "seed": 9,
+   "mode": "open-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.85,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 69.21,
+   "p95": 0.1888,
+   "mean": 0.0438,
+   "seen_in_tol": 96.85,
+   "minutes": 95.25,
+   "import": 32.32,
+   "finished": true,
+   "ledger": 1.1141310096718371e-11,
+   "replans": 0
+  },
+  {
+   "exp": "C:0.85",
+   "seed": 9,
+   "mode": "closed-loop",
+   "soil": {
+    "swell": 1.25,
+    "keep": 0.85,
+    "cut_error": 0.06,
+    "finish_error_m": 0.006
+   },
+   "beliefs": {
+    "swell": 1.25,
+    "keep": 0.8
+   },
+   "in_tol": 99.79,
+   "p95": 0.0595,
+   "mean": 0.0002,
+   "seen_in_tol": 98.86,
+   "minutes": 103.5,
+   "import": 10.29,
+   "finished": true,
+   "ledger": -5.7980287238024175e-12,
+   "replans": 2
+  }
+ ]
+}

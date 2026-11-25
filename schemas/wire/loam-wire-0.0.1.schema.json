@@ -1,0 +1,483 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/loam/wire/0.0.1/schema.json",
+  "title": "Loam Wire 0.0.1 messages",
+  "description": "Positions are in the site CRS (site units). Every other quantity is SI: metres, seconds, m/s, cubic metres.",
+  "$defs": {
+    "order": {
+      "type": "object",
+      "description": "loam/v0/<site>/<machine>/order \u2014 one unit of work for one machine. A new orderId replaces the previous order; a higher orderUpdateId amends it.",
+      "properties": {
+        "version": {
+          "type": "string",
+          "const": "0.0.1"
+        },
+        "headerId": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "site": {
+          "type": "string"
+        },
+        "machine": {
+          "type": "string"
+        },
+        "orderId": {
+          "type": "string"
+        },
+        "orderUpdateId": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "task": {
+          "type": "string"
+        },
+        "op": {
+          "enum": [
+            "cut",
+            "fill",
+            "spread",
+            "compact",
+            "trench",
+            "haul",
+            "finish",
+            "load"
+          ]
+        },
+        "window": {
+          "oneOf": [
+            {
+              "type": "array",
+              "minItems": 3,
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              }
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Work area polygon; null when the work is defined by deposit/source only"
+        },
+        "target": {
+          "type": "object",
+          "description": "What the ground in the window should become",
+          "oneOf": [
+            {
+              "properties": {
+                "surface": {
+                  "const": "design"
+                }
+              },
+              "required": [
+                "surface"
+              ]
+            },
+            {
+              "properties": {
+                "elevation": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "elevation"
+              ]
+            },
+            {
+              "properties": {
+                "offset": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "offset"
+              ]
+            }
+          ]
+        },
+        "limits": {
+          "type": "object",
+          "properties": {
+            "maxCut": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "lift": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "passes": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "maxSpeed": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          },
+          "additionalProperties": true
+        },
+        "deposit": {
+          "type": "object",
+          "properties": {
+            "zone": {
+              "type": "string"
+            },
+            "stockpile": {
+              "type": "string"
+            },
+            "lift": {
+              "type": "number"
+            },
+            "source": {
+              "type": "string"
+            },
+            "window": {
+              "type": "array",
+              "minItems": 3,
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "version",
+        "headerId",
+        "timestamp",
+        "site",
+        "machine",
+        "orderId",
+        "orderUpdateId",
+        "task",
+        "op",
+        "target",
+        "limits"
+      ],
+      "additionalProperties": false
+    },
+    "instantAction": {
+      "type": "object",
+      "description": "loam/v0/<site>/<machine>/instantAction \u2014 acted on immediately, ahead of any order.",
+      "properties": {
+        "version": {
+          "type": "string",
+          "const": "0.0.1"
+        },
+        "headerId": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "site": {
+          "type": "string"
+        },
+        "machine": {
+          "type": "string"
+        },
+        "action": {
+          "enum": [
+            "stop",
+            "hold",
+            "resume",
+            "slow"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "maxSpeed": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "version",
+        "headerId",
+        "timestamp",
+        "site",
+        "machine",
+        "action",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "state": {
+      "type": "object",
+      "description": "loam/v0/<site>/<machine>/state \u2014 published by the machine at 1 Hz or faster.",
+      "properties": {
+        "version": {
+          "type": "string",
+          "const": "0.0.1"
+        },
+        "headerId": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "site": {
+          "type": "string"
+        },
+        "machine": {
+          "type": "string"
+        },
+        "orderId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pose": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            },
+            "z": {
+              "type": "number"
+            },
+            "heading": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "x",
+            "y",
+            "heading"
+          ]
+        },
+        "driving": {
+          "type": "boolean"
+        },
+        "progress": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "safetyState": {
+          "enum": [
+            "ok",
+            "stopped",
+            "held",
+            "estop",
+            "fault"
+          ]
+        },
+        "tool": {
+          "type": "object",
+          "description": "Blade/bucket/drum pose if known",
+          "additionalProperties": true
+        },
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "level": {
+                "enum": [
+                  "warning",
+                  "fatal"
+                ]
+              },
+              "text": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "version",
+        "headerId",
+        "timestamp",
+        "site",
+        "machine",
+        "pose",
+        "driving",
+        "safetyState"
+      ],
+      "additionalProperties": false
+    },
+    "connection": {
+      "type": "object",
+      "description": "loam/v0/<site>/<machine>/connection \u2014 retained; also set as the MQTT last-will message with state 'connectionBroken'.",
+      "properties": {
+        "version": {
+          "type": "string",
+          "const": "0.0.1"
+        },
+        "headerId": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "site": {
+          "type": "string"
+        },
+        "machine": {
+          "type": "string"
+        },
+        "connectionState": {
+          "enum": [
+            "online",
+            "offline",
+            "connectionBroken"
+          ]
+        }
+      },
+      "required": [
+        "version",
+        "headerId",
+        "timestamp",
+        "site",
+        "machine",
+        "connectionState"
+      ],
+      "additionalProperties": false
+    },
+    "terrain": {
+      "type": "object",
+      "description": "loam/v0/<site>/terrain \u2014 a measured surface tile from a probe.",
+      "properties": {
+        "version": {
+          "type": "string",
+          "const": "0.0.1"
+        },
+        "headerId": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "site": {
+          "type": "string"
+        },
+        "probe": {
+          "type": "string"
+        },
+        "origin": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "cell": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "shape": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "encoding": {
+          "enum": [
+            "float32-le-base64",
+            "laz-url"
+          ]
+        },
+        "sigma": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "data": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Heights in site units, row-major from origin; null when the tile is sent by reference or omitted from a log"
+        }
+      },
+      "required": [
+        "version",
+        "headerId",
+        "timestamp",
+        "site",
+        "probe",
+        "origin",
+        "cell",
+        "shape",
+        "encoding"
+      ],
+      "additionalProperties": false
+    },
+    "safety": {
+      "type": "object",
+      "description": "loam/v0/<site>/safety: site-wide stop/hold/resume and a 1 Hz heartbeat. A machine that receives nothing on this topic for 3 s stops on its own.",
+      "properties": {
+        "version": {
+          "type": "string",
+          "const": "0.0.1"
+        },
+        "headerId": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "site": {
+          "type": "string"
+        },
+        "command": {
+          "enum": [
+            "heartbeat",
+            "stop",
+            "hold",
+            "resume"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "version",
+        "headerId",
+        "timestamp",
+        "site",
+        "command"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

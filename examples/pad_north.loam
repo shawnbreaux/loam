@@ -1,0 +1,92 @@
+loam 0.0.1
+
+# A 160 x 100 ft building pad on sloping ground: cut the high west half,
+# push it into the low east half, top up from a stockpile, compact, finish.
+# Coordinates are site-local feet; (0, 0) is the pad's south-west corner.
+
+site pad_north {
+  crs      "LOCAL:ft"                      # site-local grid; use an EPSG code for real jobs
+  units    ft
+  datum    "NAVD88"
+  design   "pad_north_design.xml"   format landxml  surface "FG"
+  existing "pad_north_existing.xml" format landxml  surface "EG"
+  boundary rect (0, 0) (160, 100)
+  grid     1 ft
+}
+
+probe overhead {
+  kind        tethered_uav
+  sensor      lidar
+  rate        5 min
+  accuracy    0.05 ft
+  coverage    site
+  stale_after 15 min
+}
+
+machine dz1 { class dozer;   blade 12 ft;  max_speed 3 mph }
+machine dz2 { class dozer;   blade 10 ft;  max_speed 3 mph }
+machine rl1 { class roller;  drum 7 ft;    max_speed 4 mph }
+
+zone pad  { role finish;  area rect (0, 0) (160, 100);   tolerance ±0.1 ft }
+zone A    { role cut;     area rect (0, 0) (85, 100);    tolerance ±0.1 ft }
+zone C    { role fill;    area rect (85, 0) (160, 100);  tolerance ±0.1 ft
+            lift 8 in;   compaction 95 % proctor }
+
+stockpile sp1 { area rect (170, 0) (200, 40);  available 600 yd3;  material "select fill" }
+
+task strip_A {
+  op      cut
+  zone    A
+  by      class dozer
+  max_cut 0.5 ft per pass
+  spoil   -> [C, sp1]                # fill C first; overflow goes to the stockpile
+  until   residual(A).high < 0.15 ft
+}
+
+task top_up_C {
+  op     fill
+  zone   C
+  by     class dozer
+  source [sp1]
+  lift   8 in
+  after  strip_A done
+  until  residual(C).low > -0.15 ft and compaction(C) >= 95 %
+}
+
+task compact_C {
+  op     compact
+  zone   C
+  by     class roller
+  passes 4
+  after  strip_A start
+  until  done(top_up_C) and compaction(C) >= 95 %
+}
+
+task finish_pad {
+  op    finish
+  zone  pad
+  by    class dozer
+  after strip_A done
+  after top_up_C done
+  source [sp1]                      # small low spots are topped up from the stockpile
+  until in_tolerance(pad)
+}
+
+rule people_near_machines {
+  when proximity(person, machine) < 50 ft
+  do   stop all
+}
+
+rule overhead_stale {
+  when age(overhead) > 15 min
+  do   hold all
+}
+
+rule rain {
+  when weather(rain) > 0.25 in/h
+  do   pause task compact_C
+}
+
+replan drift {
+  when deviation() > 0.15 ft
+}
