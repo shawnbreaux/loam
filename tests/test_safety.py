@@ -29,6 +29,7 @@ from loam.runtime.machine import MachineSim
 
 
 def free_port() -> int:
+    """A TCP or UDP port that is free right now."""
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
@@ -36,11 +37,17 @@ def free_port() -> int:
 
 # -- e-stop latch ---------------------------------------------------------------------------------------
 def machine() -> MachineSim:
+    """The example's first machine, not connected to any broker: only its safety logic is used."""
     m = load(EXAMPLE)
     return MachineSim(m, next(iter(m.machines)), "localhost:1", (0.0, 0.0))
 
 
 def test_estop_release_does_not_restart():
+    """The e-stop latch, step by step.
+
+    Pressing stops the machine. Releasing does not start it: it stays stopped as `estopReset` until someone sends a
+    resume. Heartbeats do not count as a resume. The same holds for per-machine hold and stop commands.
+    """
     ms = machine()
     assert ms.safety_state()[0] == "ok"
     hits = []
@@ -71,6 +78,9 @@ def test_estop_release_does_not_restart():
 
 
 def test_malformed_messages_are_skipped(capsys):
+    """A message with missing or wrong fields is reported and skipped; the machine carries on. Errors that are not
+    about a message are not hidden.
+    """
     ms = machine()
     for kind, msg in (("estop", {}), ("instantAction", {"act": "stop"}), ("safety", {"command": None})):
         with tolerant(f"loam/v0/s/{kind}"):
@@ -85,6 +95,9 @@ def test_malformed_messages_are_skipped(capsys):
 
 # -- the bus ------------------------------------------------------------------------------------------------
 def test_bus_order_and_failed_connection(mqtt_broker):
+    """Messages that arrive while waiting for the site clock are handed back in order, non-JSON traffic is dropped,
+    and a failed connection exits with a clear message.
+    """
     a = Bus(mqtt_broker, "order-a").start(["t/#", "sim/s/clock"])
     b = Bus(mqtt_broker, "order-b").start([])
     try:
@@ -115,6 +128,7 @@ class FakeRover(threading.Thread):
     origin), GPS, the mission handshake, modes, arming; in AUTO it reaches each waypoint in turn."""
 
     def __init__(self, port: int, lat0: float, lon0: float):
+        """Connect out to the bridge's UDP port, as a vehicle at (lat0, lon0) in HOLD (mode 4), disarmed."""
         super().__init__(daemon=True)
         from pymavlink import mavutil
         self.m = mavutil.mavlink_connection(f"udpout:127.0.0.1:{port}", source_system=1, source_component=1)
@@ -124,6 +138,7 @@ class FakeRover(threading.Thread):
         self.reject = False                       # refuse the next mission upload (MAV_MISSION_ERROR)
 
     def send_state(self):
+        """Send what a vehicle streams: heartbeat, position and GPS status (RTK fixed)."""
         mav = self.m.mav
         if self.beating:
             mav.heartbeat_send(10, 3, (128 if self.armed else 0) | 1, self.mode, 4)
@@ -132,6 +147,9 @@ class FakeRover(threading.Thread):
         mav.gps_raw_int_send(0, 6, round(self.lat * 1e7), round(self.lon * 1e7), 0, 50, 50, 0, 0, 20)
 
     def run(self):
+        """The vehicle's loop: stream state ten times a second, answer messages, and in AUTO (mode 10) and armed, jump
+        to each waypoint in turn.
+        """
         last = 0.0
         while self.running:
             if time.time() - last > 0.1:
@@ -151,6 +169,9 @@ class FakeRover(threading.Thread):
         self.m.close()
 
     def handle(self, msg):
+        """Answer one message from the bridge: the mission upload handshake, commands (arm and disarm are obeyed), and
+        mode changes.
+        """
         t = msg.get_type()
         if t == "MISSION_COUNT" and self.reject:
             self.m.mav.mission_ack_send(255, 0, 1, 0)                 # the old mission stays on board
@@ -173,6 +194,12 @@ class FakeRover(threading.Thread):
 
 
 def test_mavlink_bridge_against_fake_ardupilot(mqtt_broker):
+    """The MAVLink bridge from end to end against the fake vehicle.
+
+    In order: no position until the autopilot has one; an order becomes a mission with its speed limit, is driven
+    and reported done; a refused mission fails the order without the old mission being re-run; the next order
+    works; the e-stop force-disarms; release leaves it stopped; losing the vehicle's heartbeat is reported.
+    """
     pytest.importorskip("pymavlink")
     from test_bridges import SRC, Controller
 
@@ -245,6 +272,7 @@ def test_mavlink_bridge_against_fake_ardupilot(mqtt_broker):
 
 
 def test_mavlink_no_vehicle_closes_the_link():
+    """If no vehicle answers, the bridge says so and leaves no socket open."""
     pytest.importorskip("pymavlink")
     from loam.runtime.mavlink import Vehicle
     with pytest.raises(ValueError, match="no MAVLink heartbeat"):
@@ -253,6 +281,7 @@ def test_mavlink_no_vehicle_closes_the_link():
 
 
 # -- OPERA without ROS ------------------------------------------------------------------------------------------
+# A small excavator arm as a URDF: swing, boom (5 m), arm (2.8 m), bucket (1.2 m).
 ARM = """<robot name="arm">
  <link name="base_link"/><link name="body"/><link name="boom"/><link name="arm"/><link name="bucket"/>
  <link name="tip"/>
@@ -270,6 +299,9 @@ ARM = """<robot name="arm">
 
 
 def test_urdf_kinematics_and_ik():
+    """The arm's geometry is read from a URDF; the solver puts the bucket tip on reachable targets within the joint
+    limits and returns None for one out of reach.
+    """
     from loam.runtime.opera import Chain, ExcavatorIK
     c = Chain(ARM, tip="tip")
     assert c.moving == ["swing_joint", "boom_joint", "arm_joint", "bucket_joint"]
@@ -288,6 +320,7 @@ def test_urdf_kinematics_and_ik():
 
 
 def test_map_frame_round_trip():
+    """Site to map and back gives the same point, and distances scale by the unit (feet to metres)."""
     from loam.runtime.opera import MapFrame
     f = MapFrame(0.3048, (100.0, -50.0, 12.0), 30.0)
     p = f.to_map(10.0, 20.0, 5.0)
@@ -303,6 +336,9 @@ def bare(cls, **attrs):
 
 
 def test_carrier_splits_work_lines_travel_and_dump():
+    """A carrier's order becomes travel, a work line inside the window, a haul that ends with a dump, and the return.
+    Back-and-forth roller passes are all work lines.
+    """
     from loam.runtime.opera import Carrier, MapFrame
     f = MapFrame(1.0)
     c = bare(Carrier, frame=f, dumper=object(), goal=None, lock=threading.Lock(), state="idle")
@@ -324,6 +360,9 @@ def test_carrier_splits_work_lines_travel_and_dump():
 
 
 def test_excavator_plan_follows_the_target_and_never_goes_below_design(tmp_path):
+    """The planned bucket-tip points lie on the target surface (checked by forward kinematics, to a millimetre), the
+    target is never below design, and a relative target without a survey is refused.
+    """
     from loam.grid import SiteGrid
     from loam.runtime.opera import Chain, Excavator, ExcavatorIK, MapFrame
     m = load(EXAMPLE)
@@ -354,6 +393,7 @@ def test_excavator_plan_follows_the_target_and_never_goes_below_design(tmp_path)
 
 # -- monitor and resume ----------------------------------------------------------------------------------------
 def test_monitor_serves_and_shuts_down_with_a_live_connection(mqtt_broker):
+    """The dashboard serves metrics and a live stream, and still shuts down cleanly while a browser is connected."""
     from loam import monitor
     m = load(EXAMPLE)
     port = free_port()
@@ -382,6 +422,9 @@ def test_monitor_serves_and_shuts_down_with_a_live_connection(mqtt_broker):
 
 
 def test_resume_command(mqtt_broker, capsys):
+    """`loam resume` sends the site-wide resume, or one machine's, with the reason given; an unknown machine is an
+    error.
+    """
     m = load(EXAMPLE)
     site, name = m.site["name"], next(iter(m.machines))
     sub = Bus(mqtt_broker, "resume-test").start([f"loam/v0/{site}/#"])

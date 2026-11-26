@@ -34,6 +34,7 @@ ORDER_ACK_S = 10.0                       # a robot whose state does not show a n
 
 
 def iso(t: float | None = None) -> str:
+    """A time (now, by default) as VDA 5050 writes it: UTC, to the millisecond, ending in Z."""
     d = datetime.fromtimestamp(time.time() if t is None else t, timezone.utc)
     return d.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
@@ -43,6 +44,9 @@ class Robot:
 
     def __init__(self, broker: str, manufacturer: str, serial: str, map_id: str, unit_m: float,
                  interface: str = "uagv", client: str | None = None):
+        """Connect to the broker and listen to the robot's state and connection topics. `map_id` is the site name;
+        `unit_m` is the length of one site unit in metres (VDA 5050 is metric).
+        """
         self.base = f"{interface}/v3/{manufacturer}/{serial}"
         self.manufacturer, self.serial, self.map_id, self.u = manufacturer, serial, map_id, unit_m
         self.bus = Bus(broker, client or f"loam-vda-{serial}-{time.time():.3f}")
@@ -58,11 +62,15 @@ class Robot:
         self.ordered_at = 0.0
 
     def _msg(self, **body) -> dict:
+        """A VDA 5050 message: the common header (a counter, the time, version, manufacturer and serial number)
+        followed by `body`.
+        """
         self.header += 1
         return {"headerId": self.header, "timestamp": iso(), "version": VERSION,
                 "manufacturer": self.manufacturer, "serialNumber": self.serial, **body}
 
     def _actions(self, *types: str, **params) -> None:
+        """Send instant actions (startPause, stopPause, cancelOrder) to the robot."""
         acts = [{"actionId": f"{a}-{self.header + 1}-{i}", "actionType": a, "blockingType": "NONE",
                  **({"actionParameters": [{"key": k, "value": v} for k, v in params.items()]} if params else {})}
                 for i, a in enumerate(types)]
@@ -70,6 +78,7 @@ class Robot:
 
     # -- adapter -------------------------------------------------------------------------
     def poll(self) -> None:
+        """Read the robot's state and connection messages that have arrived. Positions on another map are ignored."""
         for topic, msg in self.bus.drain(0.0):
             with tolerant(topic):
                 if topic.endswith("/connection"):
@@ -82,14 +91,19 @@ class Robot:
 
     @property
     def fix_ok(self) -> bool:
+        """Does the robot know where it is on the map?"""
         return bool((self.state.get("mobileRobotPosition") or {}).get("localized"))
 
     @property
     def fix_name(self) -> str:
+        """The localization in words, for the state message."""
         return "localized" if self.fix_ok else "not localized"
 
     @property
     def fault(self) -> str | None:
+        """Why the robot cannot work, or None. In order: it is offline or silent; its own emergency stop is active; it
+        is not in an automatic mode; it reports a critical or fatal error.
+        """
         st = self.state
         if self.connection != "ONLINE" or time.time() - self.state_at > STATE_STALE_S:
             return "vehicleLinkLost"
@@ -103,32 +117,42 @@ class Robot:
 
     @property
     def order_error(self) -> str | None:
+        """`vehicleOrderRejected` when the robot's state still does not show the order 10 s after it was sent, else
+        None.
+        """
         if self.order_id is not None and self.state.get("orderId") != self.order_id \
                 and time.time() - self.ordered_at > ORDER_ACK_S:
             return "vehicleOrderRejected"            # it never took the order: do not wait on it forever
         return None
 
     def start(self, path: list[tuple[float, float]], order: dict, max_speed_ms: float | None) -> None:
+        """Send the order. Nodes are numbered 0, 2, 4, ... and edges take the odd numbers between, so the last node is
+        2 x (points - 1).
+        """
         self.bus.pub(f"{self.base}/order", vda_order(self._msg, order, path, self.map_id, self.u, max_speed_ms),
                      qos=1)
         self.order_id, self.last_seq = order["orderId"], 2 * (len(path) - 1)
         self.paused_sent, self.ordered_at = None, time.time()
 
     def pause(self, on: bool) -> None:
+        """Pause or release the robot. Sent once per change, since the broker delivers it reliably (QoS 1)."""
         if on != self.paused_sent and (self.order_id is not None or on):
             self._actions("startPause" if on else "stopPause")
             self.paused_sent = on
 
     def estop(self) -> None:
+        """Site e-stop: cancel the order and pause. The robot's own safety system does the actual stopping."""
         self._actions("cancelOrder", "startPause")
         self.paused_sent = True
 
     def fraction(self) -> float:
+        """How far through the order, 0 to 1, by the last node reached."""
         if self.state.get("orderId") != self.order_id or not self.last_seq:
             return 0.0
         return min(1.0, self.state.get("lastNodeSequenceId", 0) / self.last_seq)
 
     def done(self) -> bool:
+        """Is the order complete: last node reached, nothing left to drive, every action finished or failed?"""
         st = self.state
         return (self.order_id is not None and st.get("orderId") == self.order_id
                 and st.get("lastNodeSequenceId") == self.last_seq and not st.get("nodeStates")
@@ -136,6 +160,7 @@ class Robot:
                 and all(a.get("actionStatus") in ("FINISHED", "FAILED") for a in st.get("actionStates", [])))
 
     def close(self) -> None:
+        """Disconnect from the broker."""
         self.bus.stop()
 
 
@@ -155,6 +180,8 @@ def vda_order(msg, order: dict, path: list[tuple[float, float]], map_id: str, u:
     edges = []
     for i in range(len(path) - 1):
         e: dict = {"edgeId": f"{order['orderId']}-e{i}", "sequenceId": 2 * i + 1, "released": True,
+                   # The path is: where the robot is, the start of the work pass, its end, then the haul. So the work
+                   # pass is the second edge (or the only one).
                    "actions": [work] if i == 1 or (i == 0 and len(path) == 2) else []}
         if max_speed_ms:
             e["maximumSpeed"] = max_speed_ms

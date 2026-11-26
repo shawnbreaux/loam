@@ -21,6 +21,13 @@ from .bus import Bus
 def launch(path: str, broker: str, speed: float, faults_path: str | None, model, until_done: bool = True,
            timeout_min: float = 48 * 60, quiet: bool = False, physics: bool = False,
            soil_table: str | None = None) -> dict:
+    """Start the simulated site, wait for the job to end, and return the true result.
+
+    `speed` is how many times faster than real time the site runs. `faults_path` is a JSON fault script (see
+    world.DEFAULT_FAULTS). The site ends when the controller reports every task done (`until_done`), when the world
+    exits, or after `timeout_min` site minutes. Returns the world's final truth report and each process's exit
+    code.
+    """
     site = model.site["name"]
     cleaner = Bus(broker, f"loam-site-launcher-{site}").start([])
     try:
@@ -88,6 +95,9 @@ def _reap(procs: list[subprocess.Popen], force: bool = False) -> None:
 
 
 def role(path: str, model, a) -> None:
+    """Run one process of the simulated site: the world, the probe, or one machine (`a` holds the command-line
+    options).
+    """
     from .machine import run_machine
     from .probe import run_probe
     from .world import DEFAULT_FAULTS, run_world
@@ -121,5 +131,6 @@ def role(path: str, model, a) -> None:
                          / g.cell).astype(int)
             zp = np.pad(z, ((lo[1], hi[1]), (lo[0], hi[0])), mode="edge")
             ground = (zp, g.x0 - lo[0] * g.cell, g.y0 - lo[1] * g.cell, g.cell)
+        # Machines start in a row just south of the site, six cells apart.
         park = (g.x0 + (a.index + 1) * 6 * g.cell, g.y0 - 10 * g.cell)
         run_machine(model, a.name, a.broker, park, ground)

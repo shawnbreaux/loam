@@ -33,6 +33,22 @@ from .machine import STATE_EVERY_S, MachineSim
 
 
 class Adapter(Protocol):
+    """What a vehicle protocol must provide to be driven by `run_bridge`.
+
+    The MAVLink, VDA 5050 and OPERA modules each implement it.
+    """
+    #   pose         (x, y, heading) in site coordinates and radians, or None until the vehicle has reported one
+    #   fix_ok       whether its position is good enough to work by (RTK fixed, localized, ...)
+    #   fix_name     the position quality in words, for the error text
+    #   fault        why the vehicle cannot work at all right now (link lost, its own e-stop, ...), or None
+    #   order_error  why it cannot carry out the *current order* (refused, navigation failed, ...), or None
+    #   poll()       read whatever the vehicle has sent; called every cycle
+    #   start(path, order, max_speed_ms)   take a new order; the vehicle must not move until pause(False)
+    #   pause(on)    hold the vehicle (True) or let it work (False); called every cycle, so it must be cheap
+    #   estop()      the hardest stop the protocol offers
+    #   fraction()   share of the current order done, 0-1
+    #   done()       whether the vehicle has finished the current order
+    #   close()      release the vehicle connection
     pose: tuple[float, float, float] | None
 
     @property
@@ -82,6 +98,8 @@ def run_bridge(model: Model, name: str, broker: str, adapter: Adapter, sim_world
                     elif topic.startswith(f"sim/{ms.site}/world/applied/") and ms.waiting and ms.order \
                             and msg["orderId"] == ms.order["orderId"]:
                         _finish(ms, adapter, bus, clock, t)
+            # An order the vehicle cannot run is reported once, as `orderFailed`, and dropped, so the controller can
+            # re-plan and this machine is free for its next order.
             failed = adapter.order_error if ms.order is not None and not ms.waiting else None
             if failed is not None and ms.order is not None:
                 adapter.pause(True)
@@ -93,11 +111,15 @@ def run_bridge(model: Model, name: str, broker: str, adapter: Adapter, sim_world
                 print(f"loam: {name}: order {ms.order['orderId']} failed: {failed}", file=sys.stderr, flush=True)
                 ms.order = None
             if ms.order is not None and not ms.waiting:
+                # The vehicle may move only while everything is in order: no stop, hold or e-stop, a fresh safety
+                # heartbeat, a good position, and no fault of its own.
                 go = ms.safety_state()[0] == "ok" and adapter.fault is None and adapter.pose is not None
                 adapter.pause(not go)
                 ms.progress = min(0.999, max(ms.progress, adapter.fraction()))
                 if go and adapter.done():
                     adapter.pause(True)
+                    # On a simulated site the ground only changes when the world applies the pass, so wait for that;
+                    # on a real site the ground has changed already and the next survey will show it.
                     if sim_world:
                         ms.waiting = True
                         bus.pub(f"sim/{ms.site}/world/apply", {"machine": name, "order": ms.order}, qos=1)
@@ -124,6 +146,7 @@ def run_bridge(model: Model, name: str, broker: str, adapter: Adapter, sim_world
 
 
 def _finish(ms: MachineSim, adapter: Adapter, bus: Bus, clock: Clock, t: float) -> None:
+    """Report the current order complete (progress 1.0, delivered at least once) and forget it."""
     ms.progress, ms.waiting = 1.0, False
     ms.seq += 1
     bus.pub(ms.topic("state"), bridge_state(ms, adapter, clock, t), qos=1)
@@ -131,6 +154,11 @@ def _finish(ms: MachineSim, adapter: Adapter, bus: Bus, clock: Clock, t: float) 
 
 
 def bridge_state(ms: MachineSim, adapter: Adapter, clock: Clock, t: float) -> dict:
+    """The machine's state message, built from the bridge's safety state and the vehicle's own condition.
+
+    The vehicle's position is read exactly once here, and both the position published and the decision "has a
+    position" come from that one reading.
+    """
     pose = adapter.pose                      # read once: with ROS it is set from another thread, and the
     if pose is not None:                     # position published must be the one "ok" was decided on
         ms.x, ms.y, ms.heading = pose

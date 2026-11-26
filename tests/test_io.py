@@ -15,6 +15,7 @@ SCHEMA = os.path.join(ROOT, "schemas", "wire", "loam-wire-0.0.1.schema.json")
 
 
 def test_tin_reproduces_a_plane_exactly(tmp_path):
+    """A sloping plane written as a LandXML TIN and read back onto a grid matches to the file's 3 decimals."""
     xs, ys = np.arange(0, 51, 10.0), np.arange(0, 31, 10.0)
     gx, gy = np.meshgrid(xs, ys)
     plane = 100 + 0.02 * gx - 0.01 * gy
@@ -28,6 +29,9 @@ def test_tin_reproduces_a_plane_exactly(tmp_path):
 
 
 def test_tin_errors(tmp_path):
+    """Asking for a surface the file does not have is an error; grid cells outside the TIN are NaN (no data), not
+    zero.
+    """
     path = str(tmp_path / "p.xml")
     write_grid_tin(path, "FG", np.array([0.0, 1]), np.array([0.0, 1]), np.zeros((2, 2)))
     with pytest.raises(ValueError, match="no surface named"):
@@ -37,6 +41,7 @@ def test_tin_errors(tmp_path):
 
 
 def _validate(kind, payload):
+    """Check a message against one definition in the published Loam Wire JSON Schema."""
     jsonschema = pytest.importorskip("jsonschema")
     with open(SCHEMA, encoding="utf-8") as f:
         defs = json.load(f)["$defs"]
@@ -44,6 +49,7 @@ def _validate(kind, payload):
 
 
 def test_every_builder_matches_schema():
+    """Every message the `wire` module builds is valid under the published schema, and a misspelt field is rejected."""
     _validate("order", wire.order("s", "m", 1, "o", 0, "t", "cut", [[0, 0], [1, 0], [1, 1]],
                                   {"surface": "design"}, {"maxCut": 0.1}))
     _validate("instantAction", wire.instant_action("s", "m", 2, "stop", "person"))
@@ -63,6 +69,7 @@ def test_every_builder_matches_schema():
 
 
 def test_sample_wire_log_matches_schema():
+    """Every message in the shipped example log is valid under the schema."""
     n = 0
     with open(os.path.join(EXAMPLES, "pad_north_wire.jsonl"), encoding="utf-8") as f:
         for line in f:
@@ -73,7 +80,9 @@ def test_sample_wire_log_matches_schema():
 
 
 class Result:
+    """A finished command: exit code and what it printed."""
     def __init__(self, returncode, stdout, stderr):
+        """Store the three values."""
         self.returncode, self.stdout, self.stderr = returncode, stdout, stderr
 
 
@@ -94,12 +103,16 @@ def run_cli(*args):
 
 
 def test_cli_entry_point_runs_as_module():
+    """`python -m loam.cli` works, as a real separate process."""
     r = subprocess.run([sys.executable, "-m", "loam.cli", "check", EXAMPLE], capture_output=True, text=True,
                        cwd=ROOT, check=False)
     assert r.returncode == 0 and "ok" in r.stdout
 
 
 def test_cli_exit_codes(tmp_path):
+    """Exit codes: 0 for a clean program, 1 for one with errors, 2 when it cannot be read or parsed. Errors carry
+    file:line:column.
+    """
     assert run_cli("check", EXAMPLE).returncode == 0
     bad = tmp_path / "bad.loam"
     bad.write_text(read(EXAMPLE).replace("rate        5 min", "rate        5"))
@@ -111,6 +124,7 @@ def test_cli_exit_codes(tmp_path):
 
 
 def test_cli_compile_and_sim(tmp_path):
+    """`compile`, `sim` (JSON, wire log, plot) and `explain` all run on the example."""
     out = tmp_path / "plan.json"
     assert run_cli("compile", EXAMPLE, "-o", str(out)).returncode == 0
     assert json.loads(out.read_text())["task_order"][0] == "strip_A"

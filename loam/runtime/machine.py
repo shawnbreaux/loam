@@ -26,17 +26,26 @@ from ..checker import Model
 from ..units import Quantity
 from .bus import Bus, Clock, tolerant, wait_clock
 
+# A machine stops by itself after this long without the controller's safety heartbeat (the Loam Wire rule), and
+# reports its state this often.
 HEARTBEAT_TIMEOUT_S = 3.0
 STATE_EVERY_S = 0.25
 
 
 def _centre(poly: list) -> tuple[float, float]:
+    """The mean of a polygon's corners: where a machine heads for when told to go to an area."""
     p = np.asarray(poly, float)
     return float(p[:, 0].mean()), float(p[:, 1].mean())
 
 
 class MachineSim:
+    """One machine's side of Loam Wire: its order, its safety state and its position.
+
+    `run_machine` drives it as a simulated machine. The vehicle bridges reuse it for everything that is the same on
+    a real machine: reading orders, stop / hold / e-stop handling, the heartbeat watchdog and the state report.
+    """
     def __init__(self, model: Model, name: str, broker: str, park: tuple[float, float]):
+        """`park` is where the machine starts, in site coordinates. Speeds are kept in site units per site minute."""
         self.m, self.name = model, name
         self.site = model.site["name"]
         self.broker = broker
@@ -64,9 +73,13 @@ class MachineSim:
 
     # -- connection ----------------------------------------------------------
     def topic(self, kind: str) -> str:
+        """This machine's topic for one kind of message."""
         return wire.topic(self.site, self.name, kind)
 
     def connect(self) -> Bus:
+        """Connect to the broker, subscribe to everything a machine listens to, and announce the machine online. Its
+        last will says `connectionBroken`, so the controller learns of a dropped link from the broker.
+        """
         will = (self.topic("connection"), wire.connection(self.site, self.name, 0, "connectionBroken"))
         bus = Bus(self.broker, f"loam-machine-{self.site}-{self.name}-{os.getpid()}-{time.time():.3f}", will)
         bus.start([self.topic("order"), self.topic("instantAction"), wire.topic(self.site, None, "safety"),
@@ -79,6 +92,12 @@ class MachineSim:
 
     # -- orders ----------------------------------------------------------------
     def take(self, order: dict) -> None:
+        """Accept an order and work out the path to drive, as a list of site points in `self.path`.
+
+        The work pass runs down the middle of the order's window along its longer side (back and forth for a
+        roller). A cut then hauls to where the spoil goes and returns; a fill runs from the source stockpile to the
+        placement and back.
+        """
         win, dep = order.get("window"), order.get("deposit") or {}
         op = order["op"]
         pts: list[tuple[float, float]] = []
@@ -110,6 +129,7 @@ class MachineSim:
         self.order, self.progress, self.waiting = order, 0.0, False
 
     def pose_at(self, f: float) -> None:
+        """Move the machine to fraction `f` (0 to 1) of the way along its path, facing the way it is travelling."""
         total = sum(self.legs)
         if total <= 0:
             return
@@ -156,6 +176,12 @@ class MachineSim:
                     self.stop_latency_s.append(time.time() - float(msg["wall"]))
 
     def safety_state(self) -> tuple[str, list]:
+        """The machine's safety state and the reasons for it: ("ok" | "degraded" | "stopped", errors).
+
+        Stopped beats degraded. Reasons, in order: it has tipped over; an e-stop is pressed; an e-stop was released
+        but nobody has resumed; a stop was ordered; the controller's heartbeat has not been heard for 3 s. Degraded
+        means the GNSS position is not good enough to grade by.
+        """
         if self.rolled:
             return "stopped", [wire.error("rollover", f"tilt {math.degrees(self.max_tilt or 0):.0f} deg")]
         if self.estop or self.latched or self.stopped or time.time() - self.last_hb > HEARTBEAT_TIMEOUT_S:
@@ -195,6 +221,8 @@ def run_machine(model: Model, name: str, broker: str, park: tuple[float, float],
         for f in faults.get("crash", []):
             if f["machine"] == name and t >= f["at"]:
                 bus.sever()
+                # A scripted crash: die at once, with no goodbye, as a machine computer losing power would. The broker
+                # then publishes its last will.
                 os._exit(3)
         for k, f in enumerate(faults.get("link_loss", [])):
             if f["machine"] == name and f["at"] <= t and k not in fired:
@@ -245,6 +273,8 @@ def run_machine(model: Model, name: str, broker: str, park: tuple[float, float],
             travelled += math.hypot(x - ms.x, y - ms.y)
             ms.x, ms.y, ms.heading = x, y, h
             end = ms.path[-1]
+            # A physical body never lands exactly on the last point, so the pass also counts as driven when the
+            # machine is within 1.5 m of the end and most of the way along.
             near_end = math.hypot(end[0] - x, end[1] - y) * ms.u < 1.5
             ms.progress = min(1.0, travelled / total) if total > 0 else 1.0
             wedged = False
@@ -273,6 +303,7 @@ def run_machine(model: Model, name: str, broker: str, park: tuple[float, float],
 
 
 def _state(ms: MachineSim, clock: Clock, t: float) -> dict:
+    """A simulated machine's state message, with its worst e-stop reaction time and, under physics, its largest tilt."""
     safety, errors = ms.safety_state()
     st = wire.state(ms.site, ms.name, ms.seq, ms.order["orderId"] if ms.order else None, round(ms.x, 3),
                     round(ms.y, 3), round(ms.heading, 4), False, round(ms.progress, 4), safety, errors, ts=clock.ts(t))

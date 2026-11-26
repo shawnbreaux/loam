@@ -25,11 +25,15 @@ except ImportError as e:  # pragma: no cover
 # Body size (m: length, width, height) and mass (kg) by machine class.
 BODY = {"dozer": ((4.5, 2.6, 2.4), 9000.0), "roller": ((5.5, 2.3, 2.9), 11000.0),
         "excavator": ((5.0, 2.6, 2.8), 14000.0), "grader": ((8.0, 2.5, 3.2), 13000.0)}
+# Pure pursuit steers at a point this far ahead on the path. Further ahead cuts corners; nearer weaves.
 LOOKAHEAD_M = 3.0
 MAX_YAW_RATE = 0.6          # rad/s, a small dozer counter-rotating
 
 
 class Body:
+    """One machine in its own PyBullet world: the site's ground as a height field, and the machine as a rigid body
+    driven along its path.
+    """
     def __init__(self, z: np.ndarray, x0: float, y0: float, cell: float, u: float, cls: str,
                  start: tuple[float, float]):
         """z: ground heights on the site grid (site units); cell, x0, y0 in site units; u = metres per unit."""
@@ -38,6 +42,7 @@ class Body:
         pb.setGravity(0, 0, -9.81, physicsClientId=self.c)
         ny, nx = z.shape
         self.zmin = float(np.nanmin(z))
+        # Heights in metres above the lowest point of the site. Cells with no data sit at that lowest point.
         hf = ((np.nan_to_num(z, nan=self.zmin) - self.zmin) * u).astype(np.float32)
         span = (float(hf.max()) if hf.size else 0.0)
         shape = pb.createCollisionShape(pb.GEOM_HEIGHTFIELD, meshScale=[cell * u, cell * u, 1.0],
@@ -78,6 +83,7 @@ class Body:
         self.track_err: list[float] = []
 
     def _ground_z(self, z, x0, y0, cell, p) -> float:
+        """The physics-world height (m) of the ground under site point `p`."""
         i = int(np.clip((p[0] - x0) / cell, 0, z.shape[1] - 1))
         j = int(np.clip((p[1] - y0) / cell, 0, z.shape[0] - 1))
         v = z[j, i]
@@ -101,10 +107,13 @@ class Body:
             roll, pitch, yaw = pb.getEulerFromQuaternion(q)
             dx, dy = tx - x, ty - y
             dist = math.hypot(dx, dy)
+            # The heading error, wrapped into -180 to +180 degrees so the machine turns the short way round.
             err = (math.atan2(dy, dx) - yaw + math.pi) % (2 * math.pi) - math.pi
             yaw_rate = max(-MAX_YAW_RATE, min(MAX_YAW_RATE, 2.0 * err))
             v = speed_mps * max(0.0, math.cos(err)) * min(1.0, dist / 1.0)     # slow to turn, stop at target
             lin, ang = pb.getBaseVelocity(self.id, physicsClientId=self.c)
+            # Set the forward speed and turn rate, and leave vertical speed, pitch rate and roll rate to the physics:
+            # that is what lets the ground tilt the machine.
             pb.resetBaseVelocity(self.id, [v * math.cos(yaw), v * math.sin(yaw), lin[2]], [ang[0], ang[1], yaw_rate],
                                  physicsClientId=self.c)
             pb.stepSimulation(physicsClientId=self.c)
@@ -112,6 +121,7 @@ class Body:
             self.rolled = self.max_tilt > math.radians(45)
 
     def close(self) -> None:
+        """Release the physics world. Each one holds native memory until it is disconnected."""
         pb.disconnect(physicsClientId=self.c)
 
 

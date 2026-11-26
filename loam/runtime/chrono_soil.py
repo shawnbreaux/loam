@@ -35,6 +35,7 @@ from dataclasses import asdict, dataclass
 # friction [deg]; Janosi shear modulus [m]; SCM elastic stiffness [Pa/m] and damping [Pa s/m].
 @dataclass(frozen=True)
 class SoilParams:
+    """The soil's parameters for Chrono's SCM model (see the comment above for each one's meaning and unit)."""
     Kphi: float = 1.515e6
     Kc: float = 5.27e3
     n: float = 0.7
@@ -69,12 +70,14 @@ def drum_passes(mass_kg: float, width_m: float, diameter_m: float, soil: SoilPar
     r = diameter_m / 2
 
     def light(pos):                               # a massless-ish carrier for the joints
+        """A light body (10 kg) at `pos`, used only to connect joints."""
         b = ch.ChBody()
         b.SetMass(10)
         b.SetInertiaXX(ch.ChVector3d(1, 1, 1))
         b.SetPos(pos)
         s.Add(b)
         return b
+    # The fixed frame everything is measured from.
     gnd = ch.ChBody()
     gnd.SetFixed(True)
     s.Add(gnd)
@@ -105,6 +108,9 @@ def drum_passes(mass_kg: float, width_m: float, diameter_m: float, soil: SoilPar
     ys = (-width_m / 4, 0.0, width_m / 4)
 
     def strip() -> float:
+        """Mean settlement (m, positive downward) over the middle of the rolled strip, sampled every 10 cm at three
+        positions across the drum.
+        """
         return -sum(terrain.GetHeight(ch.ChVector3d(x, y, 0)) for x in xs for y in ys) / (len(xs) * len(ys))
 
     ramp = 1.5                                    # load the soil quasi-statically: no drop, no overshoot
@@ -114,6 +120,8 @@ def drum_passes(mass_kg: float, width_m: float, diameter_m: float, soil: SoilPar
     settle, rolling = [], []
     for k in range(passes):
         fwd = k % 2 == 0
+        # Odd passes roll forward and even passes roll back over the same strip, as a roller works. After each pass
+        # the drum stops for 0.3 s so the soil comes to rest before it is measured.
         speed.SetConstant(speed_ms if fwd else -speed_ms)
         while (drum.GetPos().x < length_m) if fwd else (drum.GetPos().x > 0.0):
             s.DoStepDynamics(dt)

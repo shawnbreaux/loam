@@ -68,6 +68,13 @@ Tests and CI
   cancelled, pip cache. Coverage in CI is 86 %; with every integration live it is 89 %.
 - Packaging: SPDX licence (`Apache-2.0`) and `license-files`, replacing the deprecated table.
 
+Code comments
+- All the code is commented for outside readers: every module, class and function says what it is
+  for, with units, and the reasoning behind non-obvious steps and constants is written beside them.
+  That covers the package, the dashboard page, the tests (each says what it proves), the examples
+  and the setup script. No behaviour changed: for every Python file, the syntax tree with docstrings
+  removed is identical to the one before.
+
 ## [0.0.4] - 2026-11-26
 
 Project Chrono soil physics and OPERA machines on ROS 2. Both are FOSS; see docs/INTEGRATIONS.md.

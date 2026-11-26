@@ -24,11 +24,19 @@ import numpy as np
 from .grid import Grid, SiteGrid
 from .units import FT, Quantity
 
+# Limits used when the program sets none: the most a pass may cut, and the thickness of one layer of fill.
 DEFAULT_CUT = Quantity(0.5, "ft")
 DEFAULT_LIFT = Quantity(8, "in")
 
 
 def next_target(grid: SiteGrid, design: Grid, ground: Grid) -> tuple[Grid, dict]:
+    """The surface the next pass should leave, and a summary of the work in it.
+
+    `design` and `ground` are height grids in site units (`ground` may have NaN where nothing was measured).
+    Returns (target grid with NaN where there is nothing to grade, info). `info` gives the cells covered, the share
+    already in tolerance, cut and fill volumes, the deepest cut and fill, and `done`: whether every covered cell is
+    in tolerance.
+    """
     m, unit = grid.m, grid.unit
     shape = grid.shape
     cut_cap, lift_cap, tol = np.full(shape, np.inf), np.full(shape, np.inf), np.full(shape, np.inf)
@@ -49,6 +57,8 @@ def next_target(grid: SiteGrid, design: Grid, ground: Grid) -> tuple[Grid, dict]
     live = covered & ~excl & np.isfinite(ground) & np.isfinite(design)
     r = ground - design
     with np.errstate(invalid="ignore"):
+        # High: cut down, but not below design and not more than the cap. Low: build up, but not above design and not
+        # more than one lift. Otherwise: the design itself.
         tgt = np.where(r > tol, np.maximum(design, ground - cut_cap),
                        np.where(r < -tol, np.minimum(design, ground + lift_cap), design))
     tgt = np.where(live, tgt, np.nan)

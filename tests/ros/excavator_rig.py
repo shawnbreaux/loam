@@ -17,12 +17,15 @@ from nav_msgs.msg import Odometry
 from sensor_msgs.msg import JointState
 
 URDF_IN, OUT, X, Y, Z, YAW = sys.argv[1], sys.argv[2], *map(float, sys.argv[3:7])
+# Where the arm starts (radians).
 INIT = {"swing_joint": 0.0, "boom_joint": -0.8, "arm_joint": 1.5, "bucket_joint": 1.0,  # bucket up, 2.6 m
         "bucket_end_joint": 0.0}
 NS = "zx200"
 
 with open(URDF_IN, encoding="utf-8") as f:
     urdf = f.read()
+# Add a ros2_control section to the URDF: mock hardware that follows position commands exactly, in place of the real
+# machine's hydraulics.
 block = "".join(f"""<joint name="{j}"><command_interface name="position"/>
   <state_interface name="position"><param name="initial_value">{v}</param></state_interface>
   <state_interface name="velocity"/></joint>""" for j, v in INIT.items())
@@ -45,6 +48,7 @@ with open(f"{OUT}/controllers.yaml", "w", encoding="utf-8") as f:
       state_interfaces: [position, velocity]
 """)
 ns = ["--ros-args", "-r", f"__ns:=/{NS}"]
+# Start the robot state publisher and the controller manager, then load the two controllers.
 procs = [
     subprocess.Popen(["ros2", "run", "robot_state_publisher", "robot_state_publisher", *ns,
                       "-p", f"robot_description:={urdf}"]),
@@ -66,6 +70,7 @@ node.create_subscription(JointState, f"/{NS}/joint_states",
 
 
 def odom():
+    """Publish the parked machine's fixed position and heading."""
     m = Odometry()
     m.header.frame_id = "map"
     m.pose.pose.position.x, m.pose.pose.position.y, m.pose.pose.position.z = X, Y, Z
@@ -75,6 +80,7 @@ def odom():
 
 node.create_timer(0.05, odom)
 running = True
+# SIGTERM ends the loop below, so the log is closed and the ROS processes are shut down in order.
 signal.signal(signal.SIGTERM, lambda *_: globals().__setitem__("running", False))
 print("RIG READY", flush=True)
 while running:

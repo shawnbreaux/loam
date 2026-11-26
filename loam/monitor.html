@@ -1,16 +1,31 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<!--
+  The Loam dashboard: one page, no libraries, no network requests except to the monitor that served it.
+
+  It works in two ways, from the same file:
+    live    `loam monitor` serves it and streams frames over Server-Sent Events from /events;
+    replay  `loam monitor --replay` writes the recorded frames into the page (or beside it, as run.json),
+            and the bar at the bottom plays them back.
+
+  A frame is a small JSON object: site time, machines, orders, status, events, and sometimes a new map.
+  The map is one signed byte per cell: measured minus design, in tenths of the finish tolerance
+  (-128 = no data). See loam/monitor.py for the sending side.
+-->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Loam site monitor</title>
 <style>
+/* Colours. Red = ground too high (cut), blue = too low (fill), grey = within tolerance.
+   The status colours (good, warning, serious, critical) are used for state only, always with a word beside them. */
 :root {
   --surface-0: #f6f6f4; --surface-1: #ffffff; --line: #e2e2de; --text-primary: #191919; --text-secondary: #666666;
   --neutral: #efefef; --high: #ec4647; --low: #257de0; --zone: #191919;
   --good: #0aac23; --warning: #fbb315; --serious: #f18a59; --critical: #dc3c3d;
   --machine: #191919; --machine-ring: #ffffff;
 }
+/* Dark mode has its own values, chosen for a dark surface. */
 @media (prefers-color-scheme: dark) {
   :root { --surface-0: #111111; --surface-1: #191919; --line: #2c2c2c; --text-primary: #efefef; --text-secondary: #9c9c9c;
           --neutral: #383838; --high: #eb6263; --low: #338ced; --zone: #efefef; --machine: #efefef; --machine-ring: #191919; }
@@ -91,28 +106,37 @@ button { font: inherit; padding: 4px 12px; border-radius: 6px; border: 1px solid
   <span class="clock" id="rtime"></span>
 </div>
 <script>
+// The monitor writes the site description (and, for a replay, the frames) in place of the null below.
+// If it is still null, this is a split replay and the data is in run.json beside the page.
 const EMBED = /*LOAM_DATA*/null;
 (EMBED ? Promise.resolve(EMBED) : fetch("run.json").then((r) => r.json())).then(start).catch((e) => {
   document.getElementById("clock").textContent = "could not load the recording: " + e.message;
 });
 function start(DATA) {
 const site = DATA.site;
+// Shorthands: an element by id, and the current value of a CSS colour variable.
 const $ = (id) => document.getElementById(id);
 const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+// Everything currently shown. Frames only carry what changed; apply() merges them into this.
 let view = {map: null, mapShape: site.shape, machines: {}, orders: {}, status: null, truth: null, people: {}, events: [], t: null, estop: false};
 $("title").textContent = `Loam · ${site.site}`;
 
+// -- colours ----------------------------------------------------------------------------
+// "#rrggbb" to [r, g, b], and a blend of two colours (k = 0 gives a, k = 1 gives b).
 function hex(c) { const n = parseInt(c.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; }
 function mix(a, b, k) { return a.map((v, i) => Math.round(v + (b[i] - v) * k)); }
+// The map's seven colours: grey for in tolerance, then three steps of red (high) and three of blue (low).
 function bands() {
   const n = hex(css("--neutral")), hi = hex(css("--high")), lo = hex(css("--low"));
   return {n, hi: [mix(n, hi, .38), mix(n, hi, .7), hi], lo: [mix(n, lo, .38), mix(n, lo, .7), lo]};
 }
+// Steps at 1x, 2x and 4x the tolerance.
 function colorFor(q, b) {          // q = residual / tolerance × 10
   const a = Math.abs(q), arm = q > 0 ? b.hi : b.lo;
   if (a <= 10) return b.n;
   return a <= 20 ? arm[0] : a <= 40 ? arm[1] : arm[2];
 }
+// The legend under the map, in the site's own unit.
 function legend() {
   const b = bands(), u = site.unit, t = site.tol;
   const items = [[b.hi[2], `> ${fmt(4*t)} ${u} high`], [b.hi[1], `${fmt(2*t)}–${fmt(4*t)} high`], [b.hi[0], `${fmt(t)}–${fmt(2*t)} high`],
@@ -122,11 +146,14 @@ function legend() {
     `<span>▲ machine</span><span>▭ work window</span><span>┅ deposit</span>`;
   $("mapnote").textContent = "High ground (red) still needs cutting; low ground (blue) needs fill. From the latest probe survey.";
 }
+// A number to at most three decimals, without trailing zeros.
 function fmt(v) { return (+v.toFixed(3)).toString(); }
 
 // -- geometry -------------------------------------------------------------------------
 const cv = $("map"), cx = cv.getContext("2d");
 let geo = null;
+// Fit the site (grid plus stockpiles, which may lie outside it) into the canvas at one scale for x and y.
+// px/py turn site coordinates into pixels (y up on site, down on screen); ux/uy turn pixels back.
 function layout() {
   const [rows, cols] = site.shape, pad = 10;
   const xs = [], ys = [];
@@ -140,8 +167,11 @@ function layout() {
   cx.setTransform(dpr, 0, 0, dpr, 0, 0);
   geo = {s, px: (x) => pad + (x - x0) * s, py: (y) => h - pad - (y - y0) * s, ux: (px) => x0 + (px - pad) / s, uy: (py) => y0 + (h - pad - py) / s};
 }
+// Base64 to signed bytes.
 function decodeMap(b64) { const raw = atob(b64), a = new Int8Array(raw.length); for (let i = 0; i < raw.length; i++) a[i] = raw.charCodeAt(i) << 24 >> 24; return a; }
 let mapCanvas = null, mapArr = null;
+// Paint the map once, one pixel per cell, into an off-screen canvas; draw() then scales it up.
+// Row 0 of the data is the south edge, so rows are flipped.
 function buildMap() {
   if (!view.map) return;
   mapArr = decodeMap(view.map);
@@ -155,11 +185,14 @@ function buildMap() {
   }
   ctx.putImageData(img, 0, 0);
 }
+// Outline a polygon given in site coordinates.
 function poly(p, dash, color, width) {
   if (!p || !p.length) return;
   cx.beginPath(); p.forEach(([x, y], i) => i ? cx.lineTo(geo.px(x), geo.py(y)) : cx.moveTo(geo.px(x), geo.py(y)));
   cx.closePath(); cx.setLineDash(dash || []); cx.strokeStyle = color; cx.lineWidth = width || 1; cx.stroke(); cx.setLineDash([]);
 }
+// Redraw the whole map: survey colours, zones, stockpiles, the work windows and deposits of orders being run,
+// detected people, then machines on top.
 function draw() {
   if (!geo) layout();
   cx.clearRect(0, 0, cv.width, cv.height);
@@ -187,6 +220,7 @@ function draw() {
     let dy = -8;                                   // keep labels of nearby machines apart
     while (placed.some(([px, py]) => Math.abs(px - X) < 40 && Math.abs(py - (Y + dy)) < 12)) dy += 13;
     placed.push([X, Y + dy]);
+    // A machine is an arrowhead pointing the way it faces, coloured by its safety state.
     cx.save(); cx.translate(X, Y); cx.rotate(h);
     cx.beginPath(); cx.moveTo(10, 0); cx.lineTo(-7, 6); cx.lineTo(-7, -6); cx.closePath();
     cx.fillStyle = m.safety === "ok" ? css("--machine") : m.safety === "degraded" ? css("--warning") : css("--critical");
@@ -194,10 +228,12 @@ function draw() {
     label(n, m.x, m.y, css("--text-primary"), 12, dy);
   });
 }
+// Text with a halo in the surface colour, so it reads on any map colour.
 function label(t, x, y, color, dx, dy) {
   cx.font = "600 11px system-ui, sans-serif"; cx.lineWidth = 3; cx.strokeStyle = css("--surface-1");
   cx.strokeText(t, geo.px(x) + dx, geo.py(y) + dy); cx.fillStyle = color; cx.fillText(t, geo.px(x) + dx, geo.py(y) + dy);
 }
+// Hover: the value of the cell under the pointer, and whether it needs cut or fill.
 cv.addEventListener("mousemove", (e) => {
   const tip = $("tip");
   if (!geo || !mapArr) { tip.style.display = "none"; return; }
@@ -213,14 +249,18 @@ cv.addEventListener("mousemove", (e) => {
 cv.addEventListener("mouseleave", () => $("tip").style.display = "none");
 
 // -- panels ---------------------------------------------------------------------------
+// Site time of day (UTC) from Unix seconds.
 function hhmm(ts) { return ts == null ? "–" : new Date(ts * 1000).toISOString().slice(11, 16); }
+// A status pill: a coloured dot and a word, so state is never shown by colour alone.
 function chip(level, text) {
   const c = {good: "--good", warning: "--warning", serious: "--serious", critical: "--critical", info: "--text-secondary"}[level];
   return `<span class="chip"><i style="background:${css(c)}"></i>${text}</span>`;
 }
+// Fill the header and the side panels from the current view.
 function panels() {
   const st = view.status || {};
   $("clock").textContent = view.t ? new Date(view.t * 1000).toISOString().replace("T", " ").slice(0, 16) + " UTC (site clock)" : "waiting for data…";
+  // The overall state: the most serious condition wins.
   let state = ["info", "running"];
   if (st.done) state = ["good", "done"];
   if ((st.rules || []).length) state = ["warning", "hold: " + st.rules.join(", ")];
@@ -247,6 +287,7 @@ function panels() {
   }).join("");
   $("events").innerHTML = (view.events || []).map((e) => `<div><span class="t">${hhmm(e.ts)}</span>${e.level === "info" ? "" : chip(e.level, "")}<span>${e.text}</span></div>`).join("") || '<span class="muted">none yet</span>';
 }
+// Merge one frame into the view and redraw.
 function apply(f) {
   for (const k of ["t", "machines", "orders", "status", "truth", "people", "events", "estop"]) if (f[k] !== undefined) view[k] = f[k];
   if (f.map) { view.map = f.map; buildMap(); }
@@ -257,6 +298,7 @@ function apply(f) {
 legend();
 window.addEventListener("resize", () => { geo = null; draw(); });
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { legend(); buildMap(); draw(); panels(); });
+// Replay: a slider over the recorded frames. Not every frame has a map, so each is shown with the newest map up to it.
 if (DATA.frames) {
   const frames = DATA.frames, sc = $("scrub");
   $("replay").style.display = "flex"; $("source").textContent = `replay · ${frames.length} frames`;
@@ -274,6 +316,7 @@ if (DATA.frames) {
   sc.oninput = () => show(+sc.value);
   show(frames.length - 1);
 } else {
+  // Live: the browser reconnects by itself if the stream drops.
   $("source").textContent = "live";
   const es = new EventSource("/events");
   es.onmessage = (e) => apply(JSON.parse(e.data));

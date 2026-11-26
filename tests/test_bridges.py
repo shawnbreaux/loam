@@ -28,6 +28,7 @@ from loam.runtime.vda5050 import iso, run_vda5050, vda_order
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FT = 0.3048
+# A one-dozer site in feet, used by all the bridge tests.
 SRC = """loam 0.0.2
 site yard { crs "LOCAL:ft"; units ft; design "d.xml"; boundary rect (0, 0) (200, 100); grid 2 ft }
 probe p { kind static; sensor lidar; rate 5 min; accuracy 0.05 ft }
@@ -39,12 +40,14 @@ task cut { op cut; zone pad; by class dozer; spoil -> pad; until residual(pad).h
 
 @pytest.fixture(scope="module")
 def model():
+    """The small one-dozer site (`SRC`), checked."""
     m, d = check(parse(SRC))
     assert not has_errors(d), [x.msg for x in d]
     return m
 
 
 def schemas():
+    """Validators for the four official VDA 5050 3.0 message schemas (vendored in tests/vda5050)."""
     jsonschema = pytest.importorskip("jsonschema")
     out = {}
     for n in ("order", "instantActions", "state", "connection"):
@@ -58,6 +61,9 @@ class VdaRobot(threading.Thread):
     """Drives node to node at the edge speed; obeys startPause/stopPause/cancelOrder."""
 
     def __init__(self, broker, map_id, x=0.0, y=0.0, speed=2.0):
+        """A robot of manufacturer `acme`, serial `R1`, at (x, y) metres on map `map_id`, online. `speed` (m/s)
+        applies where an edge gives no limit.
+        """
         super().__init__(daemon=True)
         self.v = schemas()
         self.base = "uagv/v3/acme/R1"
@@ -73,19 +79,25 @@ class VdaRobot(threading.Thread):
         self.send("connection", self.msg(connectionState="ONLINE"), retain=True)
 
     def msg(self, **body):
+        """A VDA 5050 message with the common header."""
         self.header += 1
         return {"headerId": self.header, "timestamp": iso(), "version": "3.0.0", "manufacturer": "acme",
                 "serialNumber": "R1", **body}
 
     def check(self, kind, m):
+        """Validate a message against the official schema and keep any problems. The test fails at the end if there
+        were any, in either direction.
+        """
         for e in self.v[kind].iter_errors(m):
             self.problems.append(f"{kind}: {e.json_path}: {e.message}")
 
     def send(self, kind, m, retain=False):
+        """Check and publish one of the robot's own messages."""
         self.check(kind, m)
         self.bus.pub(f"{self.base}/{kind}", m, retain=retain, qos=1)
 
     def state(self):
+        """The robot's state message: order progress, position, pause and e-stop status, action states."""
         return self.msg(
             orderId=self.order_id, orderUpdateId=0, lastNodeId=self.last_node, lastNodeSequenceId=self.last_seq,
             nodeStates=[{k: n[k] for k in ("nodeId", "sequenceId", "released")} for n in self.nodes],
@@ -98,6 +110,9 @@ class VdaRobot(threading.Thread):
             safetyState={"activeEmergencyStop": "MANUAL" if self.hw_estop else "NONE", "fieldViolation": False})
 
     def run(self):
+        """The robot's loop, 20 times a second: take orders and instant actions, drive towards the next node at the
+        edge's speed, mark actions running and finished, publish state.
+        """
         last = time.time()
         while self.running:
             for topic, m in self.bus.drain(0.02):
@@ -152,6 +167,7 @@ class Controller:
     """Plays the Loam controller's part of the Wire: heartbeats, orders, actions, e-stop."""
 
     def __init__(self, broker, site, machine):
+        """Connect, listen to the machine's state and start the heartbeat."""
         self.site, self.machine, self.seq = site, machine, 0
         self.bus = Bus(broker, "test-controller")
         self.bus.start([wire.topic(site, machine, "state")])
@@ -160,6 +176,7 @@ class Controller:
         threading.Thread(target=self._hb, daemon=True).start()
 
     def _hb(self):
+        """Send the safety heartbeat every half second, as the real controller must, until closed."""
         while not self.stop_hb.is_set():
             self.seq += 1
             self.bus.pub(wire.topic(self.site, None, "safety"), wire.safety(self.site, self.seq))
@@ -175,6 +192,7 @@ class Controller:
         self.bus.stop()
 
     def send(self, kind, m, topic_machine=True):
+        """Publish a message on the machine's topic of that kind (or the site's, with `topic_machine=False`)."""
         self.bus.pub(wire.topic(self.site, self.machine if topic_machine else None, kind), m, qos=1)
 
     def latest(self, settle=0.5):
@@ -202,10 +220,14 @@ class Controller:
 
 
 def loam_order(site, machine, oid, window, speed=None):
+    """A Loam cut order over `window`, optionally with a speed limit (m/s)."""
     return wire.order(site, machine, 1, oid, 0, "cut", "cut", window, {}, {"maxSpeed": speed} if speed else {})
 
 
 def test_vda_order_matches_the_schema(model):
+    """A Loam order converts to a valid VDA 5050 order: even sequence numbers on nodes, odd on edges, positions in
+    metres, and the work as an action on the work edge. A one-point path puts the action on the node.
+    """
     v = schemas()
     o = loam_order("yard", "dz1", "o1", [(20, 40), (60, 40), (60, 50), (20, 50)], 1.5)
     hdr = {"headerId": 1, "timestamp": iso(), "version": "3.0.0", "manufacturer": "a", "serialNumber": "b"}
@@ -222,6 +244,12 @@ def test_vda_order_matches_the_schema(model):
 
 
 def test_vda5050_robot_runs_loam_orders(model, mqtt_broker, monkeypatch):
+    """The VDA 5050 bridge from end to end against the stand-in robot.
+
+    In order: an order is driven and reported done; a robot that ignores an order fails it instead of hanging; stop
+    pauses and resume continues; the robot's own e-stop holds the Loam machine; the site e-stop cancels the order
+    on the robot; a dropped robot link is reported. Every message in both directions must be valid VDA 5050.
+    """
     monkeypatch.setattr("loam.runtime.vda5050.ORDER_ACK_S", 2.0)
     robot = VdaRobot(mqtt_broker, "yard", speed=3.0)
     robot.start()
@@ -292,6 +320,9 @@ def test_vda5050_robot_runs_loam_orders(model, mqtt_broker, monkeypatch):
 
 # -- MAVLink / ArduPilot Rover SITL ---------------------------------------------------------------
 def test_mission_items_and_heading(model):
+    """A path becomes a mission (home slot, speed change, waypoints) whose coordinates convert back to the same site
+    points, on a site rotated 30 degrees. Compass bearings convert to site headings.
+    """
     from loam.runtime.mavlink import CMD_CHANGE_SPEED, CMD_WAYPOINT, bearing_to_heading, mission_items
     f = Frame(FT, 30.0, 34.4459, -85.7197)
     path = [(0.0, 0.0), (100.0, 0.0), (100.0, 50.0)]
@@ -305,6 +336,7 @@ def test_mission_items_and_heading(model):
     assert bearing_to_heading(120.0, f) == pytest.approx(0.0, abs=1e-12)    # along site +x
 
 
+# Where the ArduPilot Rover simulator binary is, if it is installed.
 ARDUROVER = os.environ.get("ARDUROVER") or shutil.which("ardurover") or next(
     (p for p in ("/opt/src/ardupilot/build/sitl/bin/ardurover",) if os.path.exists(p)), None)
 
@@ -312,6 +344,11 @@ ARDUROVER = os.environ.get("ARDUROVER") or shutil.which("ardurover") or next(
 @pytest.mark.slow
 @pytest.mark.skipif(ARDUROVER is None, reason="needs an ArduPilot Rover SITL binary (ARDUROVER)")
 def test_ardupilot_rover_sitl(model, mqtt_broker, tmp_path):
+    """The MAVLink bridge against the real ArduPilot Rover firmware running in its own simulator (SITL).
+
+    The rover must drive a pass and hold the work line within 2 ft, stop when told and stay stopped, and report how
+    quickly it reacted to the e-stop.
+    """
     pytest.importorskip("pymavlink")
     from loam.runtime.mavlink import run_mavlink
     root = os.path.dirname(os.path.dirname(os.path.dirname(ARDUROVER)))
@@ -355,12 +392,19 @@ def test_ardupilot_rover_sitl(model, mqtt_broker, tmp_path):
 
 
 # -- RTKLIB stream -> loam nmea -> MQTT -----------------------------------------------------------
+# Where RTKLIB's stream relay is, if it is installed.
 STR2STR = os.environ.get("STR2STR") or shutil.which("str2str") or next(
     (p for p in ("/opt/src/RTKLIB/app/consapp/str2str/gcc/str2str",) if os.path.exists(p)), None)
 
 
 @pytest.mark.skipif(STR2STR is None, reason="needs RTKLIB str2str (STR2STR)")
 def test_rtklib_stream_to_wire(model, mqtt_broker, tmp_path):
+    """GNSS positions flow from a receiver, through RTKLIB's `str2str` relay, into `loam nmea`, and out as Loam Wire
+    state.
+
+    The receiver here is a socket sending NMEA GGA sentences for eight known points; the positions that arrive must
+    match within 0.05 ft.
+    """
     import socket
     import sys
 
@@ -372,6 +416,7 @@ def test_rtklib_stream_to_wire(model, mqtt_broker, tmp_path):
     lines = [_gga(*f.local_to_wgs84(x, y), q=4) for x, y in pts]
 
     def free():
+        """A TCP port that is free right now."""
         with socket.socket() as s:
             s.bind(("127.0.0.1", 0))
             return s.getsockname()[1]

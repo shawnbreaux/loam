@@ -17,6 +17,7 @@ E0, N0 = 600000.0, 3812000.0                 # UTM 16N, DeKalb County, AL
 UTM = "EPSG:32616"
 SP = "EPSG:26929"                            # NAD83 / Alabama East (m)
 
+# A small metric site whose design file, format, boundary and zone area are filled in by each test.
 SRC = """loam 0.0.2
 site t {{ crs "LOCAL:m"; units m; design "{design}" format {fmt} surface "FG"
           boundary {boundary}; grid 1 m }}
@@ -28,10 +29,14 @@ task cutW {{ op cut; zone W; by class dozer; until residual(W).high < 3 cm }}
 
 
 def design(x, y):
+    """The design surface used throughout: a plane sloping up 1 % to the east and 2 % to the north, from 100 m."""
     return 100 + 0.01 * x + 0.02 * y
 
 
 def site(tmp_path, fmt="landxml", design_file="d.xml", boundary="rect (0, 0) (40, 20)", area="rect (0, 0) (20, 20)"):
+    """A checked 40 x 20 m site and its grid. By default the design is written as LandXML; with another `fmt` the test
+    supplies the design file itself.
+    """
     if fmt == "landxml":
         xs, ys = np.arange(0.0, 41.0), np.arange(0.0, 21.0)
         gx, gy = np.meshgrid(xs, ys)
@@ -48,6 +53,9 @@ def site(tmp_path, fmt="landxml", design_file="d.xml", boundary="rect (0, 0) (40
     ("swale", lambda x, y: 0.6 * np.cos(y / 6)),
 ])
 def test_ground_filter_removes_machines_and_brush(name, surface):
+    """The ground filter recovers bare earth from a scan with brush (15 % of cells, 0.3 m high), a parked machine (3 m
+    high) and gaps, on a gentle slope, a 3:1 bank and a swale.
+    """
     c = 0.5
     y, x = np.mgrid[0:120, 0:120] * c
     g = surface(x, y)
@@ -66,6 +74,7 @@ def test_ground_filter_removes_machines_and_brush(name, surface):
 
 
 def test_ground_filter_degenerate():
+    """An empty scan stays empty, and flat ground comes back unchanged."""
     assert np.isnan(ground_surface(np.full((5, 5), np.nan), 1.0)).all()
     flat = np.full((9, 9), 2.0)
     np.testing.assert_array_equal(ground_surface(flat, 1.0), flat)
@@ -73,6 +82,7 @@ def test_ground_filter_degenerate():
 
 # -- LAZ + CRS ------------------------------------------------------------------------------------
 def write_laz(path, e, n, z, cls, crs=None):
+    """Write points as compressed LAS 1.4 (LAZ) with classes and, optionally, a coordinate reference system."""
     laspy = pytest.importorskip("laspy")
     pytest.importorskip("lazrs")
     h = laspy.LasHeader(point_format=6, version="1.4")
@@ -86,6 +96,12 @@ def write_laz(path, e, n, z, cls, crs=None):
 
 
 def test_laz_with_ground_filter_and_crs(tmp_path):
+    """A drone scan in one coordinate system (UTM) is gridded onto a site defined in another (Alabama East state
+    plane).
+
+    Unfiltered, the machine's roof shows up in the surface. With the ground filter, or using the file's own ground
+    classification, the surface matches the truth within 2 cm.
+    """
     pyproj = pytest.importorskip("pyproj")
     _, g = site(tmp_path)
     frame = Frame(1.0, 0.0, None, None, *pyproj.Transformer.from_crs(UTM, SP, always_xy=True)
@@ -112,6 +128,9 @@ def test_laz_with_ground_filter_and_crs(tmp_path):
 
 
 def test_frame_crs_wgs84_and_reproject():
+    """With a named coordinate system, pyproj does the conversions: to latitude/longitude and back, and between
+    systems.
+    """
     pytest.importorskip("pyproj")
     f = Frame(0.3048, 0.0, None, None, E0, N0, 1.0, 0.0, UTM)
     lat, lon = f.local_to_wgs84([0.0, 1000.0], [0.0, 2000.0])
@@ -126,6 +145,7 @@ def test_frame_crs_wgs84_and_reproject():
 # -- GeoTIFF -------------------------------------------------------------------------------------
 @pytest.mark.parametrize("rot", [0.0, 30.0])
 def test_geotiff_export_reads_back_exactly(tmp_path, rot):
+    """A surface exported as GeoTIFF reads back to the same heights, also on a rotated site and with heights in feet."""
     pytest.importorskip("rasterio")
     from loam.surfaces import geotiff_ground, write_geotiff
     _, g = site(tmp_path)
@@ -139,6 +159,9 @@ def test_geotiff_export_reads_back_exactly(tmp_path, rot):
 
 
 def test_geotiff_dem_in_another_crs_and_as_design(tmp_path, capsys):
+    """A terrain model in UTM at 0.25 m pixels is sampled correctly onto a state-plane site, and an OpenDroneMap
+    project folder is accepted as the ground for `export`.
+    """
     pytest.importorskip("rasterio")
     pyproj = pytest.importorskip("pyproj")
     import rasterio
@@ -168,6 +191,7 @@ def test_geotiff_dem_in_another_crs_and_as_design(tmp_path, capsys):
 
 
 def test_geotiff_design_surface(tmp_path):
+    """A GeoTIFF can be the design surface of a site."""
     pytest.importorskip("rasterio")
     from loam.surfaces import write_geotiff
     _, g = site(tmp_path)
@@ -181,6 +205,7 @@ def test_geotiff_design_surface(tmp_path):
 
 # -- IFC 4.3 -------------------------------------------------------------------------------------
 def write_ifc(path, step=4.0):
+    """Write a minimal IFC 4.3 file holding the design plane as a triangulated surface named FG."""
     pytest.importorskip("ifcopenshell")
     import ifcopenshell.api as api
     f = api.run("project.create_file", version="IFC4X3")
@@ -209,6 +234,7 @@ def write_ifc(path, step=4.0):
 
 
 def test_ifc_design_surface(tmp_path):
+    """An IFC 4.3 surface can be the design surface of a site; asking for a name the file does not have is an error."""
     write_ifc(tmp_path / "fg.ifc")
     _, g = site(tmp_path, fmt="ifc", design_file="fg.ifc")
     d = g.surface(g.m.site["design"])                       # a plane: exact on every cell
@@ -220,6 +246,9 @@ def test_ifc_design_surface(tmp_path):
 
 # -- GeoJSON areas (QGIS) ---------------------------------------------------------------------------
 def test_geojson_area_files_and_export(tmp_path):
+    """A zone's area can come from a GeoJSON polygon (drawn in QGIS, for example), and the site's zones export as
+    GeoJSON in world coordinates.
+    """
     poly = {"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {}, "geometry": {
         "type": "Polygon", "coordinates": [[[0, 0], [20, 0], [20, 20], [0, 20], [0, 0]]]}}]}
     (tmp_path / "w.geojson").write_text(json.dumps(poly))
@@ -236,6 +265,7 @@ def test_geojson_area_files_and_export(tmp_path):
 
 
 def test_cli_exports(tmp_path):
+    """`loam export` writes GeoJSON and GeoTIFF from the command line."""
     pytest.importorskip("rasterio")
     site(tmp_path)
     (tmp_path / "t.loam").write_text(SRC.format(design="d.xml", fmt="landxml",

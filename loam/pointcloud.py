@@ -32,6 +32,11 @@ Points = NDArray[np.float64]          # shape (n, 3)
 
 # -- LAS -----------------------------------------------------------------------------
 def _las_header(f) -> dict:
+    """Read the fixed public header of a LAS file: version, where the points start, their record layout and count, and
+    the scale and offset that turn the stored integers into coordinates.
+
+    The byte positions are those of the ASPRS LAS specification.
+    """
     head = f.read(375)
     if head[:4] != b"LASF":
         raise ValueError("not a LAS file (missing LASF signature)")
@@ -55,6 +60,8 @@ def read_las(path: str, classes: set[int] | None = None, chunk: int = CHUNK) -> 
     """Yield (n, 3) float arrays of x, y, z, optionally keeping only some classifications."""
     with open(path, "rb") as f:
         h = _las_header(f)
+        # Each point record starts with x, y, z as 32-bit integers. The classification byte sits at offset 15 in the
+        # older point formats (0-5, where its low 5 bits are the class) and at 16 in the newer ones (6-10).
         cls_at = 15 if h["format"] <= 5 else 16
         dt = np.dtype({"names": ["x", "y", "z", "c"], "formats": ["<i4", "<i4", "<i4", "u1"],
                        "offsets": [0, 4, 8, cls_at], "itemsize": h["rec_len"]})
@@ -101,11 +108,15 @@ def write_las(path: str, pts: Points, scale: float = 0.001, classification: int 
 
 
 # -- PCD -----------------------------------------------------------------------------
+# PCD field (TYPE, SIZE) pairs to NumPy little-endian types.
 _PCD_TYPES = {("F", 4): "<f4", ("F", 8): "<f8", ("U", 1): "u1", ("U", 2): "<u2", ("U", 4): "<u4",
               ("I", 1): "i1", ("I", 2): "<i2", ("I", 4): "<i4", ("U", 8): "<u8", ("I", 8): "<i8"}
 
 
 def read_pcd(path: str, chunk: int = CHUNK) -> Iterator[Points]:
+    """Yield (n, 3) arrays of x, y, z from a Point Cloud Data file, ascii or binary. Other fields (intensity, time,
+    ...) are skipped.
+    """
     with open(path, "rb") as f:
         meta: dict[str, list[str]] = {}
         while True:
@@ -163,6 +174,9 @@ def write_pcd(path: str, pts: Points) -> None:
 
 
 def read_xyz(path: str, chunk: int = CHUNK) -> Iterator[Points]:
+    """Yield (n, 3) arrays from a text file of `x y z` lines (spaces or commas). Lines that are not three numbers,
+    such as a header, are skipped.
+    """
     with open(path, encoding="utf-8") as f:
         while True:
             rows = []
@@ -179,6 +193,9 @@ def read_xyz(path: str, chunk: int = CHUNK) -> Iterator[Points]:
 
 
 def read_laz(path: str, classes: set[int] | None = None, chunk: int = CHUNK) -> Iterator[Points]:
+    """Yield (n, 3) arrays of x, y, z from a compressed LAZ file, optionally keeping only some classifications. Needs
+    laspy with the lazrs backend.
+    """
     try:
         import laspy
     except ImportError as e:
@@ -190,6 +207,9 @@ def read_laz(path: str, classes: set[int] | None = None, chunk: int = CHUNK) -> 
 
 
 def read_points(path: str, ground_only: bool = False, chunk: int = CHUNK) -> Iterator[Points]:
+    """Open a point cloud by its file extension and yield its points in chunks. `ground_only` keeps LAS/LAZ class 2
+    (ground, as classified by whoever processed the scan).
+    """
     ext = os.path.splitext(path)[1].lower()
     if ext == ".las":
         return read_las(path, {2} if ground_only else None, chunk)
@@ -207,6 +227,7 @@ class Binner:
     """Streams points into per-cell count, mean and minimum height."""
 
     def __init__(self, grid: SiteGrid):
+        """Start with empty cells: point count, sum of heights and lowest height per cell."""
         self.g = grid
         self.n = np.zeros(grid.nx * grid.ny, np.int64)
         self.s = np.zeros(grid.nx * grid.ny)
@@ -214,6 +235,9 @@ class Binner:
         self.seen = self.used = 0
 
     def add(self, x: Grid, y: Grid, z: Grid) -> None:
+        """Add a chunk of points (site coordinates). Points off the grid or without a height are counted in `seen` but
+        not used.
+        """
         self.seen += len(z)
         i, j, ok = self.g.cell_of(x, y)
         ok &= np.isfinite(z)
@@ -225,6 +249,12 @@ class Binner:
         np.minimum.at(self.lo, k, zz)
 
     def result(self, stat: str = "mean", min_points: int = 1) -> tuple[Grid, NDArray[np.int64]]:
+        """The height grid: the mean height per cell (`stat="mean"`) or the lowest (`"min"`), NaN where a cell has
+        fewer than `min_points` points. Also returns the point count per cell.
+
+        The mean suits bare ground; the minimum is the starting point of the ground filter, since vegetation and
+        machines only ever add height.
+        """
         n = self.n.reshape(self.g.shape)
         with np.errstate(invalid="ignore", divide="ignore"):
             z = (self.s / self.n if stat == "mean" else self.lo).reshape(self.g.shape)
@@ -259,6 +289,9 @@ def grid_cloud(path: str, grid: SiteGrid, frame: Frame, stat: str = "mean", grou
     src = src_crs or (cloud_crs(path) if frame.crs else None)
 
     def points():
+        """The file's points in site coordinates, chunk by chunk. Called once per pass, so the file is read twice when
+        the ground filter is on and never held in memory.
+        """
         for p in read_points(path, ground_only, chunk):
             e, n, h = frame.reproject(p[:, 0], p[:, 1], p[:, 2], src)
             x, y = frame.projected_to_local(e, n)
@@ -308,6 +341,9 @@ def ground_surface(zmin: Grid, cell_m: float, max_window_m: float = 10.0, slope:
     if np.isnan(z).all():
         return z
     obj = np.zeros(z.shape, bool)
+    # Windows of 3, 5, 9, 17, ... cells. An *opening* (erosion then dilation) removes anything narrower than the
+    # window; what the opening lowered by more than the threshold was an object standing on the ground. The threshold
+    # grows with the window so that real slopes survive.
     cur, w_prev, k = z, 3, 1
     while (2 * k - 1) * cell_m <= max_window_m:
         w = 2 * k + 1

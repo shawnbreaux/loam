@@ -14,6 +14,9 @@ Thanks for helping. Loam aims to be small, correct and easy to review, so change
   seeds, and is regenerated in the same pull request (`python examples/study.py`).
 - **Keep it small.** Prefer deleting code to adding it. New runtime dependencies need a strong reason;
   the core depends only on NumPy.
+- **Code is written to be read by people outside the project.** Every module, class and function has
+  a docstring that says what it is for; units are stated; trade terms (bank volume, lift, windrow)
+  are explained where they first appear. Comments say why, not what.
 - **Safety-relevant changes** (rules, holds, Loam Wire stop and heartbeat semantics) need a second
   reviewer and must never weaken an existing guarantee.
 

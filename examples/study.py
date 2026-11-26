@@ -32,6 +32,7 @@ MODEL = None
 
 
 def _model():
+    """The example program, parsed and checked once per worker process."""
     global MODEL
     if MODEL is None:
         MODEL, _ = check(parse_file(os.path.join(HERE, "pad_north.loam")))
@@ -39,6 +40,11 @@ def _model():
 
 
 def run(job: tuple) -> dict:
+    """Run one simulation and return its scores.
+
+    A job is (experiment label, seed, open loop?, true soil, planner's beliefs, scripted events?). Scores are taken
+    on the true ground, which only the simulator knows, and also as the program itself saw them.
+    """
     exp, seed, open_loop, soil, beliefs, events = job
     r = Sim(_model(), base_dir=HERE, seed=seed, open_loop=open_loop, soil=Soil(**soil), beliefs=Beliefs(**beliefs),
             events=Events() if events else Events.none(), log=lambda *a: None).run()
@@ -50,6 +56,9 @@ def run(job: tuple) -> dict:
 
 
 def boot_ci(x: list[float], n: int = 10_000, seed: int = 0) -> tuple[float, float, float]:
+    """The mean of `x` and its 95 % confidence interval by percentile bootstrap: resample the values with replacement
+    `n` times and take the 2.5th and 97.5th percentiles of the resampled means.
+    """
     a = np.asarray(x, float)
     rng = np.random.default_rng(seed)   # analysis only; does not affect simulated results
     means = a[rng.integers(0, a.size, (n, a.size))].mean(1)
@@ -57,16 +66,21 @@ def boot_ci(x: list[float], n: int = 10_000, seed: int = 0) -> tuple[float, floa
 
 
 def fmt(x: list[float], digits: int = 1) -> str:
+    """"mean [low, high]" for a list of values, to `digits` decimals."""
     m, lo, hi = boot_ci(x)
     return f"{m:.{digits}f} [{lo:.{digits}f}, {hi:.{digits}f}]"
 
 
 def main() -> None:
+    """Build the list of runs for the three experiments, run them in parallel, check the volume ledger of every run,
+    and write the JSON, the Markdown tables and the figure.
+    """
     ap = argparse.ArgumentParser()
     ap.add_argument("--seeds", type=int, default=50)
     ap.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
     a = ap.parse_args()
     soil, bel = asdict(Soil()), asdict(Beliefs())
+    # The same soil with perfect blades: no random error in cutting or finishing.
     quiet_soil = {**soil, "cut_error": 0.0, "finish_error_m": 0.0}
     jobs = [("A", s, ol, soil, bel, True) for s in range(a.seeds) for ol in (True, False)]
     nb = max(10, a.seeds // 2)
@@ -91,6 +105,7 @@ def main() -> None:
         json.dump({"seeds": a.seeds, "rows": rows}, f, indent=1)
 
     def sel(exp: str, mode: str, key: str) -> list[float]:
+        """One score (`key`) from every run of an experiment in one mode."""
         return [r[key] for r in rows if r["exp"] == exp and r["mode"] == mode]
 
     md = ["# Simulation study: open loop vs closed loop", "",

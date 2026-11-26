@@ -40,16 +40,27 @@ DEFAULT_FAULTS: dict[str, Any] = {
 
 
 def active(spans: list[dict], t: float) -> dict | None:
+    """The scripted fault that is under way at site minute `t`, or None."""
     return next((s for s in spans if s["from"] <= t < s["to"]), None)
 
 
 class World:
+    """The true state of the simulated site: the ground, the loose soil lying on it, and the stockpiles.
+
+    Volumes are in site units cubed. "Bank" volume is soil measured in the ground, before digging; "loose" volume
+    is the same soil after digging, when it takes up more room (the swell factor). Everything here is hidden from
+    the controller, which only sees what the probe measures.
+    """
     def __init__(self, model: Model, base_dir: str, seed: int = 7, soil: Soil | None = None,
                  compaction: dict[str, dict] | None = None):
+        """Start from the existing ground. `soil` is the true soil behaviour; `compaction` holds per-machine roller
+        tables from `loam soil-calibrate`; `seed` fixes the random cut and finish errors.
+        """
         self.g = SiteGrid(model, base_dir)
         self.m = model
         self.design, self.z = self.g.design_and_existing()
         self.z0 = self.z.copy()
+        # Height of loose (placed, not yet compacted) soil in each cell. Rolling squeezes it down.
         self.loose = np.zeros_like(self.z)
         self.rolled = np.zeros(self.z.shape, int)       # roller passes over the loose lift so far
         self.compaction = compaction or {}
@@ -60,18 +71,26 @@ class World:
         for name, sp in model.stockpiles.items():
             v = sp.get("available") or sp.get("capacity")
             self.stock[name] = v.to(f"{self.g.unit}3") if v else 0.0
+        # Windrow: soil a blade leaves in a ridge beside its pass. It is on site but in nobody's plan until finishing
+        # uses it.
         self.windrow = 0.0                  # bank volume left lying on site
+        # The ledger is a bookkeeping check: the sum of every change made through `_add` must equal the change in the
+        # ground itself (see `truth`).
         self.ledger = 0.0                   # booked change of ground volume
         self.applied = 0
         self.seen_orders: set[str] = set()
         self.duplicates = 0
 
     def _mask(self, poly: list | None) -> np.ndarray:
+        """The grid cells inside a polygon given as a list of points (none, for no polygon)."""
         if not poly:
             return np.zeros(self.g.shape, bool)
         return polygon_mask([tuple(p) for p in poly], self.g.xs, self.g.ys)
 
     def _add(self, mk: np.ndarray, dz: np.ndarray, loose: bool = False) -> None:
+        """Change the ground height of the cells `mk` by `dz`, and book the volume in the ledger. `loose=True` marks
+        it as newly placed loose soil.
+        """
         self.z[mk] += dz
         if loose:
             self.loose[mk] += dz
@@ -81,8 +100,11 @@ class World:
     def place(self, mk: np.ndarray, lift: float, loose_vol: float) -> float:
         """Spread loose material into the lowest cells of `mk`, overbuilt for compaction, at most
         one lift thick. Returns the loose volume placed."""
+        # Fill is placed higher than design because rolling will press it down: the height still needed, divided by
+        # the planner's 0.8 keep factor, and no more than one lift.
         need = np.clip((self.design - self.z) / 0.8, 0, lift)
         flat = np.where(mk, need, 0).ravel()
+        # Deepest holes first, until the load runs out; the last cell takes what is left.
         order = np.argsort(-flat, kind="stable")
         cum = np.cumsum(flat[order]) * self.area
         k = int(np.searchsorted(cum, loose_vol))
@@ -141,11 +163,15 @@ class World:
                 d = np.minimum(d, np.clip(r[sel], 0, None))
             else:
                 sel = win & (r > thr)
+                # Without a planned pattern the blade takes off whatever is above design, up to the deepest cut
+                # allowed in one pass (default 6 in).
                 d = np.clip(r[sel], 0, lim.get("maxCut", 0.1524) / u)
                 d *= np.clip(1 + self.rng.normal(0, self.soil.cut_error, d.shape), 0, None)
             self._add(sel, -d)
             self.loose[sel] = np.maximum(self.loose[sel] - d, 0)
             bank = float(d.sum() * self.area)
+            # Dug soil swells. It goes, in order of preference, to the planned deposit, to the stockpile, and
+            # otherwise stays on site as windrow.
             loose = bank * self.soil.swell
             if dep.get("pattern"):
                 share = float(dep["volume"]) / max(float(dep.get("planned", dep["volume"])), 1e-12)
@@ -171,6 +197,8 @@ class World:
                 self.stock[src] -= placed / self.soil.swell
             out["bank"] = placed / self.soil.swell
         elif op == "compact":
+            # Rolling only changes cells that have loose soil. Without a roller table the whole lift compacts at once
+            # to the true keep factor.
             sel = win & (self.loose > 1e-9)
             table = self.compaction.get(order.get("machine", "")) or self.compaction.get("*")
             if table is None:
@@ -189,6 +217,9 @@ class World:
                 self.rolled[sel] += k
                 out["settled_mean"] = float(dz.mean() * u) if dz.size else 0.0
         elif op == "finish":
+            # A finishing pass moves the surface at most one step (default 0.3 ft) towards design, with a small
+            # random error. What it cuts joins the windrow; what it fills is drawn from the windrow first, then
+            # the stockpile.
             step = lim.get("step", 0.0914) / u
             if planned is not None:
                 sel = planned != 0
@@ -230,6 +261,13 @@ class World:
 def run_world(model: Model, base_dir: str, broker: str, speed: float, faults: dict, seed: int = 7,
               truth_every_min: float = 5.0, stop_after_min: float = 48 * 60,
               compaction: dict[str, dict] | None = None) -> None:
+    """Run the simulated world until the site ends or `stop_after_min` site minutes pass.
+
+    It publishes the site clock and the fault script, moves earth when a machine reports a finished pass, answers
+    the probe's scan requests, and plays the site's sensors (person detection, rain gauge, e-stop button) from the
+    fault script. Every `truth_every_min` it publishes the true score for the test report, and a final one when it
+    stops.
+    """
     site = model.site["name"]
     w = World(model, base_dir, seed, compaction=compaction)
     bus = Bus(broker, f"loam-world-{site}").start([f"sim/{site}/world/#", f"loam/v0/{site}/+/state",
@@ -271,8 +309,11 @@ def run_world(model: Model, base_dir: str, broker: str, speed: float, faults: di
                 seq += 1
                 bus.pub(f"loam/v0/{site}/detection",
                         wire.detection(site, "camera1", seq, "clear", 0, 0, ts=clock.ts(t)))
+            # A person counts as present only once a detection has actually been sent, so that exactly one "clear"
+            # follows.
             person_on = bool(p) and (person_on or last_seen > 0)
             r = active(faults.get("rain", []), t)
+            # The gauge reports when rain starts or stops, and about every 5 site minutes while it rains.
             if bool(r) != rain_on or (r and int(t * 4) % 20 == 0):
                 seq += 1
                 bus.pub(f"loam/v0/{site}/weather",

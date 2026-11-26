@@ -1,4 +1,16 @@
-"""Command line: loam check | explain | compile | sim | export | terrain | score | nmea"""
+"""The `loam` command line.
+
+    Understand a program     check, explain, compile
+    Try it on a model        sim (the reference simulator)
+    Start from a design      plan (LandXML grading model -> Loam program)
+    Work with field data     export, terrain, score, nmea
+    Run a site               run (controller), monitor (dashboard), resume (after a stop)
+    Simulate a site          simulate-site, soil-calibrate
+    Connect real machines    mavlink, vda5050, opera
+
+Run `loam <command> --help` for a command's options. Heavy or optional modules are imported inside the
+commands that need them, so `loam check` starts fast and works with nothing but numpy installed.
+"""
 from __future__ import annotations
 
 import argparse
@@ -15,6 +27,9 @@ from .parser import parse_file
 
 
 def load(path: str):
+    """Parse and check a `.loam` file. Diagnostics go to stderr; the process exits with status 2 for a syntax or file
+    error and 1 for a program that does not check.
+    """
     try:
         prog = parse_file(path)
     except LoamSyntaxError as e:
@@ -37,16 +52,23 @@ LONG_RUNNING = {"run", "simulate-site", "monitor", "_role", "mavlink", "vda5050"
 
 
 def _stop_cleanly_on_sigterm() -> None:
+    """Turn SIGTERM into a normal exit, so `finally` blocks run. Only possible on the main thread; elsewhere (tests
+    calling `main` from a thread) it does nothing.
+    """
     import signal
     import threading
 
     def stop(signum, frame):
+        """Exit with the conventional status for death by signal (128 + signal number)."""
         raise SystemExit(128 + signum)
     if threading.current_thread() is threading.main_thread():
         signal.signal(signal.SIGTERM, stop)
 
 
 def main(argv=None) -> None:
+    """The `loam` command: parse the arguments, load the program and run the chosen sub-command. `argv` defaults to
+    the process arguments; tests pass a list.
+    """
     ap = argparse.ArgumentParser(prog="loam", description="Loam: an open language for programmable earthmoving")
     sub = ap.add_subparsers(dest="cmd", required=True)
     for name, hlp in (("check", "parse and check a program"), ("explain", "describe a program in plain English"),
@@ -106,11 +128,15 @@ def main(argv=None) -> None:
 
 # -- field adapters ------------------------------------------------------------------
 def _pair(text: str) -> tuple[float, float]:
+    """Two comma-separated numbers, e.g. "34.4459,-85.7197"."""
     a, b = (float(v) for v in text.split(","))
     return a, b
 
 
 def _frame_args(p: argparse.ArgumentParser) -> None:
+    """The options, shared by every command that reads or writes real-world coordinates, that say where the site is on
+    the earth.
+    """
     g = p.add_argument_group("placing the site on the earth")
     g.add_argument("--origin", type=_pair, metavar="LAT,LON", help="WGS84 position of site point (0, 0)")
     g.add_argument("--world-origin", type=_pair, metavar="E,N", default=(0.0, 0.0),
@@ -126,6 +152,7 @@ def _frame_args(p: argparse.ArgumentParser) -> None:
 
 
 def _frame(grid, a):
+    """The coordinate frame described by those options (see geo.Frame)."""
     from .geo import Frame
     from .units import length_unit_si
     lat0, lon0 = a.origin if a.origin else (None, None)
@@ -134,6 +161,7 @@ def _frame(grid, a):
 
 
 def _grid(model, a):
+    """The site grid of a program; relative file names in it are looked up next to the `.loam` file."""
     from .grid import SiteGrid
     return SiteGrid(model, os.path.dirname(os.path.abspath(a.file)))
 
@@ -188,6 +216,9 @@ def load_ground(path: str, grid, frame, a):
 
 
 def _ground_args(p: argparse.ArgumentParser) -> None:
+    """The options, shared by every command that reads measured ground, that say where it comes from and how to grid
+    it.
+    """
     p.add_argument("--stat", choices=["mean", "min"], default="mean", help="per-cell statistic for clouds")
     p.add_argument("--ground-only", action="store_true", help="LAS/LAZ: keep only class 2 (ground) points")
     p.add_argument("--ground-filter", action="store_true",
@@ -199,6 +230,7 @@ def _ground_args(p: argparse.ArgumentParser) -> None:
 
 
 def add_field_commands(sub) -> None:
+    """Declare every sub-command beyond the four basic ones, with its options."""
     p = sub.add_parser("plan", help="write a Loam program from a grading model (LandXML existing + design)")
     p.add_argument("file", help="LandXML file with the design (and usually the existing) surface")
     p.add_argument("-o", "--out", required=True, help="the .loam program to write")
@@ -330,6 +362,7 @@ def add_field_commands(sub) -> None:
 
 
 def cmd_plan(a) -> None:
+    """`loam plan`: write a Loam program from a grading model, then check what was written."""
     from .plan import plan
     try:
         r = plan(a.file, a.out, a.design, a.existing, a.existing_file, a.fleet, a.tolerance, a.max_cells, a.name)
@@ -342,6 +375,9 @@ def cmd_plan(a) -> None:
 
 
 def cmd_export(model, a) -> None:
+    """`loam export`: write the design, or the next-pass target computed from measured ground, in a format field tools
+    load (LandXML, OpenGrade3D, AgOpenGPS, GeoTIFF, GeoJSON).
+    """
     from . import export
     from .target import next_target
     grid = _grid(model, a)
@@ -382,6 +418,9 @@ def cmd_export(model, a) -> None:
 
 
 def cmd_terrain(model, a) -> None:
+    """`loam terrain`: grid measured ground onto the site and write it as a Loam Wire terrain message and/or a LandXML
+    surface.
+    """
     import json as _json
 
     from . import wire
@@ -403,6 +442,9 @@ def cmd_terrain(model, a) -> None:
 
 
 def cmd_score(model, a) -> None:
+    """`loam score`: how much of a zone a survey shows within tolerance of the design. This is the number a field test
+    is judged by.
+    """
     from .survey import read_points_csv, score
     grid = _grid(model, a)
     frame = _frame(grid, a)
@@ -418,6 +460,9 @@ def cmd_score(model, a) -> None:
 
 
 def cmd_nmea(model, a) -> None:
+    """`loam nmea`: turn a GNSS receiver's GGA sentences (file, stdin or TCP) into machine state messages, written as
+    JSON lines or published to MQTT.
+    """
     import json as _json
 
     from . import wire
@@ -455,6 +500,7 @@ def cmd_nmea(model, a) -> None:
 
 
 def _show(d: dict, as_json: bool) -> None:
+    """Print a result: as JSON, or as `key: value` lines with one level of nesting."""
     if as_json:
         print(json.dumps(d, indent=2))
         return
@@ -468,6 +514,7 @@ def _show(d: dict, as_json: bool) -> None:
 
 
 def cmd_run(model, a) -> None:
+    """`loam run`: run the site controller against the machines on an MQTT broker until every task is done."""
     from .runtime.controller import run_controller
     r = run_controller(model, os.path.dirname(os.path.abspath(a.file)), a.broker, a.record, a.max_minutes,
                        wait_for_clock=not a.real_time)
@@ -477,6 +524,9 @@ def cmd_run(model, a) -> None:
 
 
 def cmd_simulate_site(model, a) -> None:
+    """`loam simulate-site`: start a simulated world, probe and machines as separate processes and print the true
+    result when the job ends.
+    """
     from .runtime.site import launch
     r = launch(a.file, a.broker, a.speed, a.faults, model, quiet=a.quiet, physics=a.physics,
                soil_table=a.soil_table)
@@ -484,11 +534,13 @@ def cmd_simulate_site(model, a) -> None:
 
 
 def cmd_mavlink(model, a) -> None:
+    """`loam mavlink`: make an ArduPilot Rover (or other MAVLink ground vehicle) one of the program's machines."""
     from .runtime.mavlink import run_mavlink
     run_mavlink(model, a.machine, a.broker, a.vehicle, _frame(_grid(model, a), a), a.min_fix, a.sim_world)
 
 
 def cmd_vda5050(model, a) -> None:
+    """`loam vda5050`: make a VDA 5050 mobile robot one of the program's machines."""
     from .runtime.vda5050 import run_vda5050
     run_vda5050(model, a.machine, a.broker, a.manufacturer, a.serial, a.interface, a.sim_world)
 
@@ -506,6 +558,9 @@ def _si(text: str, units: dict[str, float]) -> float:
 
 
 def cmd_soil_calibrate(model, a) -> None:
+    """`loam soil-calibrate`: compute a roller's settlement per pass with Project Chrono and save it for `simulate-
+    site --soil-table`. The output file holds one table per roller; an existing file is added to.
+    """
     import json as _json
 
     from .runtime.chrono_soil import SoilParams, calibrate
@@ -538,6 +593,9 @@ def cmd_soil_calibrate(model, a) -> None:
 
 
 def cmd_resume(model, a) -> None:
+    """`loam resume`: the deliberate restart after an e-stop or stop, for the whole site or one machine. Releasing an
+    e-stop restarts nothing by itself.
+    """
     from . import wire
     from .runtime.bus import Bus
     site = model.site["name"]
@@ -559,6 +617,7 @@ def cmd_resume(model, a) -> None:
 
 
 def cmd_opera(model, a) -> None:
+    """`loam opera`: make an OPERA (ROS 2) machine one of the program's machines."""
     from .runtime.opera import run_opera
     off = tuple(float(v) for v in a.map_offset.split(","))
     if len(off) != 3:
@@ -572,6 +631,7 @@ def cmd_opera(model, a) -> None:
 
 
 def cmd_monitor(model, a) -> None:
+    """`loam monitor`: serve the live dashboard, or build a replay page from a recording."""
     from . import monitor
     if a.replay:
         if not a.html:
@@ -582,10 +642,13 @@ def cmd_monitor(model, a) -> None:
 
 
 def cmd_role(model, a) -> None:
+    """Internal: one process of a simulated site (world, probe or machine), started by `simulate-site`."""
     from .runtime.site import role
     role(a.file, model, a)
 
 
+# Sub-command name to the function that runs it. Their errors (ValueError, OSError) are printed as one line, without a
+# traceback.
 FIELD_COMMANDS = {"run": cmd_run, "simulate-site": cmd_simulate_site, "mavlink": cmd_mavlink, "vda5050": cmd_vda5050,
                   "soil-calibrate": cmd_soil_calibrate, "opera": cmd_opera,
                   "resume": cmd_resume,
@@ -594,6 +657,9 @@ FIELD_COMMANDS = {"run": cmd_run, "simulate-site": cmd_simulate_site, "mavlink":
 
 
 def print_report(r: dict) -> None:
+    """Print a simulator report for people: time, volumes, passes per task, and the finish zone as the program saw it
+    and as it truly is.
+    """
     u = r["units"]
     print()
     print(f"== {r['mode']} result after {r['minutes']} min ({'all tasks done' if r['finished'] else 'NOT finished'})")

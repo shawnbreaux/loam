@@ -18,16 +18,19 @@ from loam.cli import load, main
 from loam.runtime.chrono_soil import SoilParams, bekker_wheel_sinkage, load_tables, settlement
 from loam.runtime.world import World
 
+# A hand-made roller table: total settlement (m) after 1, 2, 3 and 4 passes.
 TABLE = {"settlement_m": [0.010, 0.018, 0.024, 0.028]}
 
 
 def world(compaction=None):
+    """The example site's world with no loose soil lying on it, optionally with roller tables."""
     w = World(load(EXAMPLE), EXAMPLES, compaction=compaction)
     w.loose[:] = 0.0
     return w
 
 
 def compact(w, oid, passes, machine="rl1"):
+    """Have `machine` roll the south-west 10 x 10 cells with `passes` passes, as order `oid`."""
     g = w.g
     win = [[g.x0, g.y0], [g.x0 + 10 * g.cell, g.y0], [g.x0 + 10 * g.cell, g.y0 + 10 * g.cell],
            [g.x0, g.y0 + 10 * g.cell]]
@@ -36,12 +39,16 @@ def compact(w, oid, passes, machine="rl1"):
 
 
 def test_settlement_table_is_clamped_not_extrapolated():
+    """Beyond the last calibrated pass the settlement stays at the last value."""
     assert settlement(TABLE, 0) == 0.0
     assert settlement(TABLE, 2) == 0.018
     assert settlement(TABLE, 9) == 0.028
 
 
 def test_world_compacts_by_the_roller_curve():
+    """With a roller table, loose fill settles by the table's value for the passes made so far, never beyond full
+    compaction, and fresh fill starts the count again.
+    """
     w = world({"rl1": TABLE})
     u = w.u
     mk = np.zeros(w.g.shape, bool)
@@ -67,6 +74,7 @@ def test_world_compacts_by_the_roller_curve():
 
 
 def test_world_without_tables_is_unchanged():
+    """Without a table, one compaction order compacts the lift fully, as before."""
     w = world()
     u = w.u
     mk = np.zeros(w.g.shape, bool)
@@ -78,6 +86,9 @@ def test_world_without_tables_is_unchanged():
 
 
 def test_tables_file_and_cli_errors(tmp_path, capsys):
+    """Table files load in both layouts, the shipped example table has the expected shape (each pass settles more, by
+    less each time), and bad command-line input is explained.
+    """
     (tmp_path / "one.json").write_text(json.dumps(TABLE))
     assert load_tables(str(tmp_path / "one.json")) == {"*": TABLE}
     with open(os.path.join(EXAMPLES, "soil_rl1.json"), encoding="utf-8") as f:
@@ -97,6 +108,9 @@ def test_tables_file_and_cli_errors(tmp_path, capsys):
 
 
 def test_bekker_wong_closed_form():
+    """The textbook sinkage formula gives 58 mm for the reference drum, more for a heavier drum and less for a wider
+    one.
+    """
     s = SoilParams()
     z = bekker_wheel_sinkage(10_000 * 9.81, 2.1, 1.5, s)
     assert z == pytest.approx(0.0579, abs=5e-4)
@@ -105,6 +119,7 @@ def test_bekker_wong_closed_form():
 
 # -- Chrono itself ------------------------------------------------------------------------------------
 def chrono_python():
+    """A Python interpreter that can import pychrono: this one, or the one named by LOAM_CHRONO_PYTHON, or None."""
     try:
         import pychrono  # noqa: F401
         return sys.executable
@@ -113,6 +128,7 @@ def chrono_python():
 
 
 CHRONO = chrono_python()
+# The script run inside the Chrono interpreter: roll each drum and print the results as JSON.
 PROBE = """
 import json, sys
 from loam.runtime.chrono_soil import drum_passes, bekker_wheel_sinkage, SoilParams
@@ -128,6 +144,9 @@ print(json.dumps(out))
 @pytest.mark.slow
 @pytest.mark.skipif(CHRONO is None, reason="needs pychrono (or LOAM_CHRONO_PYTHON)")
 def test_chrono_drum_matches_bekker_wong_and_compacts_less_each_pass():
+    """Chrono's simulated drum sinks 1.15 to 1.40 times the textbook value for three drums, sinks more when heavier or
+    narrower, and settles the soil less with each pass.
+    """
     cases = {"10t": {"mass_kg": 10000, "width_m": 2.1, "diameter_m": 1.5, "passes": 3},
              "20t": {"mass_kg": 20000, "width_m": 2.1, "diameter_m": 1.5, "passes": 1},
              "narrow": {"mass_kg": 10000, "width_m": 1.0, "diameter_m": 1.5, "passes": 1}}

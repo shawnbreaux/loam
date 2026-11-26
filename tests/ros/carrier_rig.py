@@ -23,6 +23,7 @@ from tf2_ros import StaticTransformBroadcaster, TransformBroadcaster
 PARAMS, OUT, X, Y, YAW = sys.argv[1], sys.argv[2], *map(float, sys.argv[3:6])
 NS = "ic120"
 os.makedirs(OUT, exist_ok=True)
+# Start the four Nav2 servers in the machine's namespace, and the lifecycle manager that brings them up.
 ns = ["--ros-args", "-r", f"__ns:=/{NS}", "--params-file", PARAMS]
 procs = [subprocess.Popen(["ros2", "run", pkg, exe, *ns]) for pkg, exe in (
     ("nav2_controller", "controller_server"), ("nav2_planner", "planner_server"),
@@ -33,11 +34,13 @@ procs.append(subprocess.Popen(["ros2", "run", "nav2_lifecycle_manager", "lifecyc
 
 rclpy.init()
 node = rclpy.create_node("ic120_sim")
+# The crawler: position (m), heading (rad), speed, turn rate, and the last command with its time.
 state = {"x": X, "y": Y, "th": YAW, "v": 0.0, "w": 0.0, "cmd": (0.0, 0.0), "cmd_at": 0.0}
 odom_pub = node.create_publisher(Odometry, f"/{NS}/odom", 10)
 tf = TransformBroadcaster(node)
 static = StaticTransformBroadcaster(node)
 st = TransformStamped()
+# The map and odometry frames are the same here: the simulated machine has no drift.
 st.header.frame_id, st.child_frame_id = "map", "odom"
 st.transform.rotation.w = 1.0
 static.sendTransform(st)
@@ -46,6 +49,7 @@ dumps = open(f"{OUT}/dumps.jsonl", "w", encoding="utf-8")  # noqa: SIM115
 
 
 def on_cmd(m: Twist) -> None:
+    """Remember the newest velocity command from Nav2 and when it came."""
     state["cmd"], state["cmd_at"] = (m.linear.x, m.angular.z), time.time()
 
 
@@ -54,6 +58,9 @@ DT, ACC, WACC = 0.02, 0.5, 1.5                 # s, m/s^2, rad/s^2: a heavy craw
 
 
 def tick() -> None:
+    """One 20 ms step of the simulated crawler: move towards the commanded speed and turn rate within the acceleration
+    limits, then publish the transform and odometry and record the pose.
+    """
     cv, cw = state["cmd"] if time.time() - state["cmd_at"] < 0.5 else (0.0, 0.0)   # no command: stop
     state["v"] += max(-ACC * DT, min(ACC * DT, cv - state["v"]))
     state["w"] += max(-WACC * DT, min(WACC * DT, cw - state["w"]))
@@ -77,6 +84,7 @@ def tick() -> None:
 
 
 def dump(goal):
+    """The vessel action: record the angle asked for and where the machine stood, take a second, and succeed."""
     a = goal.request.target_angle
     dumps.write(json.dumps({"t": time.time(), "angle": a, "x": state["x"], "y": state["y"]}) + "\n")
     dumps.flush()
@@ -90,6 +98,7 @@ node.create_timer(DT, tick)
 ex = MultiThreadedExecutor()
 ex.add_node(node)
 running = True
+# SIGTERM ends the loop below, so the files are closed and Nav2 is shut down in order.
 signal.signal(signal.SIGTERM, lambda *_: globals().__setitem__("running", False))
 print("SIM UP", flush=True)
 while running:

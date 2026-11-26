@@ -18,12 +18,18 @@ from __future__ import annotations
 
 import numpy as np
 
+# 2**64 divided by the golden ratio: the increment SplitMix64 uses, and the multiplier that spreads seeds apart. _M1
+# and _M2 are SplitMix64's two published mixing multipliers.
 GOLDEN = np.uint64(0x9E3779B97F4A7C15)
 _M1 = np.uint64(0xBF58476D1CE4E5B9)
 _M2 = np.uint64(0x94D049BB133111EB)
 
 
 def splitmix64(x: np.ndarray) -> np.ndarray:
+    """The SplitMix64 mixing function (Steele, Lea and Flood, 2014): turns any 64-bit number into a well-scrambled one.
+
+    All arithmetic wraps modulo 2**64, which is why callers silence NumPy's overflow warning.
+    """
     x = x + GOLDEN
     x = (x ^ (x >> np.uint64(30))) * _M1
     x = (x ^ (x >> np.uint64(27))) * _M2
@@ -31,7 +37,13 @@ def splitmix64(x: np.ndarray) -> np.ndarray:
 
 
 class CounterRNG:
+    """A random stream identified by a seed, where draw number `c` depends only on (seed, c).
+
+    Two simulations with the same seed therefore see exactly the same noise, in any language and on any machine, which
+    is what makes a run reproducible and comparable.
+    """
     def __init__(self, seed: int):
+        """Start the stream for `seed` at draw 0."""
         with np.errstate(over="ignore"):
             self.key = np.uint64(seed & 0xFFFFFFFFFFFFFFFF) * GOLDEN
         self.counter = 0
@@ -47,6 +59,7 @@ class CounterRNG:
             return splitmix64(self.key + c)
 
     def uniform(self, n: int) -> np.ndarray:
+        """The next `n` uniform numbers in [0, 1)."""
         return _to_unit(self._u64(n))
 
     def normal(self, loc: float, scale: float, shape: tuple[int, ...] | int) -> np.ndarray:
@@ -64,4 +77,5 @@ class CounterRNG:
 
 
 def _to_unit(u: np.ndarray) -> np.ndarray:
+    """A 64-bit integer to a float in [0, 1): keep the top 53 bits (all a double can hold) and scale by 2**-53."""
     return (u >> np.uint64(11)).astype(np.float64) * 2.0**-53

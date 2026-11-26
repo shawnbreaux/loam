@@ -19,6 +19,9 @@ def q(v):
 
 
 def ser(obj):
+    """Make a checked model JSON-ready: quantities become {value, unit, si}, conditions become their source text, and
+    private keys (those starting with `_`) are dropped.
+    """
     if isinstance(obj, Quantity):
         return q(obj)
     if isinstance(obj, dict):
@@ -31,6 +34,11 @@ def ser(obj):
 
 
 def manifest(model: Model) -> dict:
+    """The execution manifest: everything a controller needs to run the job, as one JSON-ready dict.
+
+    It holds the checked site, probes, machines, zones, stockpiles, tasks (with `task_order`, the order their
+    dependencies allow), rules and replans, plus the MQTT topics each party publishes and listens on.
+    """
     site = model.site["name"]
     return {
         "loam": model.version,
@@ -54,6 +62,7 @@ def manifest(model: Model) -> dict:
 
 
 def by_text(by: dict | None) -> str:
+    """Who may do a task, in words: a named machine, any machine of a class, or any machine with a capability."""
     if not by:
         return "any suitable machine"
     if by.get("machine"):
@@ -64,6 +73,11 @@ def by_text(by: dict | None) -> str:
 
 
 def explain(model: Model) -> str:
+    """The program in plain English, for the people on site who will not read Loam.
+
+    One line per probe, zone and task (in dependency order, with what each waits for and when it is finished), then
+    the safety rules and replan triggers.
+    """
     s = model.site
     surf = f" (surface {s['design']['surface']})" if s["design"].get("surface") else ""
     lines = [f"Site '{s['name']}' in {s.get('crs')} ({s.get('units')}), finished surface from "

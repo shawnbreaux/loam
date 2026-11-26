@@ -34,6 +34,8 @@ from ..geo import Frame
 from .bridge import run_bridge
 from .machine import HEARTBEAT_TIMEOUT_S
 
+# Numbers from the MAVLink common message set and ArduPilot Rover: GPS_FIX_TYPE names, command ids, the coordinate
+# frame for waypoints, Rover's mode numbers, and the magic value that forces a disarm.
 FIX_NAMES = {0: "no-gps", 1: "no-fix", 2: "2d", 3: "3d", 4: "dgps", 5: "rtk-float", 6: "rtk-fixed"}
 CMD_WAYPOINT, CMD_CHANGE_SPEED, CMD_ARM = 16, 178, 400
 FRAME_REL_ALT = 3                     # MAV_FRAME_GLOBAL_RELATIVE_ALT (the INT variant takes the same id)
@@ -47,6 +49,7 @@ def bearing_to_heading(bearing_deg: float, frame: Frame) -> float:
 
 
 def _e7(deg: float) -> int:
+    """Degrees as the integer MAVLink sends: degrees times ten million, rounded half up (about 1 cm on the ground)."""
     return math.floor(float(deg) * 1e7 + 0.5)
 
 
@@ -67,12 +70,19 @@ class Vehicle:
     """A MAVLink ground vehicle as a bridge adapter: telemetry, missions, HOLD/AUTO, arming."""
 
     def __init__(self, url: str, frame: Frame, min_fix: int = 6, timeout: float = 30.0):
+        """Connect and wait up to `timeout` seconds for the vehicle's heartbeat.
+
+        `url` is a pymavlink connection string (for example `udpin:0.0.0.0:14550` or `/dev/ttyUSB0`). `frame`
+        places the site grid on the Earth. `min_fix` is the lowest GNSS fix type good enough to work by (6 is RTK
+        fixed, centimetre level).
+        """
         try:
             from pymavlink import mavutil
         except ImportError as e:
             raise ValueError("MAVLink vehicles need pymavlink: pip install pymavlink") from e
         os.environ.setdefault("MAVLINK20", "1")
         self.frame, self.min_fix = frame, min_fix
+        # The bridge identifies itself as a ground station (system 254), component 191 (MAV_COMP_ID_ONBOARD_COMPUTER).
         self.m: Any = mavutil.mavlink_connection(url, source_system=254, source_component=191)
         if self.m.wait_heartbeat(timeout=timeout) is None:
             self.m.close()
@@ -89,23 +99,31 @@ class Vehicle:
     # -- adapter -------------------------------------------------------------------------
     @property
     def fix_ok(self) -> bool:
+        """Is the GNSS fix good enough to grade by?"""
         return self.fix >= self.min_fix
 
     @property
     def fix_name(self) -> str:
+        """The fix type in words, for the state message."""
         return FIX_NAMES.get(self.fix, str(self.fix))
 
     @property
     def fault(self) -> str | None:
+        """`vehicleLinkLost` when the vehicle's own heartbeat has not been heard for 3 s, else None."""
         return None if time.time() - self.last_hb < HEARTBEAT_TIMEOUT_S else "vehicleLinkLost"
 
     @property
     def order_error(self) -> str | None:
+        """Why the current order cannot run (the mission was refused), or None."""
         return self.failed
 
     def poll(self) -> None:
+        """Read every MAVLink message that has arrived: heartbeat (armed, mode), position, fix type, waypoint reached.
+        """
         while (msg := self.m.recv_match(blocking=False)) is not None:
             t = msg.get_type()
+            # Only the vehicle's own heartbeat counts. Type 6 is a ground station, such as an operator's laptop on the
+            # same link.
             if t == "HEARTBEAT" and msg.get_srcSystem() == self.m.target_system and msg.type != 6:
                 self.last_hb = time.time()
                 self.armed = bool(msg.base_mode & 128)
@@ -140,6 +158,12 @@ class Vehicle:
             self.arm(True)
 
     def pause(self, on: bool) -> None:
+        """Hold the vehicle (`on`) or let it run its mission.
+
+        The command is repeated once a second until the vehicle's heartbeat shows the mode, because a single
+        MAVLink command can be lost. AUTO needs the vehicle armed, so a resume arms first and sets the mode on a
+        later call. A vehicle stopped by an e-stop is never re-armed from here.
+        """
         on = on or self.n_wp == 0               # no mission of ours on board: HOLD is the only mode
         want = MODE_HOLD if on else MODE_AUTO
         if on != self.paused or (self.mode != want and time.time() - self.sent_at > 1.0):
@@ -152,25 +176,35 @@ class Vehicle:
             self.paused = on
 
     def estop(self) -> None:
+        """Emergency stop: HOLD and a forced disarm. From then on only a person at the vehicle can arm it."""
         self.stopped_hard = True
         self.set_mode(MODE_HOLD)
         self.arm(False, force=True)
 
     def fraction(self) -> float:
+        """How far through the mission, 0 to 1, by waypoints reached."""
         return max(self.reached, 0) / max(self.n_wp, 1)
 
     def done(self) -> bool:
+        """Has the last waypoint of this order's mission been reached?"""
         return self.n_wp > 0 and self.reached >= self.n_wp
 
     def close(self) -> None:
+        """Close the MAVLink connection."""
         self.m.close()
 
     # -- MAVLink -------------------------------------------------------------------------
     def command(self, cmd: int, *p: float) -> None:
+        """Send a COMMAND_LONG with up to seven parameters (the rest are zero)."""
         q = [*p, *[0.0] * (7 - len(p))]
         self.m.mav.command_long_send(self.m.target_system, self.m.target_component, cmd, 0, *q)
 
     def upload(self, items: list[tuple], timeout: float = 10.0) -> None:
+        """Upload a mission with the MAVLink mission protocol: send the count, then answer each request for an item
+        until the vehicle acknowledges.
+
+        Raises ValueError if the vehicle rejects the mission or does not finish within `timeout` seconds.
+        """
         m = self.m
         m.mav.mission_count_send(m.target_system, m.target_component, len(items), 0)
         end = time.time() + timeout
@@ -189,9 +223,11 @@ class Vehicle:
         raise ValueError("mission upload timed out")
 
     def set_mode(self, mode: int) -> None:
+        """Ask for an ArduPilot custom mode (the 1 says the number is a custom mode)."""
         self.m.mav.set_mode_send(self.m.target_system, 1, mode)
 
     def arm(self, on: bool, force: bool = False) -> None:
+        """Arm or disarm the motors. `force` disarms even while moving."""
         self.command(CMD_ARM, 1 if on else 0, FORCE_DISARM if force else 0)
 
 

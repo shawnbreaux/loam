@@ -13,22 +13,26 @@ from loam.sim import Beliefs, Events, Sim, Soil
 
 
 def quiet(model, **kw):
+    """A simulator for `model` that prints nothing."""
     return Sim(model, base_dir=EXAMPLES, log=lambda *a: None, **kw)
 
 
 @pytest.mark.parametrize("open_loop", [False, True])
 def test_volume_ledger_balances(example_model, open_loop):
+    """Soil is neither created nor lost: every change to the ground is accounted for, to a millionth of a cubic foot."""
     r = quiet(example_model, open_loop=open_loop).run()
     assert abs(r["ledger_error"]) < 1e-6
 
 
 def test_deterministic_for_a_seed(example_model):
+    """The same seed gives exactly the same run; another seed gives another."""
     a, b = quiet(example_model, seed=3).run(), quiet(example_model, seed=3).run()
     assert a == b
     assert quiet(example_model, seed=4).run()["true_ground"] != a["true_ground"]
 
 
 def test_model_is_not_mutated(example_model):
+    """Running a site does not change the checked program it was given."""
     import copy
     before = copy.deepcopy(example_model)
     quiet(example_model).run()
@@ -36,8 +40,11 @@ def test_model_is_not_mutated(example_model):
 
 
 def test_inflight_windows_never_overlap(example_model):
+    """No two machines are ever given overlapping work areas at the same time."""
     class Checked(Sim):
+        """A simulator that checks, each time a pass is planned, that no two windows in progress overlap."""
         def plan_pass(self, m, name, speed_cap):
+            """Plan as usual, then compare every pair of windows in progress."""
             ok = super().plan_pass(m, name, speed_cap)
             ws = [p.window for p in self.inflight.values() if p.window is not None]
             for i, a in enumerate(ws):
@@ -49,12 +56,16 @@ def test_inflight_windows_never_overlap(example_model):
 
 
 def test_ground_is_frozen_during_a_stop(example_model):
+    """While a rule says stop, the true ground does not change at all: no machine keeps working."""
     class Watch(Sim):
+        """A simulator that keeps a copy of the ground at every step during which a stop is in force."""
         def _loop(self):
+            """Wrap the rule evaluation to take the copies, then run as usual."""
             self.frozen = []
             orig = self.apply_rules
 
             def rules():
+                """The rules' effects, with a copy of the ground kept whenever they say stop."""
                 eff = orig()
                 if eff["stop"]:
                     self.frozen.append(self.z.copy())
@@ -69,6 +80,9 @@ def test_ground_is_frozen_during_a_stop(example_model):
 
 
 def test_exclusion_zone_is_never_touched(example_src):
+    """An exclusion zone and its buffer (here a 4 ft well with 6 ft around it, 16 x 16 cells) end the job exactly as
+    they started.
+    """
     src = example_src.replace(
         "stockpile sp1", "zone well { role exclusion; area rect (20, 40) (24, 44); buffer 6 ft }\nstockpile sp1")
     model, diags = check(parse(src))
@@ -93,6 +107,9 @@ def test_control_nothing_unknown_means_open_loop_is_unbiased(example_model):
 
 
 def test_feedback_corrects_execution_noise_alone(example_model):
+    """With the soil known exactly, so that only blade error is left, measuring and correcting still beats working
+    blind.
+    """
     soil = Soil()
     right = Beliefs(swell=soil.swell, keep=soil.keep)
     o, c = (quiet(example_model, open_loop=ol, soil=soil, beliefs=right, events=Events.none()).run()
@@ -101,6 +118,7 @@ def test_feedback_corrects_execution_noise_alone(example_model):
 
 
 def test_closed_loop_recovers_soil_factors(example_model):
+    """The planner starts with wrong swell and compaction factors and learns the true ones from surveys."""
     r = quiet(example_model).run()
     me = r["material_estimates"]
     assert r["finished"] and r["true_ground"]["within_tolerance_pct"] > 95
@@ -108,6 +126,7 @@ def test_closed_loop_recovers_soil_factors(example_model):
 
 
 def test_no_memory_or_file_handles_retained(example_model, tmp_path):
+    """Eight runs in a row leave under 200 kB behind and no extra open files."""
     fd_dir = f"/proc/{os.getpid()}/fd"
     gc.collect()                                     # earlier tests' garbage is not this test's business
     fds = len(os.listdir(fd_dir)) if os.path.isdir(fd_dir) else None
@@ -126,8 +145,11 @@ def test_no_memory_or_file_handles_retained(example_model, tmp_path):
 
 
 def test_wire_file_closed_on_error(example_model, tmp_path):
+    """If the run crashes, the message log file is still closed."""
     class Boom(Sim):
+        """A simulator whose planner always fails."""
         def plan_pass(self, *a):
+            """Fail."""
             raise RuntimeError("boom")
     s = Boom(example_model, base_dir=EXAMPLES, log=lambda *a: None)
     with pytest.raises(RuntimeError):
@@ -135,6 +157,7 @@ def test_wire_file_closed_on_error(example_model, tmp_path):
     assert s.wire_out is None
 
 
+# The first three outputs of the specified random generator for seed 7.
 REFERENCE_U64 = [14232521865600346940, 9648886400068060533, 13633754720362554755]
 
 

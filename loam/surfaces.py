@@ -30,6 +30,7 @@ def tin_from_ifc(path: str, name: str | None = None) -> tuple[np.ndarray, np.nda
         raise ValueError("IFC surfaces need ifcopenshell: pip install ifcopenshell") from e
     f = ifcopenshell.open(path)
     settings = ifcopenshell.geom.settings()
+    # Ask for coordinates in the model's world frame (metres), with every placement and rotation in the file applied.
     settings.set("use-world-coords", True)
     found = []
     for p in f.by_type("IfcProduct"):
@@ -71,6 +72,8 @@ def raster_at(path: str, gx: np.ndarray, gy: np.ndarray) -> tuple[np.ndarray, st
         raise ValueError("GeoTIFF surfaces need rasterio: pip install rasterio") from e
     with rasterio.open(path) as src:
         band = src.read(1, masked=True).astype(float).filled(np.nan)
+        # The raster's transform maps pixel (column, row) to map coordinates; its inverse maps map coordinates to
+        # pixels.
         inv = ~src.transform
         crs = src.crs.to_string() if src.crs else None
     gx, gy = np.asarray(gx, float), np.asarray(gy, float)
@@ -79,6 +82,8 @@ def raster_at(path: str, gx: np.ndarray, gy: np.ndarray) -> tuple[np.ndarray, st
     c0, r0 = np.floor(col).astype(int), np.floor(row).astype(int)
     tc, tr = col - c0, row - r0
     h, w = band.shape
+    # Bilinear interpolation between the four pixel centres around each point; a point with any of the four off the
+    # raster gets no value.
     ok = (c0 >= 0) & (r0 >= 0) & (c0 + 1 < w) & (r0 + 1 < h)
     c0, r0 = np.clip(c0, 0, w - 2), np.clip(r0, 0, h - 2)
     v = ((1 - tc) * (1 - tr) * band[r0, c0] + tc * (1 - tr) * band[r0, c0 + 1]
@@ -87,6 +92,7 @@ def raster_at(path: str, gx: np.ndarray, gy: np.ndarray) -> tuple[np.ndarray, st
 
 
 def raster_crs(path: str) -> str | None:
+    """The coordinate reference system a raster declares, or None."""
     import rasterio
     with rasterio.open(path) as src:
         return src.crs.to_string() if src.crs else None
@@ -121,6 +127,8 @@ def write_geotiff(path: str, z: np.ndarray, grid, frame) -> None:
     c, f = frame.local_to_projected(grid.x0, top)
     ex, nx_ = frame.local_to_projected(grid.x0 + grid.cell, top)
     ey, ny_ = frame.local_to_projected(grid.x0, top - grid.cell)
+    # An affine transform built from where three grid corners land in projected coordinates, so a rotated site is
+    # written exactly, without resampling.
     t = Affine(float(ex - c), float(ey - c), float(c), float(nx_ - f), float(ny_ - f), float(f))
     with rasterio.open(path, "w", driver="GTiff", height=ny, width=nx, count=1, dtype="float32",
                        crs=frame.crs, transform=t, nodata=np.nan, compress="deflate") as dst:
@@ -184,6 +192,7 @@ def site_geojson(model, grid, frame=None) -> dict:
     feats = []
 
     def add(poly, **props):
+        """Append one polygon as a GeoJSON Feature with the given properties, closing its ring as GeoJSON requires."""
         xy = np.asarray(poly, float)
         if frame is not None:
             xy = np.column_stack(frame.local_to_projected(xy[:, 0], xy[:, 1]))

@@ -14,6 +14,9 @@ from loam.units import Quantity, UnitError, lookup
 
 
 def test_example_checks_clean(example_model):
+    """The example program checks without errors; tasks come out in dependency order and topics follow the Wire
+    layout.
+    """
     assert example_model.order == ["strip_A", "top_up_C", "compact_C", "finish_pad"]
     assert "strip_A" in explain(example_model)
     topics = manifest(example_model)["topics"]["machines"]["dz1"]
@@ -21,10 +24,12 @@ def test_example_checks_clean(example_model):
 
 
 def test_minimal_program_is_clean():
+    """The minimal program has no errors, so every error in the tests below comes from the one change made."""
     assert errors(MINI) == []
 
 
 def test_version_header():
+    """A program must start with `loam <version>`, and the version must be one this implementation supports."""
     assert parse(MINI).version == "0.0.1"
     assert any("unsupported Loam version" in e for e in errors(MINI.replace("loam 0.0.1", "loam 0.1")))
     with pytest.raises(LoamSyntaxError, match="must start with"):
@@ -39,12 +44,14 @@ def test_version_header():
     ("loam 0.0.1\ntask t { until a < b < c }", 2, 22),        # chained comparison
 ])
 def test_syntax_error_positions(src, line, col):
+    """A syntax error reports the line and column where the problem is, so an editor can jump to it."""
     with pytest.raises(LoamSyntaxError) as e:
         parse(src)
     assert (e.value.line, e.value.col) == (line, col)
 
 
 def test_lists_span_lines_and_allow_trailing_comma():
+    """A list may run over several lines and end with a comma."""
     prog = parse('loam 0.0.1\nzone z { role cut; area polygon [\n (0, 0),\n (1, 0),\n (1, 1),\n] }')
     assert len(prog.decls[0].get("area").args[1].items) == 3
 
@@ -87,6 +94,7 @@ def test_lists_span_lines_and_allow_trailing_comma():
     (("kind uav;", "kind kite;"), "unknown probe kind"),
 ])
 def test_checker_errors(change, message):
+    """One broken thing at a time: each `change` to the minimal program must produce an error containing `message`."""
     errs = errors(MINI.replace(*change))
     assert any(message in e for e in errs), errs
 
@@ -113,6 +121,9 @@ RULE = "rule r {{ when {cond}; do {act} }}\n"
     ("weather(wind) > 30 mph", "slow class dozer 3 mph", None),
 ])
 def test_rule_checks(cond, act, message):
+    """Rule conditions and actions are checked: units must match what is compared, names must exist, actions need
+    their arguments. `message=None` means the rule is valid.
+    """
     errs = errors(MINI + RULE.format(cond=cond, act=act))
     if message is None:
         assert errs == []
@@ -121,6 +132,9 @@ def test_rule_checks(cond, act, message):
 
 
 def test_warnings_are_reported():
+    """Things that are legal but probably wrong (a cut with nowhere for the spoil, a machine without the capability)
+    are warnings, not errors.
+    """
     from loam.checker import check
     _, diags = check(parse(MINI.replace("spoil -> A; ", "").replace("blade 10 ft", "blade 10 ft; caps [haul]")
                            .replace("by class dozer", "by d1")))
@@ -129,17 +143,20 @@ def test_warnings_are_reported():
 
 
 def test_dependency_cycle():
+    """Two tasks that each wait for the other are reported as a cycle."""
     src = MINI.replace("spoil -> A;", "spoil -> A; after u;") + \
         "task u { op cut; zone A; by class dozer; after t; until residual(A) < 0.1 ft }\n"
     assert any("cycle" in e for e in errors(src))
 
 
 def test_diagnostics_are_in_source_order():
+    """Diagnostics come out top to bottom, left to right."""
     _, diags = check(parse(MINI.replace("blade 10 ft", "blade 10").replace("rate 10 min", "rate 10")))
     assert [(d.line, d.col) for d in diags] == sorted((d.line, d.col) for d in diags)
 
 
 def test_units():
+    """Unit conversion, dimensions, and errors for unknown units and impossible conversions."""
     assert Quantity(8, "in").to("ft") == pytest.approx(2 / 3)
     assert Quantity(1, "yd3").to("ft3") == pytest.approx(27)
     assert Quantity(0.25, "in/h").dim == "rate"
@@ -151,6 +168,9 @@ def test_units():
 
 
 def test_stat_attributes():
+    """The statistics a condition can ask of a field of values: max, min, mean, low, high and p95 (of absolute
+    values).
+    """
     s = Stat(np.array([-0.3, -0.1, 0.0, 0.1, 0.2]))
     assert (s.get("max"), s.get("min")) == (0.2, -0.3)
     assert s.get("mean") == pytest.approx(-0.02)
@@ -159,15 +179,19 @@ def test_stat_attributes():
 
 
 def test_comparisons_absorb_unit_rounding():
+    """0.95 compared with `95 %` is equal, despite floating-point rounding in the unit conversion."""
     from loam.evaluate import Context, evaluate
 
     class Ctx(Context):
+        """A site where every zone is compacted to exactly 95 %."""
         def compaction(self, zone):
+            """Always 0.95."""
             return 0.95
     cond = parse(MINI.replace("until residual(A) < 0.2 ft", "until compaction(A) >= 95 %")).decls[-1].get("until")
     assert evaluate(cond.args[0], Ctx()) is True
 
 
+# Property test (Hypothesis): random sequences of these pieces are thrown at the parser and checker.
 TOKENS = st.sampled_from(["loam", "0.0.1", "site", "task", "zone", "s", "{", "}", "(", ")", "[", "]", ",", ";",
                           "\n", "->", "<", ">=", "±", "0.5", "ft", "min", "%", '"x"', "until", "when", "and", "#c",
                           "residual", ".", "rect", "where", "area"])
@@ -186,4 +210,5 @@ def test_parser_and_checker_never_crash(tokens):
 
 
 def test_tokenizer_scientific_notation():
+    """Numbers may be written as 1.5e3 or 2E-2."""
     assert [t.text for t in tokenize("1.5e3 2E-2")][:2] == ["1.5e3", "2E-2"]

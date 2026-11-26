@@ -12,8 +12,10 @@ from typing import Any
 from . import ast as A
 from .units import Quantity, UnitError
 
+# Language versions this checker accepts in the `loam <version>` header.
 SUPPORTED_VERSIONS = {"0.0.1", "0.0.2"}
 
+# The fixed vocabularies of the language. A value outside its set is an error that lists the valid words.
 ENUMS = {
     "probe.kind": {"tethered_uav", "uav", "machine", "rover", "static"},
     "probe.sensor": {"lidar", "photogrammetry", "radar", "track"},
@@ -28,6 +30,7 @@ ENUMS = {
     "weather": {"rain", "wind"},
 }
 
+# What each class of machine can do unless the program says otherwise with `caps [...]`.
 DEFAULT_CAPS = {
     "dozer": ["cut", "push", "spread", "finish"],
     "excavator": ["dig", "load", "trench", "cut"],
@@ -57,23 +60,35 @@ FUNCTIONS = {
     "deviation": ([], "length"),
     "elapsed": ([], "time"),
 }
+# A typical unit per dimension, for messages that show how to fix a bare number; and the statistics `residual(zone)`
+# offers.
 EXAMPLE_UNIT = {"length": "ft", "time": "min", "volume": "yd3", "speed": "mph", "ratio": "%"}
 STAT_ATTRS = {"p95", "high", "low", "max", "min", "mean"}
 
 
 @dataclass
 class Diagnostic:
+    """One finding about a program: an error (the program is not valid) or a warning (valid, but worth a look), with
+    its position in the source.
+    """
     level: str  # error | warning
     msg: str
     line: int
     col: int
 
     def format(self, src: str) -> str:
+        """The usual one-line form, `file:line:col: level: message`."""
         return f"{src}:{self.line}:{self.col}: {self.level}: {self.msg}"
 
 
 @dataclass
 class Model:
+    """A checked program, ready to plan from.
+
+    Each field maps a declared name to a plain dict of its settings, with quantities kept as written (value and
+    unit). `site` is the single site block. `order` lists the tasks so that each comes after the tasks it waits
+    for.
+    """
     version: str
     site: dict = field(default_factory=dict)
     probes: dict = field(default_factory=dict)
@@ -87,7 +102,15 @@ class Model:
 
 
 class Checker:
+    """Walks a parsed Program, resolves every name, checks every value's type and unit, and builds the Model.
+
+    It never stops at the first problem: each one is recorded as a Diagnostic and checking goes on, so an author
+    sees everything that is wrong in one pass.
+    """
     def __init__(self, prog: A.Program):
+        """`names` maps every declared name to its declaration, whatever its kind: names are unique across the whole
+        program.
+        """
         self.prog = prog
         self.diags: list[Diagnostic] = []
         self.model = Model(version=prog.version)
@@ -95,19 +118,27 @@ class Checker:
 
     # -- reporting -------------------------------------------------------
     def error(self, msg: str, pos: A.Pos) -> None:
+        """Record a problem that makes the program invalid."""
         self.diags.append(Diagnostic("error", msg, pos.line, pos.col))
 
     def warn(self, msg: str, pos: A.Pos) -> None:
+        """Record something legal but probably unintended."""
         self.diags.append(Diagnostic("warning", msg, pos.line, pos.col))
 
     # -- value helpers ---------------------------------------------------
     def one(self, s: A.Stmt, n: int = 1) -> bool:
+        """Check that a statement has exactly `n` values; report it and return False if not."""
         if len(s.args) != n:
             self.error(f"'{s.key}' takes {n} value{'s' if n > 1 else ''}, got {len(s.args)}", s.pos)
             return False
         return True
 
     def qty(self, node, dim: str | tuple, what: str, allow_tol: bool = False):
+        """Check that `node` is a quantity of dimension `dim` (or one of several), and return it.
+
+        `what` names the field for the message. A bare number gets a message showing an example unit. `±` is
+        refused unless `allow_tol` (it only means something on a tolerance). Returns None after reporting an error.
+        """
         dims = (dim,) if isinstance(dim, str) else dim
         if isinstance(node, A.Num):
             example = EXAMPLE_UNIT.get(dims[0], "")
@@ -129,6 +160,9 @@ class Checker:
         return node.q
 
     def enum(self, node, key: str, what: str):
+        """Check that `node` is one of the fixed words listed under `key` in ENUMS (a machine class, a zone role,
+        ...), and return the word.
+        """
         if not isinstance(node, A.Ident):
             self.error(f"{what} must be one of: {', '.join(sorted(ENUMS[key]))}", node.pos)
             return None
@@ -139,12 +173,16 @@ class Checker:
         return node.name
 
     def string(self, node, what: str):
+        """Check that `node` is a quoted string, and return its text."""
         if not isinstance(node, A.Str):
             self.error(f"{what} must be a quoted string", node.pos)
             return None
         return node.value
 
     def ref(self, node, kinds: tuple, what: str):
+        """Check that `node` names a declaration of one of the given kinds (e.g. a zone or a stockpile), and return
+        the name.
+        """
         if not isinstance(node, A.Ident):
             self.error(f"{what} must name a {' or '.join(kinds)}", node.pos)
             return None
@@ -158,6 +196,12 @@ class Checker:
         return node.name
 
     def area(self, s: A.Stmt):
+        """Read an area: where on the site something is.
+
+        Four forms: `polygon [(x, y), ...]`, `rect (x1, y1) (x2, y2)` (stored as a four-point polygon), `file
+        "zone.geojson"` (read when the site grid is built) and `where <condition>` (the cells where a condition on
+        the ground holds, re-evaluated as the ground changes).
+        """
         a = s.args
         if not a or not isinstance(a[0], A.Ident):
             self.error("area must be 'polygon [...]', 'rect (x, y) (x, y)', 'file \"...\"' "
@@ -207,6 +251,8 @@ class Checker:
                 self.error(str(e), node.pos)
                 return None
         if isinstance(node, A.Ident):
+            # Inside `area where ...` the condition is evaluated cell by cell, and these three names are that cell's
+            # heights.
             if "cell" in scope and node.name in ("residual", "design", "actual"):
                 return "length"
             self.error(f"'{node.name}' is not a value here; did you mean a function like residual({node.name})?",
@@ -259,6 +305,7 @@ class Checker:
             rt = self.expr_type(node.right, scope)
             if lt is None or rt is None:
                 return None
+            # A bare `residual(zone)` in a comparison stands for its 95th percentile, a length.
             lt = "length" if lt == "stat" else lt
             rt = "length" if rt == "stat" else rt
             if node.op in ("and", "or"):
@@ -266,6 +313,8 @@ class Checker:
                     self.error(f"'{node.op}' joins true/false conditions", node.pos)
                 return "bool"
             if node.op in ("<", "<=", ">", ">=", "==", "!="):
+                # Weather readings are a rate (rain, in/h) or a speed (wind, mph) depending on the input, so either is
+                # accepted.
                 if "any_rate" in (lt, rt):
                     other = rt if lt == "any_rate" else lt
                     if other not in ("rate", "speed"):
@@ -291,6 +340,7 @@ class Checker:
         return None
 
     def condition(self, s: A.Stmt):
+        """Check that the statement's expression is a true/false condition, and return it."""
         t = self.expr_type(s.args[0])
         if t is not None and t != "bool":
             self.error(f"'{s.key}' needs a true/false condition, e.g. residual(A) < 0.2 ft", s.pos)
@@ -298,6 +348,11 @@ class Checker:
 
     # -- declarations ----------------------------------------------------
     def run(self) -> tuple[Model, list[Diagnostic]]:
+        """Check the whole program and return (model, diagnostics sorted by position).
+
+        Declarations are checked kind by kind in a fixed order (site, probes, machines, zones, stockpiles, tasks,
+        rules, replans), so a task can refer to a zone declared later in the file.
+        """
         if self.prog.version not in SUPPORTED_VERSIONS:
             self.error(f"unsupported Loam version {self.prog.version}; this checker supports "
                        f"{', '.join(sorted(SUPPORTED_VERSIONS))}", A.Pos(1, 1))
@@ -324,16 +379,21 @@ class Checker:
         return self.model, self.diags
 
     def unknown_keys(self, d: A.Decl, allowed: set) -> None:
+        """Report any field this kind of declaration does not have, listing the ones it does."""
         for s in d.stmts:
             if s.key not in allowed:
                 self.error(f"unknown field '{s.key}' in {d.kind}; allowed: {', '.join(sorted(allowed))}", s.pos)
 
     def required(self, d: A.Decl, keys: list) -> None:
+        """Report each required field that is missing."""
         for k in keys:
             if d.get(k) is None:
                 self.error(f"{d.kind} '{d.name}' is missing required field '{k}'", d.pos)
 
     def decl_site(self, d: A.Decl) -> None:
+        """The site: coordinate system, units, the design surface (and optionally the existing ground), the boundary
+        and the grid cell size.
+        """
         self.unknown_keys(d, {"crs", "units", "datum", "design", "boundary", "grid", "existing"})
         self.required(d, ["crs", "units", "design"])
         out: dict[str, Any] = {"name": d.name}
@@ -358,6 +418,9 @@ class Checker:
         self.model.site = out
 
     def surface_source(self, s: A.Stmt):
+        """A surface file: `"path" [format landxml|ifc|geotiff] [surface "name"]`. The format defaults to LandXML;
+        `surface` picks one of several surfaces in the file.
+        """
         a = s.args
         if not a or not isinstance(a[0], A.Str):
             self.error(f'{s.key} needs a file path: {s.key} "surface.xml" format landxml', s.pos)
@@ -379,6 +442,9 @@ class Checker:
         return out
 
     def decl_probe(self, d: A.Decl) -> None:
+        """A probe: what surveys the ground, how often, how accurately, and over what area. A survey older than
+        `stale_after` (three survey intervals unless stated) is not trusted.
+        """
         self.unknown_keys(d, {"kind", "sensor", "rate", "accuracy", "coverage", "stale_after", "endpoint"})
         self.required(d, ["kind", "rate", "accuracy"])
         out: dict[str, Any] = {"name": d.name}
@@ -394,6 +460,7 @@ class Checker:
             out["stale_after"] = self.qty(s.args[0], "time", "stale_after")
         elif out.get("rate"):
             r = out["rate"]
+            # Default: a survey is stale once three survey intervals have passed without a new one.
             out["stale_after"] = Quantity(r.value * 3, r.unit)
         if (s := d.get("coverage")):
             if len(s.args) == 1 and isinstance(s.args[0], A.Ident) and s.args[0].name == "site":
@@ -407,6 +474,9 @@ class Checker:
         self.model.probes[d.name] = out
 
     def decl_machine(self, d: A.Decl) -> None:
+        """A machine: its class, what it can do (`caps`, defaulting to what its class normally does), its tool size
+        and its top speed.
+        """
         tool_keys = {"blade": "length", "bucket": "volume", "drum": "length", "capacity": "volume",
                      "width": "length"}
         self.unknown_keys(d, {"class", "caps", "max_speed", "endpoint", *tool_keys})
@@ -431,6 +501,9 @@ class Checker:
         self.model.machines[d.name] = out
 
     def decl_zone(self, d: A.Decl) -> None:
+        """A zone: a part of the site with a role (cut, fill, finish, or an exclusion nothing may enter), a finish
+        tolerance (±0.1 ft unless stated) and, for fill, lift thickness and compaction.
+        """
         self.unknown_keys(d, {"role", "area", "tolerance", "lift", "compaction", "buffer"})
         self.required(d, ["role", "area"])
         out: dict[str, Any] = {"name": d.name}
@@ -444,6 +517,7 @@ class Checker:
                 self.warn("write tolerances with ±, e.g. ±0.1 ft", s.pos)
             out["tolerance"] = q
         else:
+            # Default finish tolerance, a common figure for building pads.
             out["tolerance"] = Quantity(0.1, "ft", tol=True)
         if (s := d.get("lift")) and self.one(s):
             out["lift"] = self.qty(s.args[0], "length", "lift")
@@ -462,6 +536,7 @@ class Checker:
         self.model.zones[d.name] = out
 
     def decl_stockpile(self, d: A.Decl) -> None:
+        """A stockpile: where spoil goes or fill comes from, with its capacity and what is available."""
         self.unknown_keys(d, {"area", "capacity", "material", "available"})
         self.required(d, ["area"])
         out: dict[str, Any] = {"name": d.name}
@@ -476,6 +551,12 @@ class Checker:
         self.model.stockpiles[d.name] = out
 
     def decl_task(self, d: A.Decl) -> None:
+        """A task: an operation on a zone, who does it, its limits, where material goes or comes from, what it waits
+        for, and the measured condition that ends it.
+
+        `until` is required: in Loam a task is finished when the ground says so, not when a planned number of
+        passes has been made.
+        """
         self.unknown_keys(d, {"op", "zone", "by", "max_cut", "lift", "passes", "spoil", "source",
                               "after", "until", "priority", "depth", "along", "speed"})
         self.required(d, ["op", "by", "until"])
@@ -550,6 +631,9 @@ class Checker:
         self.model.tasks[d.name] = out
 
     def by(self, s: A.Stmt, op: str | None):
+        """Who does a task: `by <machine>`, `by class <class>` or `by cap <capability>`. Warns when a named machine
+        lacks the capability the operation needs.
+        """
         a = s.args
         if len(a) == 1 and isinstance(a[0], A.Ident):
             name = self.ref(a[0], ("machine",), "by")
@@ -564,6 +648,7 @@ class Checker:
         return None
 
     def decl_rule(self, d: A.Decl) -> None:
+        """A rule: `when <condition>` and `do <action>`. Rules are checked every cycle and override the plan."""
         self.unknown_keys(d, {"when", "do", "priority"})
         self.required(d, ["when", "do"])
         out: dict[str, Any] = {"name": d.name}
@@ -574,6 +659,9 @@ class Checker:
         self.model.rules[d.name] = out
 
     def action(self, s: A.Stmt):
+        """A rule's action: `stop`, `hold`, `pause` or `resume` something; `slow` something to a speed; or `alert
+        "message"`.
+        """
         a = s.args
         if not a or not isinstance(a[0], A.Ident):
             self.error("do needs an action: stop, hold, pause, resume, slow or alert", s.pos)
@@ -597,6 +685,7 @@ class Checker:
         return out
 
     def target(self, rest: list, s: A.Stmt):
+        """What an action applies to: `all`, one machine or task, `task <name>`, `class <class>`, or a list of names."""
         if not rest:
             self.error("action needs a target: all, a machine, 'task <name>', 'class <class>' or a list", s.pos)
             return None
@@ -614,6 +703,7 @@ class Checker:
         return None
 
     def decl_replan(self, d: A.Decl) -> None:
+        """A replan trigger: when its condition holds, the plan is rebuilt from the latest measured ground."""
         self.unknown_keys(d, {"when"})
         self.required(d, ["when"])
         if (s := d.get("when")):
@@ -621,11 +711,18 @@ class Checker:
 
     # -- task graph ------------------------------------------------------
     def check_tasks_graph(self) -> None:
+        """Order the tasks by their `after ... done` dependencies and report cycles; then check the program as a
+        whole.
+
+        The order comes from a depth-first walk (each task after everything it waits for). A task that waits only
+        for another to *start* does not constrain the order.
+        """
         tasks = self.model.tasks
         state: dict[str, int] = {}
         order: list[str] = []
 
         def visit(n: str, path: list[str]) -> None:
+            """Depth-first visit: state 1 means in progress (meeting it again is a cycle), 2 means done."""
             if state.get(n) == 2:
                 return
             if state.get(n) == 1:
@@ -658,8 +755,10 @@ class Checker:
 
 
 def check(prog: A.Program) -> tuple[Model, list[Diagnostic]]:
+    """Check a parsed program. Returns the Model and every diagnostic; use `has_errors` to see whether it is valid."""
     return Checker(prog).run()
 
 
 def has_errors(diags: list[Diagnostic]) -> bool:
+    """Whether any diagnostic is an error (warnings do not make a program invalid)."""
     return any(d.level == "error" for d in diags)

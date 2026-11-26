@@ -29,14 +29,21 @@ import numpy as np
 from .landxml import rasterize, read_project, read_tin, tin_boundary
 from .units import Quantity
 
+# Words that designers use in surface names. They must stand alone (`EG`, `Site-FG`), so `LEGEND` does not count as
+# `EG`.
 DESIGN_NAMES = re.compile(r"(^|[^a-z])(fg|finish|final|proposed|prop|design|dsgn|top|grade)([^a-z]|$)", re.I)
 EXISTING_NAMES = re.compile(r"(^|[^a-z])(eg|existing|exist|ex|og|original|survey|ground|topo)([^a-z]|$)", re.I)
+# Round grid sizes to choose from, the default finish tolerance, and feet per site unit, each by site unit.
 NICE = {"ft": [0.5, 1, 2, 2.5, 5, 10, 20], "usft": [0.5, 1, 2, 2.5, 5, 10, 20], "m": [0.1, 0.25, 0.5, 1, 2, 5]}
 DEFAULT_TOL = {"ft": "0.1 ft", "usft": "0.1 usft", "m": "3 cm"}
 FT_PER = {"ft": 1.0, "usft": 1200 / 3937 / 0.3048, "m": 1 / 0.3048}
 
 
 def pick_surfaces(names: list[str], design: str | None, existing: str | None) -> tuple[str, str]:
+    """Decide which surface in the file is the design and which the existing ground, from their names (FG, Finish,
+    Proposed ... against EG, Existing, OG ...). Explicit names win; if the names do not make it clear, say so
+    rather than guess.
+    """
     if design and existing:
         return design, existing
     d = design or next((n for n in names if DESIGN_NAMES.search(n)), None)
@@ -52,9 +59,14 @@ def simplify(poly: list[tuple[float, float]], tol: float) -> list[tuple[float, f
     p = np.array(poly, float)
     if len(p) <= 4:
         return poly
+    # A closed ring has no ends to anchor the algorithm, so split it at the point farthest from the first one and
+    # simplify the two halves.
     far = int(np.argmax(np.hypot(*(p - p[0]).T)))
 
     def dp(a: np.ndarray) -> list[int]:
+        """Douglas-Peucker on an open run of points: keep the point farthest from the straight line between the ends
+        if it is more than `tol` away, and recurse on both sides. Returns the indices kept.
+        """
         if len(a) < 3:
             return list(range(len(a)))
         d = a[-1] - a[0]
@@ -73,15 +85,18 @@ def simplify(poly: list[tuple[float, float]], tol: float) -> list[tuple[float, f
 
 
 def _area(p: np.ndarray) -> float:
+    """The area enclosed by a ring of points (the shoelace formula)."""
     x, y = p[:, 0], p[:, 1]
     return abs(float(np.dot(x, np.roll(y, -1)) - np.dot(y, np.roll(x, -1)))) / 2
 
 
 def _fmt(v: float) -> str:
+    """A number with at most two decimals and no trailing zeros, as a person would write it in a program."""
     return f"{v:.2f}".rstrip("0").rstrip(".")
 
 
 def _poly(poly: list[tuple[float, float]], indent: str) -> str:
+    """A polygon as Loam source text, four points to a line, continuation lines indented by `indent`."""
     pts = [f"({_fmt(x)}, {_fmt(y)})" for x, y in poly]
     lines, row = [], []
     for p in pts:
@@ -132,6 +147,8 @@ def plan(project: str, out: str, design: str | None = None, existing: str | None
     rp = np.array(ring)
     (x0, y0), (x1, y1) = rp.min(0), rp.max(0)
     area = _area(rp)
+    # The finest round cell size that keeps the grid within `max_cells`, so large jobs stay fast and small ones stay
+    # sharp.
     cell = next((c for c in NICE[unit] if (x1 - x0) * (y1 - y0) / c ** 2 <= max_cells), NICE[unit][-1])
     limits = simplify(ring, cell / 2)
     nx, ny = math.ceil((x1 - x0) / cell), math.ceil((y1 - y0) / cell)
@@ -147,6 +164,7 @@ def plan(project: str, out: str, design: str | None = None, existing: str | None
     tol_txt = tolerance or DEFAULT_TOL[unit]
     num, tunit = tol_txt.lstrip("±").split()
     tol_v = Quantity(float(num), tunit).to(unit)
+    # Earthwork quantities in place: only what is outside tolerance counts as work.
     cut = float(-d[d < -tol_v].sum() * a_cell)
     fill = float(d[d > tol_v].sum() * a_cell)
     # Balance with the planner's starting beliefs (swell 1.25, compaction keep 0.80): bank needed = fill / 1.0.

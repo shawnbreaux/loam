@@ -32,6 +32,7 @@ from test_bridges import Controller
 
 from loam.runtime.opera import Chain
 
+# How to run a program inside ROS 2, and where the built OPERA workspace is. Both come from the environment.
 RUN = shlex.split(os.environ.get("LOAM_ROS_RUN", ""))
 WS = os.environ.get("LOAM_OPERA_WS", "")
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -55,6 +56,7 @@ def ros(cmd: str, log=None, **kw) -> subprocess.Popen:
 
 
 def stop(p: subprocess.Popen) -> None:
+    """Stop a process started by `ros` and everything it started: SIGTERM to the group, then SIGKILL after 20 s."""
     if p.poll() is None:
         os.killpg(p.pid, signal.SIGTERM)
         try:
@@ -64,15 +66,18 @@ def stop(p: subprocess.Popen) -> None:
 
 
 def read(path) -> str:
+    """A log file's text (bytes that are not valid UTF-8 are replaced, not fatal)."""
     with open(path, encoding="utf-8", errors="replace") as f:
         return f.read()
 
 
 def jsonl(path) -> list[dict]:
+    """A JSON-lines file as a list of objects."""
     return [json.loads(ln) for ln in read(path).splitlines() if ln.strip()]
 
 
 def wait_for(path: str, text: str, timeout: float = 90) -> None:
+    """Wait until `text` appears in a log file. On timeout, fail and show the end of the log."""
     end = time.time() + timeout
     while time.time() < end:
         if os.path.exists(path) and text in read(path):
@@ -87,9 +92,13 @@ Z0 = 100 / FT
 
 
 def design(x, y):
+    """The design surface (ft): a plane sloping down 1 % to the east and up 0.5 % to the north, through the
+    excavator's position at 100 m.
+    """
     return Z0 - 0.01 * (x - X0) + 0.005 * (y - Y0)
 
 
+# The site program; each test fills in the size and the pit's corners.
 SRC = """loam 0.0.2
 site yard {{ crs "LOCAL:ft"; units ft; design "d.xml"; boundary rect (0, 0) ({w}, {w}); grid 1 ft }}
 probe p {{ kind static; sensor lidar; rate 5 min; accuracy 0.05 ft }}
@@ -102,6 +111,9 @@ task dig {{ op cut; zone pit; by class excavator; spoil -> pit; until residual(p
 
 @pytest.fixture
 def site(tmp_path):
+    """An 80 x 80 ft site with an excavator and a truck, and a pit 14 to 22 ft in front of the excavator. Returns
+    (model, folder, pit rectangle).
+    """
     w = 80
     win = (round(X0 + 14), round(Y0 - 4), round(X0 + 22), round(Y0 + 4))        # 4.3-6.7 m out, 2.4 m wide
     xs = ys = np.arange(0.0, w + 1.0)
@@ -115,10 +127,12 @@ def site(tmp_path):
 
 
 def last_joints(tmp) -> dict:
+    """The arm's most recent complete joint-state record (the very last line may still be being written)."""
     return jsonl(tmp / "rig" / "joints.jsonl")[-2]
 
 
 def urdf() -> str:
+    """The ZX200's URDF, generated from OPERA's own xacro description."""
     p = ros("bash -c 'xacro $(ros2 pkg prefix zx200_description)/share/zx200_description/urdf/zx200.xacro'",
             stdout=subprocess.PIPE, text=True)
     out, _ = p.communicate(timeout=120)
@@ -129,6 +143,13 @@ def urdf() -> str:
 @need_ros
 @pytest.mark.slow
 def test_zx200_cuts_to_the_design_surface(site, mqtt_broker):
+    """The excavator bridge drives OPERA's ZX200 arm through a real ros2_control trajectory controller.
+
+    A survey reports 1 ft of material on the pit. The order says remove it. Afterwards the bucket tip's path is
+    rebuilt from every recorded joint state: it never goes more than 10 mm below design, stays within 15 mm of
+    design while dragging, and covers over 90 % of the pit. Midway, a stop freezes the arm and a resume finishes
+    the job.
+    """
     m, tmp, win = site
     g = SiteGrid(m, str(tmp))
     design_grid = g.surface(m.site["design"])
@@ -202,6 +223,7 @@ def test_zx200_cuts_to_the_design_surface(site, mqtt_broker):
 
 # -- IC120 carrier on Nav2 ------------------------------------------------------------------------------
 def _seg_dist(p, a, b):
+    """The distance from point `p` to the line segment from `a` to `b`."""
     ab, ap = b - a, p - a
     t = np.clip((ap @ ab) / max(ab @ ab, 1e-12), 0, 1)
     return float(np.hypot(*(ap - t * ab)))
@@ -210,6 +232,12 @@ def _seg_dist(p, a, b):
 @need_ros
 @pytest.mark.slow
 def test_ic120_hauls_dumps_and_stops_on_nav2(site, mqtt_broker):
+    """The carrier bridge drives a tracked dump carrier through the real Nav2 stack.
+
+    It runs a work line, hauls to the deposit, raises and lowers the vessel there while standing still, and
+    returns, never exceeding the order's 0.8 m/s. A stop halts it and a resume carries on. When odometry disappears
+    it is reported stopped. Finally the recorded track must lie within 30 cm of the work line.
+    """
     _, tmp, _ = site
     rig = ros(f"python {HERE}/ros/carrier_rig.py {HERE}/ros/nav2_ic120.yaml {tmp}/rig 5.0 10.0 0.0",
               log=tmp / "rig.log")

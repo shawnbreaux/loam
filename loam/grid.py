@@ -17,6 +17,7 @@ from .checker import Model
 from .surfaces import resolve_area_files, surface_grid
 from .units import Quantity, length_unit_si
 
+# A height (or any per-cell number) for every cell, and a yes/no for every cell.
 Grid = NDArray[np.float64]
 Mask = NDArray[np.bool_]
 
@@ -52,6 +53,7 @@ def points_in_polygon(poly: list, x: Grid, y: Grid) -> Mask:
     inside = np.zeros(np.shape(x), bool)
     for k in range(len(poly)):
         (x1, y1), (x2, y2) = poly[k], poly[(k + 1) % len(poly)]
+        # Count the polygon edges that a ray from the point toward +x crosses: an odd count means inside.
         crosses = (y1 > y) != (y2 > y)
         with np.errstate(divide="ignore", invalid="ignore"):
             xint = (x2 - x1) * (y - y1) / (y2 - y1) + x1
@@ -63,6 +65,11 @@ class SiteGrid:
     """Geometry of a checked program's site, plus its polygon zone masks."""
 
     def __init__(self, model: Model, base_dir: str = "."):
+        """Size the grid from the site boundary and the zone polygons, and rasterize each polygon zone.
+
+        `base_dir` is where relative file names in the program are looked up (normally the folder of the `.loam`
+        file).
+        """
         self.m = model
         self.base_dir = base_dir
         site = model.site
@@ -79,6 +86,7 @@ class SiteGrid:
         (self.x0, self.y0), (self.x1, self.y1) = pts.min(0), pts.max(0)
         self.nx = int(np.ceil((self.x1 - self.x0) / self.cell))
         self.ny = int(np.ceil((self.y1 - self.y0) / self.cell))
+        # Cell centres: a cell's value stands for the ground around its centre.
         self.xs = self.x0 + (np.arange(self.nx) + 0.5) * self.cell
         self.ys = self.y0 + (np.arange(self.ny) + 0.5) * self.cell
         self.area = self.cell ** 2
@@ -88,6 +96,7 @@ class SiteGrid:
 
     @property
     def shape(self) -> tuple[int, int]:
+        """(rows, columns) of every array on this grid."""
         return (self.ny, self.nx)
 
     def surface(self, spec: dict, allow_gaps: bool = False) -> Grid:
@@ -120,6 +129,9 @@ class SiteGrid:
         return np.asarray(cell_eval(self.m.zones[name]["area"]["where"], actual, design, self.u), bool)
 
     def valid_shift(self, dj: int, di: int) -> Mask:
+        """Which cells hold real data after shifting the grid by (dj, di) cells with `np.roll`, which wraps around:
+        the wrapped-in edge is marked False.
+        """
         v = np.ones(self.shape, bool)
         if dj > 0:
             v[:dj] = False
@@ -148,6 +160,9 @@ class SiteGrid:
         return ex
 
     def polygon_zone(self, name: str) -> Mask:
+        """The cells of a zone drawn as a polygon; an error for a zone defined by a condition, which has no fixed
+        outline.
+        """
         mk = self.masks.get(name)
         if mk is None:
             raise ValueError(f"zone '{name}' has a 'where' area; field adapters need polygon areas")
@@ -170,6 +185,7 @@ class SiteGrid:
         tx, ty = np.clip(fx - i0, 0, 1), np.clip(fy - j0, 0, 1)
         v = ((1 - tx) * (1 - ty) * z[j0, i0] + tx * (1 - ty) * z[j0, i1]
              + (1 - tx) * ty * z[j1, i0] + tx * ty * z[j1, i1])
+        # Points more than half a cell outside the outermost cell centres are off the grid.
         half = 0.5
         out = (fx < -half) | (fx > self.nx - half) | (fy < -half) | (fy > self.ny - half)
         return np.where(out, np.nan, v)

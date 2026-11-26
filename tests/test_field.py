@@ -27,9 +27,11 @@ from loam.pointcloud import Binner, fill_gaps, grid_cloud, read_las, read_pcd, r
 from loam.survey import idw, nmea_states, parse_gga, read_points_csv, score
 from loam.target import next_target
 
+# A site origin (latitude, longitude) and matching projected coordinates (easting, northing) for the tests.
 LAT0, LON0 = 34.4459, -85.7197          # DeKalb County, AL
 E0, N0 = 600000.0, 3812000.0
 
+# A small metric site: a cut zone (W), a fill zone (E) and an exclusion zone (X) inside E.
 SRC = """loam 0.0.1
 site t {{ crs "LOCAL:m"; units m; design "d.xml" format landxml surface "FG"
           existing "e.xml" format landxml surface "EG"; boundary rect (0, 0) (40, 20); grid 1 m }}
@@ -44,6 +46,9 @@ task fillE {{ op fill; zone E; by class dozer; until residual(E).low > -3 cm }}
 
 
 def model_for(tmp_path, design_z, existing_z, buf="1 m"):
+    """Write design and existing surfaces (functions of x and y, metres) as LandXML files and return the checked model
+    and its grid. `buf` is the exclusion zone's buffer.
+    """
     xs, ys = np.arange(0.0, 41.0), np.arange(0.0, 21.0)
     gx, gy = np.meshgrid(xs, ys)
     write_grid_tin(str(tmp_path / "d.xml"), "FG", xs, ys, design_z(gx, gy), "m")
@@ -55,6 +60,9 @@ def model_for(tmp_path, design_z, existing_z, buf="1 m"):
 
 @pytest.fixture
 def site(tmp_path):
+    """A 40 x 20 m site with a flat design at 100 m: the west half 0.25 m too high, the east half 0.5 m too low.
+    Returns (model, grid, folder).
+    """
     # design flat at 100 m; west half 0.25 m high, east half 0.5 m low
     m, g = model_for(tmp_path, lambda x, y: np.full_like(x, 100.0),
                      lambda x, y: np.where(x < 20, 100.25, 99.5))
@@ -64,6 +72,9 @@ def site(tmp_path):
 # -- georeferencing -------------------------------------------------------------------------
 @pytest.mark.parametrize("rot", [0.0, 30.0, -112.5])
 def test_frame_round_trips(rot):
+    """Site coordinates convert to latitude/longitude and to projected coordinates and back to the same values, at
+    several site rotations.
+    """
     f = Frame(0.3048, rot, LAT0, LON0, E0, N0, 1200 / 3937, dz=1.5)
     x, y = np.array([0.0, 100.0, -40.0, 1234.5]), np.array([0.0, 50.0, 300.0, -77.0])
     lat, lon = f.local_to_wgs84(x, y)
@@ -74,6 +85,7 @@ def test_frame_round_trips(rot):
 
 
 def test_frame_rotation_convention():
+    """The rotation is the compass bearing of the site's +y axis: at 90 degrees, +y points east."""
     f = Frame(1.0, 90.0)                        # site +y points east
     np.testing.assert_allclose(f.local_to_en(0, 1), (1, 0), atol=1e-12)
     np.testing.assert_allclose(f.local_to_en(1, 0), (0, -1), atol=1e-12)
@@ -93,6 +105,9 @@ def test_frame_matches_agopengps_local_plane():
 
 # -- point clouds ------------------------------------------------------------------------------
 def test_las_round_trip_chunks_and_classes(tmp_path):
+    """Points written as LAS read back within the file's 0.5 mm resolution, in chunks of any size, and can be filtered
+    by class (2 = ground).
+    """
     rng = np.random.default_rng(3)
     pts = np.column_stack([E0 + rng.uniform(0, 50, 1000), N0 + rng.uniform(0, 50, 1000), rng.uniform(90, 110, 1000)])
     write_las(str(tmp_path / "a.las"), pts)
@@ -103,6 +118,9 @@ def test_las_round_trip_chunks_and_classes(tmp_path):
 
 
 def test_las_14_point_count_and_errors(tmp_path):
+    """A LAS 1.4 file with only the 64-bit point count is read correctly. Compressed, non-LAS and cut-off files are
+    refused with a reason.
+    """
     p = tmp_path / "a.las"
     write_las(str(p), np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]))
     raw = bytearray(p.read_bytes())
@@ -128,6 +146,9 @@ def test_las_14_point_count_and_errors(tmp_path):
 
 
 def test_pcd_binary_ascii_and_xyz(tmp_path):
+    """PCD files (binary, ASCII, with extra fields and padding) and plain x y z text files are read; compressed PCD is
+    refused.
+    """
     pts = np.array([[1.5, 2.5, 3.5], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]])
     write_pcd(str(tmp_path / "b.pcd"), pts)
     np.testing.assert_allclose(np.concatenate(list(read_pcd(str(tmp_path / "b.pcd"), chunk=2))), pts)
@@ -150,6 +171,9 @@ def test_pcd_binary_ascii_and_xyz(tmp_path):
 
 
 def test_binner_and_fill(site):
+    """Points are averaged per grid cell, points outside the site are dropped, cells with too few points are left
+    empty, and small holes are filled from their neighbours.
+    """
     _, g, _ = site
     b = Binner(g)
     b.add(np.array([0.5, 0.6, 1.5, -5.0]), np.array([0.5, 0.4, 0.5, 0.5]), np.array([1.0, 3.0, 7.0, 99.0]))
@@ -164,6 +188,9 @@ def test_binner_and_fill(site):
 
 
 def test_grid_cloud_recovers_surface(site):
+    """A surface written as a point cloud in projected coordinates, on a rotated site, comes back onto the grid within
+    1 mm.
+    """
     m, g, tmp = site
     ex = g.surface(m.site["existing"])
     f = Frame(1.0, 25.0, None, None, E0, N0)
@@ -177,7 +204,11 @@ def test_grid_cloud_recovers_surface(site):
 
 # -- surveys and NMEA ---------------------------------------------------------------------------
 def _gga(lat, lon, q=4, alt=100.0):
+    """An NMEA GGA sentence for a position, with a valid checksum. `q` is the fix quality (4 = RTK fixed, 5 = RTK
+    float).
+    """
     def dm(v, w):
+        """Degrees as NMEA writes them: whole degrees then decimal minutes."""
         d = int(abs(v))
         return f"{d:0{w}d}{(abs(v) - d) * 60:08.5f}"
     body = (f"GNGGA,120000.00,{dm(lat, 2)},{'N' if lat >= 0 else 'S'},{dm(lon, 3)},{'E' if lon >= 0 else 'W'},"
@@ -189,6 +220,7 @@ def _gga(lat, lon, q=4, alt=100.0):
 
 
 def test_parse_gga_and_checksum():
+    """A GGA sentence is read to within 1e-7 degrees; a wrong checksum, another sentence type or garbage gives None."""
     g = parse_gga(_gga(LAT0, LON0))
     assert g["fix"] == "rtk-fixed" and g["lat"] == pytest.approx(LAT0, abs=1e-7)
     assert g["lon"] == pytest.approx(LON0, abs=1e-7) and g["alt"] == 100.0 and g["age"] == 1.0
@@ -198,6 +230,9 @@ def test_parse_gga_and_checksum():
 
 
 def test_nmea_states_heading_and_quality():
+    """A stream of positions becomes machine states: heading from the direction of travel, and RTK float reported as
+    degraded.
+    """
     f = Frame(1.0, 0.0, LAT0, LON0)
     pts = [(0, 0), (0, 0.01), (0, 1), (1, 2)]
     lines = [_gga(*(float(v) for v in f.local_to_wgs84(x, y))) for x, y in pts] + ["$junk*00"]
@@ -212,6 +247,9 @@ def test_nmea_states_heading_and_quality():
 
 
 def test_read_points_csv_layouts(tmp_path):
+    """Survey point files are read in the layouts receivers export: Emlid's named columns, and unnamed PNEZD or PENZD.
+    Float solutions are dropped unless asked for.
+    """
     f = Frame(0.3048, 0.0, LAT0, LON0, E0, N0, 1.0)
     lat, lon = f.local_to_wgs84(100.0, 50.0)
     e, n = f.local_to_projected(100.0, 50.0)
@@ -233,6 +271,9 @@ def test_read_points_csv_layouts(tmp_path):
 
 
 def test_idw_and_score(site):
+    """Sparse survey points are spread onto the grid by inverse-distance weighting, and a zone is scored against its
+    tolerance with a 95 % confidence interval.
+    """
     m, g, _ = site
     design = g.surface(m.site["design"])
     z = idw(g, np.array([10.5, 30.5]), np.array([10.5, 10.5]), np.array([1.0, 3.0]), radius=50, max_elems=50)
@@ -253,6 +294,9 @@ def test_idw_and_score(site):
 
 # -- next-pass target --------------------------------------------------------------------------
 def test_next_target_limits_and_exclusion(site):
+    """The next-pass target cuts at most the allowed depth, fills at most one lift, leaves exclusion zones and their
+    buffer blank, and reaches design after a few passes.
+    """
     m, g, _ = site
     design, ground = g.surface(m.site["design"]), g.surface(m.site["existing"])
     t, info = next_target(g, design, ground)
@@ -275,6 +319,9 @@ def test_next_target_limits_and_exclusion(site):
 
 # -- exports -----------------------------------------------------------------------------------
 def test_landxml_site_and_projected(site):
+    """An exported LandXML surface reads back to the same heights, has a hole where the exclusion zone is, and can be
+    written in projected coordinates and feet.
+    """
     m, g, tmp = site
     design, ground = g.surface(m.site["design"]), g.surface(m.site["existing"])
     t, _ = next_target(g, design, ground)
@@ -314,6 +361,9 @@ def _read_agd(path):
 
 
 def test_agd_matches_opengrade3d_parser(site):
+    """The AGD export, read back the way OpenGrade3D itself reads it, has one master benchmark, four perimeter points
+    and a grid of existing and proposed heights.
+    """
     m, g, tmp = site
     design, ground = g.surface(m.site["design"]), g.surface(m.site["existing"])
     t, _ = next_target(g, design, ground)
@@ -332,6 +382,9 @@ def test_agd_matches_opengrade3d_parser(site):
 
 
 def test_agopengps_folder_matches_its_parsers(site):
+    """The AgOpenGPS field folder, read back the way AgOpenGPS reads it, has the origin, the boundary rings and one
+    guidance line per zone.
+    """
     _, g, tmp = site
     f = Frame(1.0, 15.0, LAT0, LON0)
     out = agopengps(str(tmp / "aog"), g, f)
@@ -368,6 +421,7 @@ def test_agopengps_folder_matches_its_parsers(site):
 
 # -- command line ----------------------------------------------------------------------------
 def test_cli_field_commands(tmp_path, capsys):
+    """The field commands run on the example: `terrain`, `export` to every format, `score` and `nmea`."""
     from loam.cli import load
     model = load(EXAMPLE)
     g = SiteGrid(model, EXAMPLES)
@@ -410,6 +464,7 @@ def test_cli_field_commands(tmp_path, capsys):
 
 @pytest.mark.slow
 def test_grid_cloud_memory_is_bounded(site):
+    """Three million points are gridded in under 40 MB: the cloud is read in chunks and never held whole."""
     _, g, tmp = site
     n = 3_000_000
     rng = np.random.default_rng(0)

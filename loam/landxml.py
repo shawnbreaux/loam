@@ -17,6 +17,7 @@ import numpy as np
 
 
 def _local(tag: str) -> str:
+    """An XML tag without its namespace, so files from any LandXML version are read the same way."""
     return tag.rsplit("}", 1)[-1]
 
 
@@ -44,6 +45,7 @@ def read_tin(path: str, surface: str | None = None):
             ids[el.get("id", str(len(pts) + 1))] = len(pts)
             pts.append((e, n, z))
         elif tag == "F":
+            # Design software marks faces outside the surface's real edge as invisible; they are not ground.
             if el.get("i") == "1":  # invisible face
                 continue
             faces.append([ids[v] for v in (el.text or "").split()[:3]])
@@ -60,9 +62,12 @@ def rasterize(pts: np.ndarray, faces: np.ndarray, x0: float, y0: float, cell: fl
     ys = y0 + (np.arange(ny) + 0.5) * cell
     for a, b, c in faces:
         (xa, ya, za), (xb, yb, zb), (xc, yc, zc) = pts[a], pts[b], pts[c]
+        # Barycentric coordinates: each cell centre inside the triangle is a weighted mix (l1, l2, l3) of its three
+        # corners, and gets the same mix of their heights. A zero determinant is a triangle with no area.
         det = (yb - yc) * (xa - xc) + (xc - xb) * (ya - yc)
         if abs(det) < 1e-12:
             continue
+        # Only the cells under this triangle's bounding box are tested, which keeps large surfaces fast.
         i0 = max(0, int(np.floor((min(xa, xb, xc) - x0) / cell)))
         i1 = min(nx - 1, int(np.ceil((max(xa, xb, xc) - x0) / cell)))
         j0 = max(0, int(np.floor((min(ya, yb, yc) - y0) / cell)))
@@ -80,6 +85,7 @@ def rasterize(pts: np.ndarray, faces: np.ndarray, x0: float, y0: float, cell: fl
     return z
 
 
+# Loam's unit names to LandXML's.
 LINEAR_UNITS = {"ft": "foot", "foot": "foot", "usft": "USSurveyFoot", "m": "meter", "meter": "meter"}
 
 
@@ -92,6 +98,7 @@ def grid_tin(xs: np.ndarray, ys: np.ndarray, z: np.ndarray) -> tuple[np.ndarray,
     a, b, c, d = k[:-1, :-1].ravel(), k[:-1, 1:].ravel(), k[1:, 1:].ravel(), k[1:, :-1].ravel()
     faces = np.stack([np.column_stack([a, b, c]), np.column_stack([a, c, d])], 1).reshape(-1, 3)  # per cell
     faces = faces[np.isfinite(pts[faces, 2]).all(1)]
+    # Drop points no triangle uses (those around gaps), and renumber the rest.
     used = np.unique(faces)
     remap = np.full(len(pts), -1)
     remap[used] = np.arange(len(used))
@@ -129,6 +136,7 @@ def write_grid_tin(path: str, name: str, xs: np.ndarray, ys: np.ndarray, z: np.n
     write_tin(path, name, pts, faces, units)
 
 
+# LandXML's unit names to Loam's.
 UNIT_OF_LINEAR = {"foot": "ft", "USSurveyFoot": "usft", "meter": "m", "metre": "m"}
 
 
@@ -155,6 +163,7 @@ def tin_boundary(pts: np.ndarray, faces: np.ndarray) -> list[tuple[float, float]
     """Outer boundary of a TIN as a polygon: the longest closed loop of edges used by one face."""
     e = np.sort(np.concatenate([faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]]]), axis=1)
     uniq, count = np.unique(e, axis=0, return_counts=True)
+    # An edge used by exactly one triangle lies on the boundary; interior edges are shared by two.
     edges = uniq[count == 1]
     nxt: dict[int, list[int]] = {}
     for a, b in edges:
@@ -184,5 +193,6 @@ def tin_boundary(pts: np.ndarray, faces: np.ndarray) -> list[tuple[float, float]
 
 
 def _area(p: np.ndarray) -> float:
+    """The area enclosed by a ring of points (the shoelace formula)."""
     x, y = p[:, 0], p[:, 1]
     return abs(float(np.dot(x, np.roll(y, -1)) - np.dot(y, np.roll(x, -1)))) / 2

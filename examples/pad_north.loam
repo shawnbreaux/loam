@@ -14,26 +14,34 @@ site pad_north {
   grid     1 ft
 }
 
-probe overhead {
+probe overhead {        # where measured ground comes from: a lidar on a tethered drone
   kind        tethered_uav
   sensor      lidar
-  rate        5 min
+  rate        5 min             # a full survey of the site every 5 minutes
   accuracy    0.05 ft
   coverage    site
-  stale_after 15 min
+  stale_after 15 min            # no survey for this long: all machines hold
 }
 
+# The fleet. A machine's class says what work it can do; its width sets the width of a pass.
 machine dz1 { class dozer;   blade 12 ft;  max_speed 3 mph }
 machine dz2 { class dozer;   blade 10 ft;  max_speed 3 mph }
 machine rl1 { class roller;  drum 7 ft;    max_speed 4 mph }
 
+# Zones give areas a role. The whole pad must end within a tenth of a foot of design.
+# A is the high side, to be cut. C is the low side, to be filled in 8 in lifts and compacted.
 zone pad  { role finish;  area rect (0, 0) (160, 100);   tolerance ±0.1 ft }
 zone A    { role cut;     area rect (0, 0) (85, 100);    tolerance ±0.1 ft }
 zone C    { role fill;    area rect (85, 0) (160, 100);  tolerance ±0.1 ft
             lift 8 in;   compaction 95 % proctor }
 
+# Fill kept beside the pad, measured in the pile.
 stockpile sp1 { area rect (170, 0) (200, 40);  available 600 yd3;  material "select fill" }
 
+# Tasks are goals with limits, not step-by-step instructions. The planner splits each into as many
+# passes as it takes, and a task ends when its `until` condition holds on the measured ground.
+
+# Cut zone A down to design, at most half a foot per pass.
 task strip_A {
   op      cut
   zone    A
@@ -43,6 +51,7 @@ task strip_A {
   until   residual(A).high < 0.15 ft
 }
 
+# Bring C up to design from the stockpile, once the cut has supplied what it can.
 task top_up_C {
   op     fill
   zone   C
@@ -53,6 +62,7 @@ task top_up_C {
   until  residual(C).low > -0.15 ft and compaction(C) >= 95 %
 }
 
+# Roll each lift four times. Starts as soon as the cut starts placing material in C.
 task compact_C {
   op     compact
   zone   C
@@ -62,6 +72,7 @@ task compact_C {
   until  done(top_up_C) and compaction(C) >= 95 %
 }
 
+# Trim the whole pad to tolerance when the bulk work is done.
 task finish_pad {
   op    finish
   zone  pad
@@ -71,6 +82,11 @@ task finish_pad {
   source [sp1]                      # small low spots are topped up from the stockpile
   until in_tolerance(pad)
 }
+
+# Rules are checked all the time, whatever the tasks are doing.
+#   stop   machines stop at once
+#   hold   passes under way finish; no new ones start
+#   pause  no new passes for the task named
 
 rule people_near_machines {
   when proximity(person, machine) < 50 ft
@@ -87,6 +103,8 @@ rule rain {
   do   pause task compact_C
 }
 
+# When the measured ground differs from what the plan predicted by more than 0.15 ft, plan again from
+# the measurement and re-estimate how much this soil swells and compacts.
 replan drift {
   when deviation() > 0.15 ft
 }

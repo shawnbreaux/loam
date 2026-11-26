@@ -36,6 +36,7 @@ from .grid import SiteGrid, polygon_mask  # noqa: F401  (polygon_mask re-exporte
 from .rng import CounterRNG
 from .units import FT, Quantity
 
+# A number per cell, a yes/no per cell, and a rectangular block of cells as (row slice, column slice).
 Grid = NDArray[np.float64]
 Mask = NDArray[np.bool_]
 Window = tuple[slice, slice]
@@ -59,6 +60,9 @@ class Beliefs:
 
 @dataclass(frozen=True)
 class PlannerConfig:
+    """Tuning of the reference planner: how long one push is, how long a machine takes to turn round, and how fussy it
+    is about small errors.
+    """
     segment_m: float = 30 * FT          # length of one dozer push
     turnaround_min: float = 0.3
     finish_step_m: float = 0.3 * FT     # most a finishing pass moves a cell
@@ -77,15 +81,20 @@ class Events:
 
     @staticmethod
     def none() -> Events:
+        """No disturbances at all: a quiet day, for tests that need one."""
         return Events(person=(-1, -1), probe_outage=(-1, -1), rain=(-1, -1))
 
 
 def in_window(t: float, w: tuple[float, float]) -> bool:
+    """Whether time `t` falls in the window `w = (start, end)`."""
     return w[0] <= t < w[1]
 
 
 @dataclass
 class Machine:
+    """A machine as the planner sees it: what it can do, how wide its tool is, how fast it travels, when it will be
+    free, and how much it has done.
+    """
     name: str
     cls: str
     caps: list[str]
@@ -111,10 +120,23 @@ class Pass:
 
 
 class Sim(Context):
+    """Runs a checked program against a simulated site and answers the program's questions about it.
+
+    It is three things at once: the *world* (true ground `z`, true soil behaviour), the *probe* (noisy surveys
+    `meas`) and the *planner* (its prediction `pred`, the passes it issues). Keeping them in one class is what lets
+    the tests compare what the program believes with what is true. The runtime's Controller subclasses it and
+    replaces the world and probe halves with messages from a real or simulated site.
+    """
     def __init__(self, model: Model, base_dir: str = ".", seed: int = 7, open_loop: bool = False,
                  soil: Soil | None = None, beliefs: Beliefs | None = None, events: Events | None = None,
                  config: PlannerConfig | None = None, dt: float = 0.25, max_minutes: float = 24 * 60,
                  log: Callable[[str], Any] = print, start_epoch: float = 1796108400.0):  # 2026-12-01 07:00 UTC
+        """Build the site from the model: grid, design and existing ground, stockpiles, machines.
+
+        `seed` fixes the random noise; `open_loop` runs with one survey and no feedback; `soil` is how the ground
+        really behaves and `beliefs` what the planner assumes; `dt` is the planning cycle in minutes; `log`
+        receives progress lines; `start_epoch` is the wall-clock time of minute 0, used only to stamp messages.
+        """
         if len(model.probes) > 1:
             raise ValueError("the reference simulator models one probe; fusing several is on the roadmap")
         self.m = model
@@ -182,25 +204,31 @@ class Sim(Context):
 
     # -- setup -----------------------------------------------------------
     def _exclusion(self) -> Mask:
+        """Cells no work may touch (exclusion zones grown by their buffers)."""
         return self.grid.exclusion(self.mask)
 
     # -- small helpers ---------------------------------------------------
     def log(self, msg: str) -> None:
+        """Log a line stamped with the site time as [hours:minutes]."""
         h, mm = divmod(self.t, 60)
         self.log_fn(f"[{int(h):02d}:{mm:04.1f}] {msg}")
 
     def emit(self, topic: str, msg: dict) -> None:
+        """Record a Loam Wire message, if a wire log is being written (see `run`)."""
         if self.wire_out is not None:
             self.wire_out.write(json.dumps({"topic": topic, "payload": msg}) + "\n")
 
     def ts(self) -> float:
+        """The current site time as seconds since 1970, for message timestamps."""
         return self.start_epoch + self.t * 60
 
     def seq(self) -> int:
+        """The next message sequence number."""
         self.wire_seq += 1
         return self.wire_seq
 
     def mask(self, zone: str) -> Mask:
+        """The cells of a zone right now. A zone defined by `area where ...` changes as the ground does."""
         return self.grid.zone_mask(zone, self.checked_surface(), self.design)
 
     # -- surfaces --------------------------------------------------------
@@ -216,17 +244,21 @@ class Sim(Context):
 
     # -- Context interface (SI units) -----------------------------------
     def residual(self, zone: str) -> Grid:
+        """Height above design (+) or below (-) of every cell of the zone, in metres, as the program sees it."""
         return (self.checked_surface() - self.design)[self.mask(zone)] * self.u
 
     def tolerance(self, zone: str) -> float:
+        """The zone's ± finish tolerance in metres (0.1 ft unless the program says otherwise)."""
         tol = self.m.zones[zone].get("tolerance") or Quantity(0.1, "ft")
         return float(tol.si)
 
     def volume_remaining(self, zone: str) -> float:
+        """Volume still to cut or fill in the zone, in cubic metres: the sum of |residual| over its cells."""
         r = (self.checked_surface() - self.design)[self.mask(zone)]
         return float(np.abs(r).sum() * self.area) * self.u ** 3
 
     def compaction(self, zone: str) -> float:
+        """How compacted the zone is, 0 to 1."""
         # Stand-in for an intelligent-compaction roller's coverage map: 95 % once every
         # loose lift in the zone has been rolled, falling linearly to 85 % with unrolled area.
         mk = self.mask(zone)
@@ -237,35 +269,48 @@ class Sim(Context):
         return 0.95 - 0.10 * frac
 
     def age(self, probe: str) -> float:
+        """Seconds since the last survey (0 in open loop, which never looks again)."""
         return 0.0 if self.open_loop else (self.t - self.last_probe) * 60.0
 
     def proximity(self, a: str, b: str) -> float:
+        """Distance in metres between people and machines."""
         # Scripted: the only people on site are the event's visitor.
         return self.ev.person_distance_m if in_window(self.t, self.ev.person) else float("inf")
 
     def weather(self, kind: str) -> float:
+        """Rain rate in metres per second during the scripted shower, otherwise 0."""
         return self.ev.rain_m_per_s if kind == "rain" and in_window(self.t, self.ev.rain) else 0.0
 
     def progress(self, task: str) -> float:
+        """1 once the task is done, otherwise 0 (the reference planner does not estimate part-way progress)."""
         return 1.0 if self.done_at[task] is not None else 0.0
 
     def done(self, task: str) -> bool:
+        """Whether the task's `until` condition has held."""
         return self.done_at[task] is not None
 
     def deviation(self) -> float:
+        """How far the last survey was from the planner's prediction (95th percentile over the cells worked since the
+        survey before), in metres. Large values mean the soil is not behaving as assumed.
+        """
         return self.last_dev * self.u
 
     def elapsed(self) -> float:
+        """Seconds since the job started."""
         return self.t * 60.0
 
     # -- surveys and replanning -----------------------------------------
     def probe(self) -> None:
+        """Take a survey if one is due: the true ground plus the probe's measurement noise. Skipped during the
+        scripted outage, and after the first survey in open loop.
+        """
         if not self.m.probes:
             return
         p = next(iter(self.m.probes.values()))
         if self.has_survey and (self.open_loop or in_window(self.t, self.ev.probe_outage)
                                 or self.t - self.last_probe < p["rate"].to("min") - 1e-9):
             return
+        # A survey is the true ground plus independent noise in every cell.
         sigma = p["accuracy"].to(self.unit) / 2   # accuracy is read as a 2-sigma (95 %) bound
         meas = self.z + self.rng.normal(0, sigma, self.z.shape)
         self.emit(wire.topic(self.site_name, None, "terrain"),
@@ -298,12 +343,16 @@ class Sim(Context):
         notes = []
         if reason is None and self.prev_meas is not None:
             n_min = self.cfg.min_calibration_cells
+            # Swell is learned where fill was placed and nothing else happened: the ground rose by (loose volume
+            # placed), so measured rise over expected rise corrects the estimate.
             only_dep = self.touched_dep & ~self.touched_comp & ~self.touched_other
             expected = self.dep_pred[only_dep].sum()
             if only_dep.sum() > n_min and expected > 1e-9:
                 rise = (self.meas - self.prev_meas)[only_dep].sum()
                 self.est_swell = float(np.clip(self.est_swell * rise / expected, 0.9, 1.8))
                 notes.append(f"swell now {self.est_swell:.2f}")
+            # Compaction is learned the same way, where rolling was the only work: the drop over the loose thickness
+            # rolled.
             only_comp = self.touched_comp & ~self.touched_dep & ~self.touched_other
             rolled = self.loose_rolled_pred[only_comp].sum()
             if only_comp.sum() > n_min and rolled > 1e-9:
@@ -318,6 +367,12 @@ class Sim(Context):
 
     # -- rules -----------------------------------------------------------
     def apply_rules(self) -> dict[str, Any]:
+        """Evaluate every rule and return what they demand this cycle.
+
+        The result has `stop` (everything halts, passes in flight included), `hold` (no new orders), `paused` (task
+        names that get no new passes) and `slow` (a speed limit). A rule turning on or off is logged and, for stop
+        and hold, sent to the machines it targets.
+        """
         eff: dict[str, Any] = {"stop": False, "hold": False, "paused": set(), "slow": None}
         # Built-in hold (spec, Safety model): stale probe data blocks new orders, rule or no rule.
         stale = any(self.age(n) > p["stale_after"].si for n, p in self.m.probes.items())
@@ -351,6 +406,7 @@ class Sim(Context):
         return eff
 
     def targets(self, tgt: dict | None) -> list[str]:
+        """The machine names an action's target stands for: all of them, one class, or those listed."""
         tgt = tgt or {}
         if tgt.get("all"):
             return list(self.machines)
@@ -360,6 +416,9 @@ class Sim(Context):
 
     # -- tasks -----------------------------------------------------------
     def eligible(self, name: str, paused: set[str]) -> bool:
+        """Whether a task may be given work now: not done, not paused, and everything it comes `after` has started or
+        finished as required.
+        """
         if self.done_at[name] is not None or name in paused:
             return False
         for dep in self.m.tasks[name].get("after", []):
@@ -369,6 +428,9 @@ class Sim(Context):
         return True
 
     def fits(self, m: Machine, name: str) -> bool:
+        """Whether a machine may do a task: it is the one named, or of the class named, or has the capability the
+        operation needs.
+        """
         by = self.m.tasks[name].get("by") or {}
         if by.get("machine"):
             return bool(by["machine"] == m.name)
@@ -390,6 +452,9 @@ class Sim(Context):
 
     # -- planning one pass -----------------------------------------------
     def _windows(self, mk: Mask, width: float, seg: float) -> list[Window]:
+        """Candidate work windows over a zone: strips one tool-width wide and one push long, stepped half a push at a
+        time along the strip so the best spot is not missed.
+        """
         wr, wc = max(1, round(width / self.cell)), max(1, round(seg / self.cell))
         rows, cols = np.flatnonzero(mk.any(1)), np.flatnonzero(mk.any(0))
         if rows.size == 0:
@@ -427,9 +492,24 @@ class Sim(Context):
         return idx[keep], amt[keep]
 
     def _zone_lift(self, zone: str) -> float:
+        """The thickness of one layer of fill in a zone, in site units (8 inches unless the program says otherwise)."""
         return float((self.m.zones[zone].get("lift") or Quantity(8, "in")).to(self.unit))
 
     def plan_pass(self, m: Machine, name: str, speed_cap: Quantity | None) -> bool:
+        """Plan one pass of a task for a machine and issue it. Returns False when there is nothing useful to do.
+
+        What a pass is depends on the operation:
+
+        - cut: shave the highest remaining strip, at most `max_cut` deep, and place the spoil in the task's
+          destinations in order (a fill zone, lowest cells first, or a stockpile).
+        - fill / spread: bring one load from a stockpile and spread it one lift thick where the zone is lowest.
+        - compact: roll a strip where loose fill has landed.
+        - finish: trim a strip toward design by a small step, cutting the highs and filling the lows.
+
+        Each pass is planned twice over: what the planner *expects* (using its estimated soil factors) and what
+        will *truly* happen (using the real ones, plus blade error). The difference is what the next survey
+        reveals.
+        """
         t = self.m.tasks[name]
         op, zone = t["op"], t.get("zone")
         mk = self.mask(zone) if zone else np.zeros((self.ny, self.nx), bool)
@@ -449,11 +529,15 @@ class Sim(Context):
                 return False
             max_cut = t["max_cut"].to(self.unit) if t.get("max_cut") else 0.5 * FT / self.u
             sub = np.where(mk[w] & (res[w] > thr), np.clip(res[w], 0, max_cut), 0)
+            # What the blade really takes: the planned depth with a random relative error per cell.
             d_true = sub * np.clip(1 + self.rng.normal(0, self.soil.cut_error, sub.shape), 0, None)
             widx = self._window_idx(w)
             parts.append((widx, -d_true.ravel(), -sub.ravel(), np.zeros(widx.size), np.zeros(widx.size)))
             bank_pred, bank_true = sub.sum() * self.area, d_true.sum() * self.area
             self.cut_bank += bank_true
+            # Dug soil takes more room than it did in the ground. The planner expects `est_swell` times the bank
+            # volume; the truth is the real swell of what was really cut. `scale` converts planned loose amounts to
+            # true ones.
             loose_pred, scale = bank_pred * self.est_swell, (bank_true * self.soil.swell) / max(
                 bank_pred * self.est_swell, 1e-12)
             centre: tuple[float, float] | None = None
@@ -496,6 +580,7 @@ class Sim(Context):
             src = next((s for s in t.get("source") or [] if self.stock.get(s, 0) > 0), None)
             if src is None:
                 return False
+            # One load: what the machine carries per trip, in bank (in-the-ground) volume.
             load_bank = min(self.stock[src], 0.5 * m.width * seg / self.est_swell)
             idx, amt = self._place(zone, lift, load_bank * self.est_swell)
             if not idx.size:
@@ -562,16 +647,24 @@ class Sim(Context):
         return True
 
     def _window_idx(self, w: Window) -> NDArray[np.intp]:
+        """The flat cell indices of a window, row by row."""
         r = np.arange(w[0].start, w[0].stop)
         c = np.arange(w[1].start, w[1].stop)
         return (r[:, None] * self.nx + c[None, :]).ravel()
 
     def _centre(self, idx: NDArray[np.intp]) -> tuple[float, float]:
+        """The mean position of a set of cells, in site coordinates."""
         j, i = np.divmod(idx, self.nx)
         return float(self.xs[i].mean()), float(self.ys[j].mean())
 
     def _issue(self, m: Machine, name: str, op: str, w: Window | None, parts: list, speed: float,
                dist: float, limits: dict, deposit_msg: dict | None, target: dict | None = None) -> None:
+        """Commit a planned pass: reserve its effect in the plan, mark the machine busy for the time the pass takes,
+        and send the order.
+
+        `parts` are (cells, true height change, predicted height change, true loose change, predicted loose change)
+        pieces; `dist` is extra travel (hauling) in site units.
+        """
         idx = np.concatenate([p[0] for p in parts]).astype(np.intp)
         cat = [np.concatenate([p[k] for p in parts]).astype(float) for k in range(1, 5)]
         ps = Pass(m.name, name, op, w, idx, *cat)
@@ -606,6 +699,7 @@ class Sim(Context):
                 "volume": round(float(amt.sum() * self.area) * self.u ** 3, 4)}
 
     def _window_poly(self, w: Window) -> list[list[float]]:
+        """A window as a four-corner polygon in site coordinates, for the order message."""
         x0, x1 = self.x0 + w[1].start * self.cell, self.x0 + w[1].stop * self.cell
         y0, y1 = self.y0 + w[0].start * self.cell, self.y0 + w[0].stop * self.cell
         return [[round(float(x), 2), round(float(y), 2)] for x, y in ((x0, y0), (x1, y0), (x1, y1), (x0, y1))]
@@ -649,6 +743,7 @@ class Sim(Context):
         return self.report()
 
     def _loop(self) -> None:
+        """The main loop: plan, advance the clock by `dt`, repeat until every task is done or time runs out."""
         self.probe()
         self.check_done()
         while self.t < self.max_minutes:
@@ -703,6 +798,9 @@ class Sim(Context):
         return float(self.ledger - (self.z - self.z_start).sum() * self.area)
 
     def report(self) -> dict[str, Any]:
+        """The result of a run: time taken, passes per task and machine, volumes moved, surveys and replans, the soil
+        factors learned, and how close the finish zone ended up, both in truth and as the program saw it.
+        """
         yd3 = (3 * FT / self.u) ** 3
         finish = [n for n, z in self.m.zones.items() if z.get("role") == "finish"]
         zone = finish[-1] if finish else next(iter(self.m.zones))
@@ -712,6 +810,7 @@ class Sim(Context):
         seen_r = (self.checked_surface() - self.design)[mk]
 
         def stats(r: Grid) -> dict[str, float]:
+            """Summary of a set of residuals: 95th percentile of |error|, mean error, and share within tolerance."""
             return {"p95_abs": round(float(np.percentile(np.abs(r), 95)), 4),
                     "mean": round(float(r.mean()), 4),
                     "within_tolerance_pct": round(float((np.abs(r) <= tol).mean() * 100), 2)}
@@ -738,6 +837,7 @@ class Sim(Context):
         }
 
     def plot(self, path: str, title: str = "") -> None:
+        """Save a before-and-after picture of height minus design (needs matplotlib)."""
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
@@ -758,5 +858,6 @@ class Sim(Context):
 
 
 def _overlap(a: Window, b: Window) -> bool:
+    """Whether two windows share any cell."""
     return (a[0].start < b[0].stop and b[0].start < a[0].stop
             and a[1].start < b[1].stop and b[1].start < a[1].stop)

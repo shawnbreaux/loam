@@ -29,13 +29,20 @@ from . import ast as A
 from .lexer import LoamSyntaxError, Token, tokenize
 from .units import Quantity, UnitError, lookup
 
+# The eight kinds of declaration, the statement keywords whose argument is a condition, and the comparison operators.
 KINDS = {"site", "probe", "machine", "zone", "stockpile", "task", "rule", "replan"}
 EXPR_KEYS = {"when", "until"}
 CMP_OPS = {"<", "<=", ">", ">=", "==", "!="}
 
 
 class Parser:
+    """Turns the token list into a Program, one method per grammar rule above.
+
+    Each method consumes the tokens of its rule and returns the node it built; `self.i` is the next token to read.
+    Nothing is looked up or type-checked here: a name is just a name until the checker runs.
+    """
     def __init__(self, text: str, src: str = "<input>"):
+        """Tokenize `text`; `src` is the file name for error messages."""
         self.src = src
         self.toks = tokenize(text, src)
         self.i = 0
@@ -44,16 +51,22 @@ class Parser:
     # -- token helpers ---------------------------------------------------
     @property
     def tok(self) -> Token:
+        """The token being looked at."""
         return self.toks[self.i]
 
     def peek(self, k: int = 1) -> Token:
+        """The token `k` places ahead, without consuming anything (the last token, EOF, if that is past the end)."""
         return self.toks[min(self.i + k, len(self.toks) - 1)]
 
     def err(self, msg: str, tok: Token | None = None) -> LoamSyntaxError:
+        """A syntax error at the current token, or at `tok`."""
         t = tok or self.tok
         return LoamSyntaxError(msg, t.line, t.col, self.src)
 
     def advance(self) -> Token:
+        """Consume the current token and return it. Inside brackets, line ends that follow are skipped, so lists and
+        conditions can span lines.
+        """
         t = self.tok
         self.i += 1
         if self.depth > 0:
@@ -61,27 +74,33 @@ class Parser:
         return t
 
     def skip_nl(self) -> None:
+        """Skip blank lines."""
         while self.tok.kind == "NL":
             self.i += 1
 
     def is_sym(self, s: str) -> bool:
+        """Whether the current token is the symbol `s`."""
         return self.tok.kind == "SYM" and self.tok.text == s
 
     def is_kw(self, s: str) -> bool:
+        """Whether the current token is the word `s`."""
         return self.tok.kind == "IDENT" and self.tok.text == s
 
     def expect_sym(self, s: str) -> Token:
+        """Consume the symbol `s`, or fail saying what was found instead."""
         if not self.is_sym(s):
             raise self.err(f"expected '{s}', found {self.describe(self.tok)}")
         return self.advance()
 
     def expect_ident(self, what: str = "name") -> Token:
+        """Consume a name, or fail; `what` describes what was wanted, for the message."""
         if self.tok.kind != "IDENT":
             raise self.err(f"expected {what}, found {self.describe(self.tok)}")
         return self.advance()
 
     @staticmethod
     def describe(t: Token) -> str:
+        """A token as it should appear in an error message."""
         if t.kind == "NL":
             return "end of line"
         if t.kind == "EOF":
@@ -89,14 +108,17 @@ class Parser:
         return f"'{t.text}'"
 
     def pos(self, t: Token | None = None) -> A.Pos:
+        """The source position of a token (the current one by default)."""
         t = t or self.tok
         return A.Pos(t.line, t.col)
 
     def at_stmt_end(self) -> bool:
+        """Whether the statement is over: a line end, `;`, the closing `}` or the end of the file."""
         return self.tok.kind in ("NL", "EOF") or self.is_sym(";") or self.is_sym("}")
 
     # -- program ---------------------------------------------------------
     def parse(self) -> A.Program:
+        """The whole program: the `loam <version>` header, then declarations until the end of the file."""
         self.skip_nl()
         if not self.is_kw("loam"):
             raise self.err("a Loam program must start with 'loam <version>', e.g. 'loam 0.0.1'")
@@ -116,6 +138,7 @@ class Parser:
         return prog
 
     def decl(self) -> A.Decl:
+        """One `kind name { statements }` block."""
         t = self.tok
         if t.kind != "IDENT" or t.text not in KINDS:
             raise self.err(f"expected a declaration ({', '.join(sorted(KINDS))}), found {self.describe(t)}")
@@ -137,6 +160,11 @@ class Parser:
         return A.Decl(t.text, name, stmts, self.pos(t))
 
     def stmt(self) -> A.Stmt:
+        """One statement: a keyword and its arguments.
+
+        `when` and `until` take a condition (an expression). `area where <condition>` defines a zone by a condition on
+        the ground. Everything else takes a run of simple values up to the end of the line.
+        """
         kt = self.expect_ident("a field name")
         key = kt.text
         args: list = []
@@ -164,6 +192,7 @@ class Parser:
             return "%"
         if t.kind != "IDENT":
             return None
+        # Try the longer unit first, so `in/h` is one unit and not `in` followed by a division.
         # compound a/b
         if self.peek().kind == "SYM" and self.peek().text == "/" and self.peek(2).kind == "IDENT":
             cand = f"{t.text}/{self.peek(2).text}"
@@ -182,6 +211,7 @@ class Parser:
         return t.text
 
     def number(self, neg: bool = False) -> A.Num | A.Qty:
+        """A number, with its unit if one follows (`0.3 ft` is one quantity; `4` alone is a plain number)."""
         t = self.advance()
         v = float(t.text)
         if neg:
@@ -192,6 +222,7 @@ class Parser:
         return A.Num(v, self.pos(t))
 
     def atom(self):
+        """One simple value: a quantity, number, string, name, list, point or `-> target`."""
         t = self.tok
         if t.kind == "NUM":
             return self.number()
@@ -222,6 +253,9 @@ class Parser:
         raise self.err(f"unexpected {self.describe(t)}")
 
     def list_lit(self, item):
+        """A `[a, b, c]` list. `item` parses one element, so lists work both in statements and in conditions. A trailing
+        comma is allowed.
+        """
         t = self.tok
         self.depth += 1
         self.advance()
@@ -240,6 +274,7 @@ class Parser:
         return A.ListLit(items, self.pos(t))
 
     def signed_num(self) -> float:
+        """A coordinate: a number, possibly negative."""
         neg = False
         if self.is_sym("-"):
             neg = True
@@ -250,6 +285,7 @@ class Parser:
         return -v if neg else v
 
     def point(self) -> A.Point:
+        """An `(x, y)` coordinate pair."""
         t = self.tok
         self.depth += 1
         self.advance()
@@ -262,9 +298,15 @@ class Parser:
 
     # -- expressions -----------------------------------------------------
     def expr(self):
+        """A condition or arithmetic expression.
+
+        The methods below are layered from loosest to tightest binding: or, and, not, comparison, + -, * /,
+        unary minus, calls and attributes.
+        """
         return self.or_()
 
     def or_(self):
+        """`a or b or ...`"""
         left = self.and_()
         while self.is_kw("or"):
             t = self.advance()
@@ -272,6 +314,7 @@ class Parser:
         return left
 
     def and_(self):
+        """`a and b and ...`"""
         left = self.not_()
         while self.is_kw("and"):
             t = self.advance()
@@ -279,12 +322,14 @@ class Parser:
         return left
 
     def not_(self):
+        """`not a`"""
         if self.is_kw("not"):
             t = self.advance()
             return A.Not(self.not_(), self.pos(t))
         return self.cmp()
 
     def cmp(self):
+        """One comparison. `a < b < c` is refused rather than guessed at: write `a < b and b < c`."""
         left = self.sum()
         if self.tok.kind == "SYM" and self.tok.text in CMP_OPS:
             t = self.advance()
@@ -294,6 +339,7 @@ class Parser:
         return left
 
     def sum(self):
+        """Addition and subtraction, left to right."""
         left = self.prod()
         while self.is_sym("+") or self.is_sym("-"):
             t = self.advance()
@@ -301,6 +347,7 @@ class Parser:
         return left
 
     def prod(self):
+        """Multiplication and division, left to right."""
         left = self.unary()
         while self.is_sym("*") or self.is_sym("/"):
             t = self.advance()
@@ -308,6 +355,7 @@ class Parser:
         return left
 
     def unary(self):
+        """A leading minus: a negative number, or `0 - x` for anything else."""
         if self.is_sym("-"):
             t = self.advance()
             if self.tok.kind == "NUM":
@@ -316,6 +364,7 @@ class Parser:
         return self.postfix()
 
     def postfix(self):
+        """A value followed by any number of calls `f(...)` and attributes `.name`, as in `residual(pad).high`."""
         node = self.primary()
         while True:
             if self.is_sym("(") and isinstance(node, A.Ident):
@@ -339,6 +388,7 @@ class Parser:
                 return node
 
     def primary(self):
+        """The innermost value: a quantity, number, string, name, list or a parenthesised expression."""
         t = self.tok
         if t.kind == "NUM":
             return self.number()
@@ -363,9 +413,11 @@ class Parser:
 
 
 def parse(text: str, src: str = "<input>") -> A.Program:
+    """Parse Loam source text into a Program. Raises LoamSyntaxError."""
     return Parser(text, src).parse()
 
 
 def parse_file(path: str) -> A.Program:
+    """Parse a `.loam` file."""
     with open(path, encoding="utf-8") as f:
         return parse(f.read(), path)

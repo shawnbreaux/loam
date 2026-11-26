@@ -22,15 +22,23 @@ import time
 
 import numpy as np
 
+# Version of the message format, carried in every message. It changes separately from the language and the package.
 WIRE_VERSION = "0.0.1"
 
 
 def topic(site: str, machine: str | None, kind: str) -> str:
+    """The MQTT topic for one kind of message: per machine when `machine` is given, site-wide otherwise."""
     return f"loam/v0/{site}/{machine}/{kind}" if machine else f"loam/v0/{site}/{kind}"
 
 
 def header(seq: int, ts: float | None = None) -> dict:
+    """The fields every message starts with: protocol version, a sequence number and a UTC timestamp.
+
+    `ts` is seconds since 1970 (0 if not given). Timestamps carry milliseconds when they have any, because a
+    simulated site runs faster than real time and events a second apart in site time can be milliseconds apart.
+    """
     ts = ts if ts is not None else 0.0
+    # Round to whole milliseconds, carrying into the seconds when rounding reaches 1000.
     ms = round((ts - int(ts)) * 1000)
     sec = int(ts) + ms // 1000
     stamp = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(sec))
@@ -63,6 +71,9 @@ def order(site: str, machine: str, seq: int, order_id: str, update_id: int, task
 
 
 def instant_action(site: str, machine: str, seq: int, action: str, reason: str, ts: float = 0) -> dict:
+    """An order to one machine that takes effect at once: `stop`, `hold`, `resume` or `slow`, with the reason for the
+    log.
+    """
     assert action in ("stop", "hold", "resume", "slow")
     msg = header(seq, ts)
     msg.update({"site": site, "machine": machine, "action": action, "reason": reason})
@@ -71,6 +82,12 @@ def instant_action(site: str, machine: str, seq: int, action: str, reason: str, 
 
 def state(site: str, machine: str, seq: int, order_id: str | None, x: float, y: float, heading: float,
           driving: bool, progress: float, safety: str = "ok", errors: list | None = None, ts: float = 0) -> dict:
+    """A machine's report: where it is, what it is doing and whether it is safe to work.
+
+    `pose` is in site coordinates with heading in radians (0 along +x, counter-clockwise). `progress` is 0 to 1 for
+    the current order and reaches 1 only when the pass is finished. `safetyState` is `ok`, `degraded` (keep going
+    carefully is not allowed: the controller holds the machine) or `stopped`.
+    """
     msg = header(seq, ts)
     msg.update({"site": site, "machine": machine, "orderId": order_id,
                 "pose": {"x": x, "y": y, "heading": heading}, "driving": driving,
@@ -79,6 +96,9 @@ def state(site: str, machine: str, seq: int, order_id: str | None, x: float, y: 
 
 
 def connection(site: str, machine: str, seq: int, state: str, ts: float = 0) -> dict:
+    """Whether a machine is reachable. Machines publish `online` retained and register `connectionBroken` as their
+    MQTT last will, so the broker announces a machine that drops off the network.
+    """
     assert state in ("online", "offline", "connectionBroken")
     msg = header(seq, ts)
     msg.update({"site": site, "machine": machine, "connectionState": state})
@@ -106,12 +126,18 @@ def encode_heights(z: np.ndarray) -> str:
 
 
 def decode_heights(data: str, shape: tuple[int, int]) -> np.ndarray:
+    """The inverse of `encode_heights`: a `[rows, columns]` float32 grid from its base64 text."""
     return np.frombuffer(base64.b64decode(data), dtype="<f4").reshape(shape)
 
 
 def terrain(site: str, probe: str, seq: int, origin: tuple, cell: float, shape: tuple,
             encoding: str = "float32-le-base64", data: str | None = None, sigma: float | None = None,
             ts: float = 0) -> dict:
+    """A survey of the ground from a probe: a height grid on the site grid.
+
+    `origin` is the corner of the grid in site coordinates, `cell` the cell size and `shape` (rows, columns), all
+    in site units; `sigma` is the probe's stated accuracy. `data` is the grid encoded as named by `encoding`.
+    """
     msg = header(seq, ts)
     msg.update({"site": site, "probe": probe, "origin": list(origin), "cell": cell,
                 "shape": list(shape), "encoding": encoding, "sigma": sigma, "data": data})
@@ -126,6 +152,7 @@ def detection(site: str, sensor: str, seq: int, kind: str, x: float, y: float, t
 
 
 def weather(site: str, sensor: str, seq: int, rain_m_per_s: float = 0.0, ts: float = 0) -> dict:
+    """A weather reading; `rain` is a rate in metres per second."""
     msg = header(seq, ts)
     msg.update({"site": site, "sensor": sensor, "rain": rain_m_per_s})
     return msg

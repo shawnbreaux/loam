@@ -51,6 +51,9 @@ def _project(path, design_offset=0.0, eg_margin=10.0, names=("EG", "FG")):
 
 
 def test_plan_writes_a_checked_program(tmp_path):
+    """`loam plan` turns a LandXML with an existing and a design surface into a Loam program that checks clean and,
+    simulated, finishes the job within tolerance.
+    """
     _project(tmp_path / "job.xml")
     r = plan(str(tmp_path / "job.xml"), str(tmp_path / "job.loam"))
     assert r["design"] == "FG" and r["existing"] == "EG" and r["units"] == "ft"
@@ -66,6 +69,9 @@ def test_plan_writes_a_checked_program(tmp_path):
 
 
 def test_plan_fleet_names_and_errors(tmp_path, capsys):
+    """Surfaces are recognised by name ("Existing Ground", "Proposed Grade"), a fleet file supplies the machines, and
+    unclear or impossible inputs are refused with a reason.
+    """
     _project(tmp_path / "job.xml", names=("Existing Ground", "Proposed Grade"))
     (tmp_path / "fleet.loam").write_text(
         "probe drone { kind tethered_uav; sensor lidar; rate 5 min; accuracy 0.05 ft; coverage site }\n"
@@ -85,6 +91,7 @@ def test_plan_fleet_names_and_errors(tmp_path, capsys):
 
 
 def test_tin_boundary_and_simplify():
+    """The outline of a TIN is found from its edges, and a straight-sided outline simplifies to its four corners."""
     pts, faces = grid_tin(np.arange(0.0, 5), np.arange(0.0, 4), np.zeros((4, 5)))
     ring = tin_boundary(pts, faces)
     assert len(ring) == 14
@@ -93,6 +100,7 @@ def test_tin_boundary_and_simplify():
 
 # -- wire ----------------------------------------------------------------------------------
 def test_wire_timestamps_keep_milliseconds():
+    """Timestamps are written to the millisecond when there are any, and read back to the same instant."""
     h = wire.header(1, 1796108400.25)
     assert h["timestamp"] == "2026-12-01T07:00:00.250Z"
     assert wire.parse_ts(h["timestamp"]) == pytest.approx(1796108400.25)
@@ -105,20 +113,29 @@ class _Replay(Sim):
     """The reference simulator, with every order also sent to the world."""
 
     def __init__(self, *a, **k):
+        """A simulator plus a World on the same site."""
         super().__init__(*a, **k)
         self.w = World(self.m, EXAMPLES)
         self.orders = {}
 
     def emit(self, topic, msg):
+        """Keep each machine's latest order instead of writing it out."""
         if topic.endswith("/order"):
             self.orders[msg["machine"]] = msg
 
     def land(self, ps):
+        """When a pass lands in the simulator, give the same order to the world."""
         super().land(ps)
         self.w.apply(self.orders[ps.machine])
 
 
 def test_world_moves_the_earth_the_orders_describe():
+    """The world's physics, driven only by the order messages, ends up with the same ground as the reference simulator
+    (within blade noise).
+
+    This shows an order carries everything a machine needs: nothing is passed on the side. A repeated report of the
+    same order moves no earth twice.
+    """
     s = _Replay(load(EXAMPLE), EXAMPLES, events=Events.none(), log=lambda x: None)
     s.run()
     d = np.abs(s.w.z - s.z)              # independent blade-error draws, so equal only within that noise
@@ -131,14 +148,23 @@ def test_world_moves_the_earth_the_orders_describe():
 
 # -- controller loopback: the real controller, the real world, no broker ---------------------------
 class _FakeBus:
+    """A bus that only keeps what is published, so a test can play the machines."""
     def __init__(self):
+        """Start with nothing published."""
         self.out = []
 
     def pub(self, topic, msg, **k):
+        """Keep the message."""
         self.out.append((topic, msg))
 
 
 def loopback(path, base, pass_min=3.0, scan_lag=0.0, max_min=1500.0):
+    """Run the real controller against the real world physics in one process, stepping time by hand.
+
+    Every pass takes `pass_min` site minutes, after which the world moves the earth and the machine reports done.
+    The probe scans at the program's rate with its stated accuracy; `scan_lag` stamps each scan that many minutes
+    in the past. Returns the controller, the world, the log lines and whether the job finished.
+    """
     m = load(path)
     bus, clock, logs = _FakeBus(), Clock(0, 60, 1796108400.0), []
     c = Controller(m, base, bus, clock, log=logs.append)
@@ -178,6 +204,9 @@ def loopback(path, base, pass_min=3.0, scan_lag=0.0, max_min=1500.0):
 
 
 def test_controller_closes_the_loop_against_the_world():
+    """The controller, seeing only surveys and machine states, finishes the example within tolerance on the true
+    ground and learns the soil's real compaction factor (0.70; it starts believing 0.80).
+    """
     c, w, _, done = loopback(EXAMPLE, EXAMPLES)
     assert done
     t = w.truth()
@@ -222,6 +251,9 @@ def test_controller_withdraws_a_pass_the_machine_cannot_run():
 
 
 def test_controller_withdraws_a_pass_from_a_lost_machine():
+    """A machine whose link breaks loses its pass at once and gets no more orders. Also here: the site e-stop stops
+    everything, and a detected person's distance is reported in metres.
+    """
     m = load(EXAMPLE)
     c = Controller(m, EXAMPLES, _FakeBus(), Clock(0, 60, 1796108400.0), log=lambda x: None)
     for n in c.machines:
@@ -246,6 +278,8 @@ def test_controller_withdraws_a_pass_from_a_lost_machine():
 
 # -- monitor --------------------------------------------------------------------------------------
 def test_monitor_frames_and_replay_page(tmp_path):
+    """The dashboard turns Wire messages into frames and events, and a recording becomes a self-contained replay page.
+    """
     m = load(EXAMPLE)
     fr = Frames(m, EXAMPLES)
     s = Sim(m, EXAMPLES, events=Events.none(), log=lambda x: None)
@@ -267,6 +301,9 @@ def test_monitor_frames_and_replay_page(tmp_path):
 
 
 def test_monitor_prometheus_metrics():
+    """The /metrics text is valid Prometheus, read back here with the official parser, with correct values and with
+    awkward label characters escaped.
+    """
     m = load(EXAMPLE)
     fr = Frames(m, EXAMPLES)
     design = fr.design.copy()
@@ -284,6 +321,7 @@ def test_monitor_prometheus_metrics():
     val = {(x.name, tuple(sorted(x.labels.items()))): x.value for f in fams.values() for x in f.samples}
 
     def get(name, **lab):
+        """One sample's value, by metric name and labels."""
         return val[(name, tuple(sorted({"site": "pad_north", **lab}.items())))]
     assert get("loam_machine_progress", machine='dz"1') == 0.25               # label escaping round-trips
     assert get("loam_machine_safety", machine='dz"1', state="stopped") == 1
@@ -298,6 +336,7 @@ def test_monitor_prometheus_metrics():
 
 # -- the real thing: a broker and one process per role ------------------------------------------------
 def _free_port():
+    """A TCP port that is free right now."""
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
@@ -307,6 +346,13 @@ def _free_port():
 @pytest.mark.skipif(shutil.which("mosquitto") is None and not os.path.exists("/usr/sbin/mosquitto"),
                     reason="needs the mosquitto broker")
 def test_site_over_mqtt_with_faults(tmp_path):
+    """The whole system as on a site: a broker, and the world, probe, each machine and the controller as separate
+    processes.
+
+    The fault script has a person walk up to a machine, a machine lose RTK, a link drop, the e-stop pressed and
+    released, and a machine's computer die. The job must still finish within tolerance, with every event in the log
+    and no machine moving between e-stop release and the supervisor's resume.
+    """
     port = _free_port()
     broker = subprocess.Popen([shutil.which("mosquitto") or "/usr/sbin/mosquitto", "-p", str(port)],
                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -348,6 +394,9 @@ def test_site_over_mqtt_with_faults(tmp_path):
 
 
 def test_physics_dozer_follows_its_path():
+    """Under rigid-body physics a dozer follows an L-shaped path over the example's real ground: it reaches the end,
+    stays within 3 ft of the line and does not tip.
+    """
     pytest.importorskip("pybullet")
     from loam.grid import SiteGrid
     from loam.runtime.physics import Body, follow

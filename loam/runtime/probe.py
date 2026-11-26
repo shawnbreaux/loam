@@ -17,6 +17,12 @@ from .bus import Bus, tolerant, wait_clock
 
 
 def run_probe(model: Model, base_dir: str, broker: str, seed: int = 11) -> None:
+    """Run the simulated probe until the site ends.
+
+    On its survey interval it asks the world for the true ground (`sim/<site>/world/scan`), adds measurement noise
+    and publishes the result as a Loam Wire terrain message, stamped with the time the world took the scan. `seed`
+    fixes the noise.
+    """
     site = model.site["name"]
     name, p = next(iter(model.probes.items()))
     g = SiteGrid(model, base_dir)

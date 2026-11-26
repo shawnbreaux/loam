@@ -28,14 +28,37 @@ from ..checker import Model
 from ..sim import Events, Sim
 from .bus import Bus, Clock, tolerant
 
+# A machine not heard from for this long gets no new orders.
 STATE_TIMEOUT_S = 3.0
 ORDER_RETRY_MIN = 1.0     # after a machine reports it cannot run an order, before it is given another
 HELD_PASS_MIN = 30.0      # a pass whose machine has not been in a safe, working state for this long is withdrawn
 
 
 class Controller(Sim):
+    """The planner connected to a live site.
+
+    It inherits tasks, rules, replanning and the pass planner from the simulator (`Sim`) and replaces the
+    simulator's make-believe with messages: orders go out over Loam Wire, and surveys, machine states and sensor
+    readings come back.
+
+    `mstate` holds what is known of each machine:
+
+        conn          "online", "offline", "connectionBroken" or "unknown"
+        safety        the machine's last reported safetyState
+        seen          wall-clock time of its last state message
+        x, y          last reported position, site coordinates
+        order         the order it says it is running
+        progress      how far through it, 0 to 1
+        ts            site time of its newest state message, minutes
+        finished      site time at which it reported its pass complete
+        unsafe_since  site time since which it has not been "ok"
+        retry_at      no new order before this site time
+    """
     def __init__(self, model: Model, base_dir: str, bus: Bus, clock: Clock, record: str | None = None,
                  log=print, max_minutes: float = 48 * 60, dt: float = 0.25):
+        """`bus` and `clock` are already connected. `record`, if given, is a file that receives every message sent,
+        one JSON object per line.
+        """
         super().__init__(model, base_dir, events=Events.none(), log=log, max_minutes=max_minutes, dt=dt,
                          start_epoch=clock.epoch)
         self.bus, self.clock = bus, clock
@@ -59,17 +82,27 @@ class Controller(Sim):
 
     # -- outgoing -------------------------------------------------------------------------
     def emit(self, topic: str, msg: dict) -> None:
+        """Send one message (and write it to the record file, if there is one)."""
         if self.record is not None:
             self.record.write(json.dumps({"topic": topic, "payload": msg}) + "\n")
         self.bus.pub(topic, msg, qos=1)
 
     def _issue(self, m, name, op, w, parts, speed, dist, limits, deposit_msg, target=None) -> None:
+        """Send an order as the simulator would, but leave its finish time open: the pass is done when the machine
+        says so.
+        """
         super()._issue(m, name, op, w, parts, speed, dist, limits, deposit_msg, target)
         m.busy_until = math.inf                     # lands when the machine says so
         self.order_of[m.name] = f"{name}-{self.order_seq}"
 
     # -- incoming -------------------------------------------------------------------------
     def handle(self, topic: str, msg: dict) -> None:
+        """Take in one Loam Wire message.
+
+        Terrain is kept for `probe`. A machine's state updates what is known of it, completes its pass at progress
+        1.0, or abandons the pass if the machine reports `orderFailed`. A lost connection abandons the pass at
+        once. Detections, weather and the e-stop feed the program's rules.
+        """
         kind = topic.rsplit("/", 1)[-1]
         if kind == "terrain":
             self.terrain, self.terrain_since = msg, time.time()
@@ -88,6 +121,8 @@ class Controller(Sim):
                      order=msg.get("orderId"), progress=msg.get("progress", 0.0), ts=max(s["ts"], ts))
             if s["conn"] == "unknown":
                 s["conn"] = "online"
+            # Only a report about the order this controller is waiting for counts; a state left over from an earlier
+            # order must not complete or fail the current one.
             mine = n in self.inflight and msg.get("orderId") == self.order_of.get(n)
             failed = next((e for e in msg.get("errors", []) if e.get("code") == "orderFailed"), None)
             if mine and failed is not None:               # the machine cannot run it: do not wait for it
@@ -117,6 +152,9 @@ class Controller(Sim):
             self.estop = bool(msg["pressed"])
 
     def step(self) -> bool:
+        """One planning step. First withdraw any pass whose machine has been stopped or degraded for too long (not
+        during a site e-stop, which holds every machine on purpose).
+        """
         for n in list(self.inflight):
             since = self.mstate[n].get("unsafe_since")
             if since is not None and self.t - since > HELD_PASS_MIN and not self.estop:
@@ -129,6 +167,7 @@ class Controller(Sim):
         ps = self.inflight.pop(n, None)
         if ps is None:
             return
+        # Take the pass's expected change back out of the plan.
         np.add.at(self.plan_dz.ravel(), ps.idx, -ps.dz_pred)
         np.add.at(self.plan_dloose.ravel(), ps.idx, -ps.dloose_pred)
         self.machines[n].busy_until = self.t
@@ -137,19 +176,31 @@ class Controller(Sim):
         self.log(f"{n}: pass {self.order_of.get(n)} abandoned ({why}); the next survey shows what was done")
 
     def _minutes(self, stamp: str) -> float:
+        """A wire timestamp as site minutes since the start of the job."""
         return (wire.parse_ts(stamp) - self.clock.epoch) / 60.0
 
     def land(self, ps) -> None:
+        """Book a finished pass into the plan, and remember what it changed, in case a survey taken before it finished
+        arrives afterwards.
+        """
         u = np.unique(ps.idx)
         pred, pl = self.pred.ravel(), self.p_loose.ravel()
         b_pred, b_pl = pred[u].copy(), pl[u].copy()
         super().land(ps)
         fin = self.mstate[ps.machine]["finished"]
         self.recent.append((self.t if fin is None else fin, u, pred[u] - b_pred, pl[u] - b_pl))
+        # Bounded memory: an hour of passes, and never more than 256.
         self.recent = [r for r in self.recent if r[0] > self.t - 60.0][-256:]
 
     # -- the Context the program's conditions see --------------------------------------------
     def probe(self) -> None:
+        """Take in the newest survey, if one is waiting.
+
+        A scan shows the ground as it was when the scan was taken. Passes that finished after that moment are
+        already in the plan but not in the scan, so they are lifted out of the plan while the survey is compared
+        with it, and put back afterwards. Otherwise each would be counted twice, or read as an error in the soil
+        model.
+        """
         msg = self.terrain
         if msg is None:
             return
@@ -182,20 +233,28 @@ class Controller(Sim):
                 f.ravel()[u] |= v
 
     def proximity(self, a: str, b: str) -> float:
+        """The smallest distance between any detected person and any machine, in metres (infinite when nobody is
+        detected). The arguments are the two names in the program's `proximity(a, b)`.
+        """
         d = [math.hypot(px - s["x"], py - s["y"]) for px, py in self.people.values()
              for s in self.mstate.values() if s["x"] is not None]
         return min(d) * self.u if d else math.inf
 
     def weather(self, kind: str) -> float:
+        """The rain gauge's reading, in metres per second; other kinds of weather are not measured and read 0."""
         return self.rain if kind == "rain" else 0.0
 
     def apply_rules(self) -> dict[str, Any]:
+        """The program's rules, plus the site e-stop, which stops everything whatever the program says."""
         eff = super().apply_rules()
         if self.estop:
             eff["stop"] = True
         return eff
 
     def machine_ready(self, name: str) -> bool:
+        """May this machine be given an order? It must be online, heard from within 3 s, reporting "ok", not held by
+        an e-stop, and past any retry delay.
+        """
         s = self.mstate[name]
         fresh = time.time() - s["seen"] < STATE_TIMEOUT_S
         return s["conn"] == "online" and fresh and s["safety"] == "ok" and not self.estop \
@@ -203,6 +262,9 @@ class Controller(Sim):
 
     # -- reporting ---------------------------------------------------------------------------
     def status(self) -> dict:
+        """The site status message: tasks, machines, active rules, survey age and the measured score. The dashboard
+        and `loam status` show this.
+        """
         return {
             "t": round(self.t, 3),
             "tasks": {n: {"started": self.started[n], "done": self.done_at[n], "passes": self.task_passes[n]}
@@ -221,6 +283,7 @@ class Controller(Sim):
         }
 
     def _measured(self) -> dict:
+        """Per finish zone, the percentage of cells within tolerance according to the latest survey."""
         out = {}
         for n, z in self.m.zones.items():
             if z.get("role") == "finish" and self.grid.masks.get(n) is not None and self.has_survey:
@@ -230,6 +293,7 @@ class Controller(Sim):
         return out
 
     def report(self) -> dict[str, Any]:
+        """The final report, as the simulator's but without the things only a simulated world can know."""
         r = super().report()
         r.pop("true_ground", None)           # the controller cannot know the truth; the world reports it
         r.pop("ledger_error", None)
@@ -239,6 +303,12 @@ class Controller(Sim):
 
 def run_controller(model: Model, base_dir: str, broker: str, record: str | None = None,
                    max_minutes: float = 48 * 60, wait_for_clock: bool = True) -> dict:
+    """Run a site from its Loam program until every task is done or `max_minutes` pass, and return the report.
+
+    Each loop: take in the messages that have arrived, do one planning step, send the 1 Hz safety heartbeat that
+    machines must keep hearing, and publish the site status. `wait_for_clock=False` is for a real site, where site
+    time is simply the time of day.
+    """
     site = model.site["name"]
     bus = Bus(broker, f"loam-controller-{site}").start([f"loam/v0/{site}/#", f"sim/{site}/clock"])
     clock = Clock()
@@ -248,6 +318,7 @@ def run_controller(model: Model, base_dir: str, broker: str, record: str | None 
     logs: list[str] = []
 
     def log(s: str) -> None:
+        """Print a log line at once, and keep it for the report."""
         print(s, flush=True)
         logs.append(s)
     ctl = Controller(model, base_dir, bus, clock, record, log, max_minutes)
@@ -274,6 +345,7 @@ def run_controller(model: Model, base_dir: str, broker: str, record: str | None 
             if done or ctl.t >= max_minutes:
                 ctl.log("all tasks done" if done else "time limit reached")
                 break
+            # Sleep for what is left of one planning step (`dt` site minutes of wall time).
             time.sleep(max(0.002, clock.wall(ctl.dt) - (time.time() - now)))
         rep = ctl.report()
         rep["log"] = logs

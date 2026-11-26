@@ -32,21 +32,29 @@ from functools import lru_cache
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
+# Shorthand for an array of floats. Every conversion below accepts single numbers or arrays.
 F = NDArray[np.float64]
 
 
 def m_per_deg_lat(lat: float) -> float:
+    """Metres in one degree of latitude at this latitude, on the WGS84 ellipsoid (a standard series; millimetre
+    accuracy).
+    """
     r = math.radians(lat)
     return 111132.92 - 559.82 * math.cos(2 * r) + 1.175 * math.cos(4 * r) - 0.0023 * math.cos(6 * r)
 
 
 def m_per_deg_lon(lat: ArrayLike) -> F:
+    """Metres in one degree of longitude at this latitude, on the WGS84 ellipsoid. It shrinks toward the poles."""
     r = np.radians(np.asarray(lat, float))
     return 111412.84 * np.cos(r) - 93.5 * np.cos(3 * r) + 0.118 * np.cos(5 * r)
 
 
 @lru_cache(maxsize=16)
 def _transformer(src: str, dst: str):
+    """A pyproj transformer between two coordinate reference systems, built once and reused (they are slow to build).
+    `always_xy` fixes the axis order as easting/longitude first, whatever the CRS's own convention.
+    """
     try:
         from pyproj import Transformer
     except ImportError as e:
@@ -56,6 +64,12 @@ def _transformer(src: str, dst: str):
 
 @dataclass(frozen=True)
 class Frame:
+    """Where the site grid sits on the earth, and how to convert to and from it.
+
+    Three coordinate systems meet here: *site* coordinates (x, y in site units, as written in a program),
+    *projected* coordinates (easting, northing in a survey grid) and *WGS84* (latitude, longitude). See the module
+    description for how each is tied to site point (0, 0).
+    """
     unit_m: float                    # metres per site unit
     rotation_deg: float = 0.0        # bearing of site +y, clockwise from north
     lat0: float | None = None        # WGS84 of site (0, 0)
@@ -74,6 +88,7 @@ class Frame:
         return x * math.cos(t) + y * math.sin(t), -x * math.sin(t) + y * math.cos(t)
 
     def en_to_local(self, e: ArrayLike, n: ArrayLike) -> tuple[F, F]:
+        """Metres east and north of site (0, 0) to site coordinates: the inverse of `local_to_en`."""
         t = math.radians(self.rotation_deg)
         e, n = np.asarray(e, float), np.asarray(n, float)
         return (e * math.cos(t) - n * math.sin(t)) / self.unit_m, (e * math.sin(t) + n * math.cos(t)) / self.unit_m
@@ -85,20 +100,25 @@ class Frame:
 
     # -- WGS84 ------------------------------------------------------------------
     def wgs84_origin(self) -> tuple[float, float]:
+        """The latitude and longitude of site (0, 0); an error if the frame was built without them."""
         if self.lat0 is None or self.lon0 is None:
             raise ValueError("this needs the site origin in WGS84 (--origin LAT,LON)")
         return self.lat0, self.lon0
 
     def local_to_wgs84(self, x: ArrayLike, y: ArrayLike) -> tuple[F, F]:
+        """Site coordinates to (latitude, longitude) in degrees."""
         if self.crs:
             lon, lat = _transformer(self.crs, "EPSG:4326").transform(*self.local_to_projected(x, y))
             return np.asarray(lat, float), np.asarray(lon, float)
         lat0, lon0 = self.wgs84_origin()
         e, n = self.local_to_en(x, y)
+        # Latitude first, then longitude at that latitude, exactly as AgOpenGPS does, so the two agree to the last
+        # digit.
         lat = lat0 + n / m_per_deg_lat(lat0)
         return lat, lon0 + e / m_per_deg_lon(lat)
 
     def wgs84_to_local(self, lat: ArrayLike, lon: ArrayLike) -> tuple[F, F]:
+        """Latitude and longitude in degrees to site coordinates."""
         if self.crs:
             e, n = _transformer("EPSG:4326", self.crs).transform(np.asarray(lon, float), np.asarray(lat, float))
             return self.projected_to_local(e, n)
@@ -110,17 +130,21 @@ class Frame:
 
     # -- projected grids and heights ---------------------------------------------
     def projected_to_local(self, e: ArrayLike, n: ArrayLike) -> tuple[F, F]:
+        """Survey-grid easting and northing (in world units) to site coordinates."""
         return self.en_to_local((np.asarray(e, float) - self.e0) * self.world_m,
                                 (np.asarray(n, float) - self.n0) * self.world_m)
 
     def local_to_projected(self, x: ArrayLike, y: ArrayLike) -> tuple[F, F]:
+        """Site coordinates to survey-grid easting and northing (in world units)."""
         e, n = self.local_to_en(x, y)
         return self.e0 + e / self.world_m, self.n0 + n / self.world_m
 
     def height_to_local(self, z: ArrayLike) -> F:
+        """A height from survey data (world units) to site units, plus the frame's vertical offset."""
         return np.asarray(z, float) * self.world_m / self.unit_m + self.dz
 
     def height_to_world(self, z: ArrayLike) -> F:
+        """A site height back to the survey data's units and datum: the inverse of `height_to_local`."""
         return (np.asarray(z, float) - self.dz) * self.unit_m / self.world_m
 
     def reproject(self, e: ArrayLike, n: ArrayLike, z: ArrayLike, src: str | None) -> tuple[F, F, F]:

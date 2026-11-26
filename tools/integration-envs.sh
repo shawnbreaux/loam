@@ -9,15 +9,18 @@
 #   LOAM_CHRONO_PYTHON=$PREFIX/mm/envs/chrono/bin/python \
 #   LOAM_ROS_RUN="env MAMBA_ROOT_PREFIX=$PREFIX/mm $PREFIX/mm/bin/micromamba run -n ros" \
 #   LOAM_OPERA_WS=$PREFIX/opera_ws  pytest tests/test_chrono.py tests/test_opera.py
+# Stop at the first error, on any unset variable, and on a failure anywhere in a pipeline.
 set -euo pipefail
 PREFIX=${1:-$HOME/loam-envs}
 LOAM=$(cd "$(dirname "$0")/.." && pwd)
 export MAMBA_ROOT_PREFIX=$PREFIX/mm
 MM=$PREFIX/mm/bin/micromamba
 mkdir -p "$PREFIX/mm/bin" "$PREFIX/src" "$PREFIX/opera_ws/src"
+# micromamba: a single-file conda client. Downloaded once.
 [ -x "$MM" ] || { curl -fsSL -o "$MM" \
     https://github.com/mamba-org/micromamba-releases/releases/latest/download/micromamba-linux-64; chmod +x "$MM"; }
 
+# Two separate environments, because Chrono and ROS 2 pin different versions of shared libraries.
 "$MM" create -y -q -n chrono -c projectchrono -c conda-forge python=3.12 pychrono=10.0.0 numpy paho-mqtt pytest
 "$MM" create -y -q -n ros -c robostack-jazzy -c conda-forge python=3.12 \
     ros-jazzy-ros-base ros-jazzy-navigation2 ros-jazzy-nav2-regulated-pure-pursuit-controller \
@@ -25,8 +28,10 @@ mkdir -p "$PREFIX/mm/bin" "$PREFIX/src" "$PREFIX/opera_ws/src"
     ros-jazzy-robot-state-publisher ros-jazzy-rmw-cyclonedds-cpp \
     colcon-common-extensions ros-jazzy-ament-cmake ros-jazzy-rosidl-default-generators cmake make compilers \
     numpy paho-mqtt pytest
+# Loam itself, installed in place into both, so the tests run this checkout.
 for env in chrono ros; do "$MM" run -n $env pip install -q --no-deps -e "$LOAM"; done
 
+# OPERA's machine descriptions and messages from PWRI: fetched, linked into a workspace and built.
 for r in zx200_ros2 ic120_ros2 com3_ros; do
     [ -d "$PREFIX/src/$r" ] || git clone -q --depth 1 "https://github.com/pwri-opera/$r" "$PREFIX/src/$r"
 done

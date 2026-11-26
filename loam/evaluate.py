@@ -21,10 +21,14 @@ class Stat:
     """
 
     def __init__(self, r: np.ndarray):
+        """`r` is the residual of every cell in the zone: measured height minus design height, in metres. Cells with no
+        measurement (NaN) are left out; a zone with none at all counts as on grade.
+        """
         r = r[np.isfinite(r)]
         self.r = r if r.size else np.zeros(1)
 
     def get(self, attr: str = "p95") -> float:
+        """One statistic by name (see the class description), in metres."""
         r = self.r
         return {
             "p95": lambda: float(np.percentile(np.abs(r), 95)),
@@ -39,6 +43,18 @@ class Stat:
 class Context:
     """Interface the evaluator calls. Override in a simulator or a live runtime."""
 
+    # What each question means, and its units (all SI):
+    #   residual(zone)          measured minus design height of every cell in the zone, metres (+ is high)
+    #   tolerance(zone)         the zone's ± finish tolerance, metres
+    #   volume_remaining(zone)  material still to move to bring the zone to design, cubic metres
+    #   compaction(zone)        how compacted the zone's fill is, 0-1 (1 = fully compacted)
+    #   age(probe)              seconds since that probe's last survey
+    #   proximity(a, b)         smallest distance between any `a` and any `b` (people, machines), metres
+    #   weather(kind)           e.g. rain rate, metres per second
+    #   progress(task)          share of the task's work done, 0-1
+    #   done(task)              whether the task's `until` condition has held
+    #   deviation()             how far measured ground is from what the plan predicted, metres
+    #   elapsed()               seconds since the job started
     def residual(self, zone: str) -> np.ndarray: raise NotImplementedError
     def tolerance(self, zone: str) -> float: raise NotImplementedError
     def volume_remaining(self, zone: str) -> float: raise NotImplementedError
@@ -58,12 +74,18 @@ def in_tolerance(ctx: Context, zone: str) -> bool:
 
 
 def evaluate(node, ctx: Context):
+    """The value of a condition or expression right now.
+
+    Numbers and quantities evaluate to floats in SI units; function calls ask the `Context`; comparisons and `and` /
+    `or` / `not` give booleans. A `residual(zone)` that is compared directly stands for its `.p95`.
+    """
     if isinstance(node, A.Num):
         return node.value
     if isinstance(node, A.Qty):
         return node.q.si
     if isinstance(node, A.Call):
         f, args = node.fn, node.args
+        # Function arguments are names (of zones, probes, tasks), already validated by the checker.
         name = lambda i: args[i].name  # noqa: E731
         if f == "residual":
             return Stat(ctx.residual(name(0)))
@@ -110,8 +132,10 @@ def evaluate(node, ctx: Context):
 
 
 def scalar(v):
+    """A plain number from a value: a zone's residual statistics stand for their 95th percentile."""
     return v.get("p95") if isinstance(v, Stat) else v
 
 
 def truth(v) -> bool:
+    """A value as a yes or no."""
     return bool(v)

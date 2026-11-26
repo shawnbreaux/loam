@@ -37,6 +37,11 @@ class Frames:
     """Folds Wire messages into dashboard state and emits frames."""
 
     def __init__(self, model: Model, base_dir: str):
+        """Load the site grid and design surface, and describe the site once for the page (`site_info`): name, unit,
+        tolerance, zones, stockpiles, boundary and machines.
+
+        The map sent to browsers is thinned to at most 160 cells on its longer side; `step` is that thinning.
+        """
         self.g = SiteGrid(model, base_dir)
         self.m = model
         self.design, _ = self.g.design_and_existing()
@@ -59,6 +64,7 @@ class Frames:
                                       "terrain": None, "messages": 0}
 
     def _t(self, msg: dict) -> float | None:
+        """The message's timestamp as Unix seconds, or None if it has none or it cannot be read."""
         if self.state["status"] is None and "timestamp" not in msg:
             return None
         try:
@@ -67,6 +73,7 @@ class Frames:
             return None
 
     def event(self, ts: float | None, text: str, level: str = "info") -> None:
+        """Add a line to the event log, newest first. The log keeps the last 60."""
         self.state["events"] = ([{"ts": ts, "text": text, "level": level}] + self.state["events"])[:60]
 
     def feed(self, topic: str, msg: dict) -> str | None:
@@ -85,6 +92,8 @@ class Frames:
                 s["terrain"] = {"within": float(np.mean(np.abs(full[ok]) <= self.tol)),
                                 "rms": float(np.sqrt(np.mean(full[ok] ** 2))), "mean": float(np.mean(full[ok]))}
             r = full[:: self.step, :: self.step]
+            # Each cell goes to the browser as one signed byte: measured minus design in tenths of the tolerance (so
+            # +10 is exactly at tolerance, high), with -128 for no data.
             q = np.clip(np.round(r / self.tol * 10), -127, 127)
             q = np.where(np.isfinite(q), q, -128).astype(np.int8)
             s["map"] = base64.b64encode(q.tobytes()).decode("ascii")
@@ -144,6 +153,7 @@ class Frames:
         return None
 
     def frame(self, full: bool = False) -> dict:
+        """The current state as one frame. The map is large, so it is only included when `full`."""
         s = self.state
         f = {"t": s["t"], "machines": s["machines"], "orders": s["orders"], "status": s["status"],
              "truth": s["truth"], "people": s["people"], "events": s["events"][:25], "estop": s["estop"]}
@@ -158,6 +168,9 @@ class Frames:
         out: list[str] = []
 
         def gauge(name: str, help_: str, rows: list[tuple[dict, float | None]], kind: str = "gauge") -> None:
+            """Append one metric: its HELP and TYPE lines, then a sample per row that has a value. Every sample is
+            labelled with the site.
+            """
             vals = [(lab, float(v)) for lab, v in rows if v is not None]
             if not vals:
                 return
@@ -201,13 +214,17 @@ class Frames:
 
 
 def _esc(v: str) -> str:
+    """Escape a label value as the Prometheus text format requires."""
     return v.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
 
 
 def page(site_info: dict, frames: list[dict] | None = None) -> str:
+    """The dashboard page with the site description (and, for a replay, the recorded frames) written into it."""
     with open(PAGE, encoding="utf-8") as f:
         html = f.read()
     data = {"site": site_info, "frames": frames}
+    # The data is written inside a <script> element, so "</" is escaped: a name containing "</script>" must not end
+    # the script.
     blob = json.dumps(data, separators=(",", ":")).replace("</", "<\\/")
     return html.replace("/*LOAM_DATA*/null", blob)
 
@@ -217,6 +234,12 @@ KEEPALIVE_S = 15.0    # a live-dashboard connection sends a comment this often, 
 
 def serve(model: Model, base_dir: str, broker: str, port: int, record: str | None,
           host: str = "127.0.0.1") -> None:
+    """Run the live dashboard until the site ends or Ctrl-C.
+
+    Serves three addresses: `/` (the page), `/events` (a Server-Sent Events stream of frames) and `/metrics`
+    (Prometheus). It listens on this computer only unless `host` says otherwise: the page shows where machines and
+    people are, and there is no login.
+    """
     from .runtime.bus import Bus
     site = model.site["name"]
     fr = Frames(model, base_dir)
@@ -224,10 +247,13 @@ def serve(model: Model, base_dir: str, broker: str, port: int, record: str | Non
     lock = threading.Lock()
 
     class Handler(BaseHTTPRequestHandler):
+        """One browser request. Each runs in its own thread."""
         def log_message(self, *a: Any) -> None:
+            """Say nothing: the default prints a line per request."""
             pass
 
         def do_GET(self) -> None:
+            """Answer `/metrics`, `/events` or the page."""
             if self.path == "/metrics":
                 with lock:
                     body = fr.metrics().encode()
@@ -242,6 +268,8 @@ def serve(model: Model, base_dir: str, broker: str, port: int, record: str | Non
                 self.send_header("Content-Type", "text/event-stream")
                 self.send_header("Cache-Control", "no-cache")
                 self.end_headers()
+                # Each connection has its own bounded queue. A browser that cannot keep up misses frames (see
+                # `_relay`) and never holds memory or slows the others.
                 q: queue.Queue = queue.Queue(maxsize=200)
                 with lock:
                     q.put(fr.frame(full=True))
@@ -312,6 +340,7 @@ def _relay(fr: Frames, bus, site: str, rec, clients: list, lock: threading.Lock)
                 changed = changed or k is not None
                 dirty_map = dirty_map or k == "map"
         now = time.time()
+        # At most five frames a second, however fast messages arrive.
         if changed and now - last_push >= 0.2:
             last_push = now
             f = fr.frame(full=dirty_map)

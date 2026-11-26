@@ -23,11 +23,14 @@ from . import wire
 from .geo import Frame
 from .grid import Grid, SiteGrid, points_in_polygon
 
+# The GGA quality field. Only 4 (RTK fixed, centimetre level) is good enough to grade by; 5 (RTK float) is decimetre
+# level.
 FIX_QUALITY = {0: "invalid", 1: "gps", 2: "dgps", 4: "rtk-fixed", 5: "rtk-float", 6: "dead-reckoning"}
 
 
 @dataclass
 class Survey:
+    """Surveyed points in site coordinates and site units, with their names from the data collector."""
     name: list[str]
     x: NDArray[np.float64]      # site coordinates
     y: NDArray[np.float64]
@@ -35,6 +38,7 @@ class Survey:
 
 
 def _num(s: str) -> bool:
+    """Whether a CSV field is a number (used to tell a header row from data)."""
     try:
         float(s)
         return True
@@ -87,6 +91,9 @@ def read_points_csv(path: str, frame: Frame, layout: str = "PNEZD", fix_only: bo
 
 # -- NMEA ------------------------------------------------------------------------------
 def _nmea_ok(line: str) -> bool:
+    """Whether an NMEA sentence is intact: its checksum (the XOR of every character between `$` and `*`) must match
+    the two hex digits after `*`.
+    """
     if not line.startswith("$") or "*" not in line:
         return False
     body, _, cs = line[1:].partition("*")
@@ -107,6 +114,8 @@ def parse_gga(line: str) -> dict | None:
     f = line[1:line.index("*")].split(",")
     if not f[0].endswith("GGA") or len(f) < 12 or not f[2] or not f[4]:
         return None
+    # NMEA writes angles as degrees and decimal minutes run together: ddmm.mmmm for latitude, dddmm.mmmm for
+    # longitude.
     lat = int(f[2][:2]) + float(f[2][2:]) / 60
     lon = int(f[4][:3]) + float(f[4][3:]) / 60
     q = int(f[6] or 0)
@@ -181,6 +190,8 @@ def score(grid: SiteGrid, design: Grid, s: Survey, polygon: list, tolerance: flo
     if err.size == 0:
         raise ValueError("no surveyed points fall inside the zone")
     ok = np.abs(err) <= tolerance * (1 + 1e-9)
+    # Bootstrap: resample the points with replacement many times and see how much the in-tolerance share varies. The
+    # middle 95 % of those shares is the interval reported.
     rng = np.random.default_rng(seed)
     boot = np.empty(n_boot)
     for b0 in range(0, n_boot, 256):                 # bounded memory: 256 resamples at a time

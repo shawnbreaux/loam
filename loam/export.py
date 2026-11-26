@@ -44,6 +44,7 @@ def landxml(path: str, grid: SiteGrid, z: Grid, frame: Frame | None, name: str =
 
 
 def _fmt(v: float, nd: int) -> str:
+    """A number with a fixed count of decimals."""
     return f"{v:.{nd}f}"
 
 
@@ -57,14 +58,21 @@ def agd(path: str, grid: SiteGrid, ground: Grid, target: Grid, frame: Frame,
     """
     if step is None:
         step = max(1, round(1.0 / (grid.cell * grid.u)))          # about 1 m spacing, as OpenGrade3D advises
+    # Site heights to metres in the survey datum, the units OpenGrade3D works in.
     to_m = lambda v: frame.height_to_world(v) * frame.world_m  # noqa: E731
     fallback = float(np.nanmean(ground))
     def ground_at(x: float, y: float) -> float:
+        """Existing ground height at a site point, or the site's mean height where nothing was measured (OpenGrade3D
+        needs a number in every row).
+        """
         v = float(grid.sample(ground, np.array([x]), np.array([y]))[0])
         return v if math.isfinite(v) else fallback
 
     lines = ["Latitude,Longitude,Existing Elevation,Proposed Elevation,Cut Fill,Code"]
     def row(x: float, y: float, ex: float, pr: float | None, code: str) -> str:
+        """One line of the file for a site point: position in WGS84, existing and proposed heights in metres, their
+        difference and the row code. `pr=None` leaves the design blank.
+        """
         lat, lon = frame.local_to_wgs84(x, y)
         e = float(to_m(ex))
         if pr is None:
@@ -107,6 +115,7 @@ def agopengps(folder: str, grid: SiteGrid, frame: Frame, name: str | None = None
         raise ValueError("AgOpenGPS needs a site boundary polygon")
     name = name or grid.m.site["name"]
     os.makedirs(folder, exist_ok=True)
+    # The date format AgOpenGPS writes in its own field files.
     stamp = time.strftime("%Y-%B-%d %I:%M:%S %p", time.localtime())
     _write(folder, "Field.txt", [stamp, "$FieldDir", name, "$Offsets", "0,0", "Convergence", "0",
                                  "StartFix", f"{lat0!r},{lon0!r}"])
@@ -116,6 +125,8 @@ def agopengps(folder: str, grid: SiteGrid, frame: Frame, name: str | None = None
         bnd += ["False", *_ring(frame, grid.m.zones[zn]["area"]["polygon"])]
     _write(folder, "Boundary.txt", bnd)
     blades = [md["blade"].to(grid.unit) for md in grid.m.machines.values() if md.get("blade")]
+    # One guidance line per work zone, half a blade in from the edge, so the first pass lines the blade up with the
+    # zone boundary.
     half = min(blades) / 2 if blades else 0.0
     trk = ["$TrackLines"]
     tracks = []
@@ -138,5 +149,6 @@ def agopengps(folder: str, grid: SiteGrid, frame: Frame, name: str | None = None
 
 
 def _write(folder: str, fname: str, lines: list[str]) -> None:
+    """Write a text file with Windows line ends, which AgOpenGPS (a Windows program) writes itself."""
     with open(os.path.join(folder, fname), "w", encoding="utf-8", newline="\r\n") as f:
         f.write("\n".join(lines) + "\n")
