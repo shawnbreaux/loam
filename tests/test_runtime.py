@@ -186,6 +186,41 @@ def test_controller_closes_the_loop_against_the_world():
     assert c.report()["finished"] and "true_ground" not in c.report()
 
 
+def test_controller_withdraws_a_pass_the_machine_cannot_run():
+    """`orderFailed` withdraws the pass at once (not after 30 minutes), and the machine, which is safe and
+    idle again, gets its next order only after a short cooldown, so a failing order cannot spin."""
+    from loam.runtime.controller import ORDER_RETRY_MIN
+    m = load(EXAMPLE)
+    c = Controller(m, EXAMPLES, _FakeBus(), Clock(0, 60, 1796108400.0), log=lambda x: None)
+    for n in c.machines:
+        c.handle(f"loam/v0/s/{n}/connection", {"machine": n, "connectionState": "online"})
+        c.handle(f"loam/v0/s/{n}/state", wire.state("s", n, 1, None, 0, 0, 0, False, 0, ts=1796108400.0))
+    c.handle("loam/v0/s/terrain", wire.terrain("s", "p", 1, (c.x0, c.y0), c.cell, (c.ny, c.nx),
+                                               data=wire.encode_heights(c.z), ts=1796108400.0))
+    c.t = 0.1
+    c.step()
+    n = next(iter(c.inflight))
+    oid, before = c.order_of[n], c.plan_dz.copy()
+    other = wire.state("s", n, 2, "someone-elses", 0, 0, 0, False, 0.1, "stopped",
+                       [wire.error("orderFailed", "vehicleNavFailed")], ts=1796108406.0)
+    c.handle(f"loam/v0/s/{n}/state", other)
+    assert n in c.inflight                                        # not about this pass
+    c.handle(f"loam/v0/s/{n}/state", {**other, "orderId": oid})
+    assert n not in c.inflight and c.abandoned == 1
+    assert np.abs(c.plan_dz).sum() < np.abs(before).sum()
+    c.handle(f"loam/v0/s/{n}/state", wire.state("s", n, 3, None, 0, 0, 0, False, 0, ts=1796108407.0))
+    c.t = 0.2
+    assert not c.machine_ready(n)                                 # safe and idle, but cooling down
+    c.step()
+    assert n not in c.inflight
+    c.t = 0.1 + ORDER_RETRY_MIN + 0.1
+    for k in c.machines:                                          # states stay fresh
+        c.mstate[k]["seen"] = time.time()
+    assert c.machine_ready(n)
+    c.step()
+    assert n in c.inflight and c.order_of[n] != oid               # then a fresh order
+
+
 def test_controller_withdraws_a_pass_from_a_lost_machine():
     m = load(EXAMPLE)
     c = Controller(m, EXAMPLES, _FakeBus(), Clock(0, 60, 1796108400.0), log=lambda x: None)
@@ -277,7 +312,8 @@ def test_site_over_mqtt_with_faults(tmp_path):
                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     faults = {"person": [{"from": 20, "to": 23, "near": "dz1", "distance_m": 9.0}], "probe_outage": [],
               "rain": [], "gnss_float": [{"machine": "dz2", "from": 30, "to": 36}],
-              "link_loss": [{"machine": "dz1", "at": 50, "wall_s": 2.0}], "estop": [{"at": 70, "for_min": 2}],
+              "link_loss": [{"machine": "dz1", "at": 50, "wall_s": 2.0}],
+              "estop": [{"at": 70, "for_min": 2, "resume_after_min": 1}],
               "crash": [{"machine": "dz2", "at": 90}]}
     (tmp_path / "faults.json").write_text(json.dumps(faults))
     b = f"127.0.0.1:{port}"
@@ -292,7 +328,14 @@ def test_site_over_mqtt_with_faults(tmp_path):
         out, _ = site.communicate(timeout=120)
     finally:
         broker.terminate()
+        broker.wait(10)
     log = ctl.stdout[:ctl.stdout.index("{\n")]
+    # releasing the e-stop (minute 72) restarts nothing; machines work again only after the resume (minute 73)
+    lines = log.splitlines()
+    k = next(i for i, ln in enumerate(lines) if "site e-stop released" in ln)
+    first_ok = next(ln for ln in lines[k:] if "safety ok" in ln)
+    h, mnt = first_ok.split("]")[0].strip("[").split(":")
+    assert int(h) * 60 + float(mnt) >= 73.0, first_ok
     rep = json.loads(ctl.stdout[ctl.stdout.index("{\n"):])
     truth = json.loads(out)
     assert rep["finished"], log

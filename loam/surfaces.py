@@ -46,7 +46,8 @@ def tin_from_ifc(path: str, name: str | None = None) -> tuple[np.ndarray, np.nda
         if not match:
             raise ValueError(f"{path}: no surface named {name!r} (found {', '.join(repr(p.Name) for p in found)})")
         found = match
-    shape: Any = ifcopenshell.geom.create_shape(settings, found[0])  # type: ignore[arg-type]
+    geom: Any = ifcopenshell.geom              # typed loosely: its stubs differ between releases
+    shape = geom.create_shape(settings, found[0])
     pts = np.asarray(shape.geometry.verts, float).reshape(-1, 3)
     faces = np.asarray(shape.geometry.faces, int).reshape(-1, 3)
     return pts, faces, found[0].Name or ""

@@ -22,26 +22,31 @@ def launch(path: str, broker: str, speed: float, faults_path: str | None, model,
            timeout_min: float = 48 * 60, quiet: bool = False, physics: bool = False,
            soil_table: str | None = None) -> dict:
     site = model.site["name"]
-    bus = Bus(broker, f"loam-site-launcher-{site}").start([])
-    for t in [f"loam/v0/{site}/status", f"sim/{site}/world/truth", f"sim/{site}/clock", f"sim/{site}/faults",
-              *(f"loam/v0/{site}/{n}/connection" for n in model.machines)]:
-        bus.clear(t)                                 # nothing retained from an earlier run
-    time.sleep(0.3)
-    bus.stop()
+    cleaner = Bus(broker, f"loam-site-launcher-{site}").start([])
+    try:
+        for t in [f"loam/v0/{site}/status", f"sim/{site}/world/truth", f"sim/{site}/clock", f"sim/{site}/faults",
+                  *(f"loam/v0/{site}/{n}/connection" for n in model.machines)]:
+            cleaner.clear(t)                         # nothing retained from an earlier run
+        time.sleep(0.3)
+    finally:
+        cleaner.stop()
     base = [sys.executable, "-m", "loam.cli", "_role", path, "--broker", broker]
     out = subprocess.DEVNULL if quiet else None
-    world = subprocess.Popen([*base, "--role", "world", "--speed", str(speed)]
-                             + (["--faults", faults_path] if faults_path else [])
-                             + (["--soil-table", soil_table] if soil_table else []), stdout=out)
-    time.sleep(1.0)                                  # the world publishes the clock first
-    procs = [world, subprocess.Popen([*base, "--role", "probe"], stdout=out)]
-    procs += [subprocess.Popen([*base, "--role", "machine", "--name", n, "--index", str(i)]
-                               + (["--physics"] if physics else []), stdout=out)
-              for i, n in enumerate(model.machines)]
-    bus = Bus(broker, f"loam-site-launcher-{site}").start([f"loam/v0/{site}/status", f"sim/{site}/world/truth"])
+    procs: list[subprocess.Popen] = []
+    bus: Bus | None = None
     truth: dict = {}
-    t_end = time.time() + timeout_min * 60 / speed
-    try:
+    try:                                             # whatever fails from here, no child is left running
+        world = subprocess.Popen([*base, "--role", "world", "--speed", str(speed)]
+                                 + (["--faults", faults_path] if faults_path else [])
+                                 + (["--soil-table", soil_table] if soil_table else []), stdout=out)
+        procs.append(world)
+        time.sleep(1.0)                              # the world publishes the clock first
+        procs.append(subprocess.Popen([*base, "--role", "probe"], stdout=out))
+        for i, n in enumerate(model.machines):
+            procs.append(subprocess.Popen([*base, "--role", "machine", "--name", n, "--index", str(i)]
+                                          + (["--physics"] if physics else []), stdout=out))
+        bus = Bus(broker, f"loam-site-launcher-{site}").start([f"loam/v0/{site}/status", f"sim/{site}/world/truth"])
+        t_end = time.time() + timeout_min * 60 / speed
         while time.time() < t_end:
             for topic, msg in bus.drain(0.5):
                 if topic.endswith("/truth"):
@@ -61,13 +66,25 @@ def launch(path: str, broker: str, speed: float, faults_path: str | None, model,
         for topic, msg in bus.drain(2.0):
             if topic.endswith("/truth"):
                 truth = msg
+        _reap(procs)
         return {"truth": truth, "exit_codes": {name: p.returncode for name, p in
                                                zip(["world", "probe", *model.machines], procs, strict=True)}}
     finally:
-        for p in procs:
-            if p.poll() is None:
-                p.kill()
-        bus.stop()
+        _reap(procs, force=True)
+        if bus is not None:
+            bus.stop()
+
+
+def _reap(procs: list[subprocess.Popen], force: bool = False) -> None:
+    """Wait for every child (no zombies); SIGTERM, then SIGKILL, for any that will not end."""
+    for p in procs:
+        if p.poll() is None and force:
+            p.terminate()
+        try:
+            p.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            p.kill()
+            p.wait()
 
 
 def role(path: str, model, a) -> None:

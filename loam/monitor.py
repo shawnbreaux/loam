@@ -14,6 +14,7 @@ such; a real site has no truth topic.
 from __future__ import annotations
 
 import base64
+import contextlib
 import json
 import os
 import queue
@@ -211,14 +212,16 @@ def page(site_info: dict, frames: list[dict] | None = None) -> str:
     return html.replace("/*LOAM_DATA*/null", blob)
 
 
-def serve(model: Model, base_dir: str, broker: str, port: int, record: str | None) -> None:
+KEEPALIVE_S = 15.0    # a live-dashboard connection sends a comment this often, so a vanished browser is noticed
+
+
+def serve(model: Model, base_dir: str, broker: str, port: int, record: str | None,
+          host: str = "127.0.0.1") -> None:
     from .runtime.bus import Bus
     site = model.site["name"]
     fr = Frames(model, base_dir)
     clients: list[queue.Queue] = []
     lock = threading.Lock()
-    bus = Bus(broker, f"loam-monitor-{site}-{os.getpid()}").start([f"loam/v0/{site}/#", f"sim/{site}/world/truth"])
-    rec = open(record, "w", encoding="utf-8") if record else None  # noqa: SIM115
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *a: Any) -> None:
@@ -245,7 +248,14 @@ def serve(model: Model, base_dir: str, broker: str, port: int, record: str | Non
                     clients.append(q)
                 try:
                     while True:
-                        item = q.get()
+                        try:
+                            item = q.get(timeout=KEEPALIVE_S)
+                        except queue.Empty:
+                            self.wfile.write(b": keep-alive\n\n")
+                            self.wfile.flush()
+                            continue
+                        if item is None:                       # the monitor is shutting down
+                            break
                         self.wfile.write(f"data: {json.dumps(item, separators=(',', ':'))}\n\n".encode())
                         self.wfile.flush()
                 except (BrokenPipeError, ConnectionResetError):
@@ -261,39 +271,57 @@ def serve(model: Model, base_dir: str, broker: str, port: int, record: str | Non
             self.end_headers()
             self.wfile.write(body)
 
-    httpd = ThreadingHTTPServer(("127.0.0.1", port), Handler)
-    threading.Thread(target=httpd.serve_forever, daemon=True).start()
-    print(f"loam monitor: http://127.0.0.1:{port}/  metrics: /metrics  (site {site})", flush=True)
-    if rec is not None:
-        rec.write(json.dumps({"site": fr.site_info}) + "\n")
-    last_push, dirty_map = 0.0, False
+    bus = Bus(broker, f"loam-monitor-{site}-{os.getpid()}").start([f"loam/v0/{site}/#", f"sim/{site}/world/truth",
+                                                                     f"sim/{site}/end"])
+    httpd: ThreadingHTTPServer | None = None
+    rec = None
     try:
-        while True:
-            changed = False
-            for topic, msg in bus.drain(0.05):
+        httpd = ThreadingHTTPServer((host, port), Handler)
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        rec = open(record, "w", encoding="utf-8") if record else None  # noqa: SIM115
+        print(f"loam monitor: http://{host}:{port}/  metrics: /metrics  (site {site})", flush=True)
+        if rec is not None:
+            rec.write(json.dumps({"site": fr.site_info}) + "\n")
+        _relay(fr, bus, site, rec, clients, lock)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        if httpd is not None:
+            httpd.shutdown()
+            httpd.server_close()
+        with lock:
+            for q in clients:                  # wake every live connection so its thread ends
+                with contextlib.suppress(queue.Full):
+                    q.put_nowait(None)
+        if rec is not None:
+            rec.close()
+        bus.stop()
+
+
+def _relay(fr: Frames, bus, site: str, rec, clients: list, lock: threading.Lock) -> None:
+    """Feed Wire messages into the frames and push frames to the live connections, until the site ends."""
+    from .runtime.bus import tolerant
+    last_push, dirty_map = 0.0, False
+    while True:
+        changed = False
+        for topic, msg in bus.drain(0.05):
+            with tolerant(topic):
                 if topic == f"sim/{site}/end":
                     return
                 k = fr.feed(topic, msg)
                 changed = changed or k is not None
                 dirty_map = dirty_map or k == "map"
-            now = time.time()
-            if changed and now - last_push >= 0.2:
-                last_push = now
-                f = fr.frame(full=dirty_map)
-                if rec is not None:
-                    rec.write(json.dumps(f, separators=(",", ":")) + "\n")
-                with lock:
-                    for q in clients:
-                        if not q.full():
-                            q.put(f)
-                dirty_map = False
-    except KeyboardInterrupt:
-        pass
-    finally:
-        httpd.shutdown()
-        if rec is not None:
-            rec.close()
-        bus.stop()
+        now = time.time()
+        if changed and now - last_push >= 0.2:
+            last_push = now
+            f = fr.frame(full=dirty_map)
+            if rec is not None:
+                rec.write(json.dumps(f, separators=(",", ":")) + "\n")
+            with lock:
+                for q in clients:
+                    if not q.full():
+                        q.put(f)
+            dirty_map = False
 
 
 def replay_html(recording: str, out: str, max_frames: int = 900, max_maps: int = 120, split: bool = False) -> dict:
@@ -312,7 +340,8 @@ def replay_html(recording: str, out: str, max_frames: int = 900, max_maps: int =
                 frames[i] = {k: v for k, v in frames[i].items() if k not in ("map", "map_t")}
     # keep every frame with a map, then thin the rest evenly to the budget
     keep = [i for i, fr in enumerate(frames) if fr.get("map")]
-    rest = [i for i in range(len(frames)) if i not in set(keep)]
+    kept_set = set(keep)
+    rest = [i for i in range(len(frames)) if i not in kept_set]
     budget = max(0, max_frames - len(keep))
     if len(rest) > budget:
         rest = [rest[int(k * len(rest) / budget)] for k in range(budget)] if budget else []

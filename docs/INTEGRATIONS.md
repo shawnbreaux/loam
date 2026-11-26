@@ -31,8 +31,13 @@ heartbeat and GNSS rules are therefore the same as for the simulated machines.
 
 - **Orders.** An order becomes the path the simulated machine drives: through the work window, then the haul.
 - **Stopping.** `stop`, a site stop, 3 s without a safety heartbeat, or a poor fix pause the vehicle.
-- **E-stop.** The site e-stop triggers the vehicle's hardest stop.
+- **E-stop.** The site e-stop triggers the vehicle's hardest stop. Releasing it restarts nothing: the
+  machine stays stopped (`estopReset`) until `loam resume`.
+- **Process stop.** On SIGTERM (systemd, Docker) or Ctrl-C the bridge holds the vehicle, cancels its
+  goal and reports itself offline before it exits.
+- **Malformed messages** on the broker are logged and skipped; they cannot crash a bridge.
 - **Vehicle faults.** A vehicle that can't work reports a `fault` and the machine shows `stopped`. Causes: link lost, its own e-stop, manual mode, a fatal error.
+- **Orders a vehicle can't run.** A refused mission, an order the robot never took, aborted navigation or a target out of reach is reported once as an `orderFailed` error, with the reason in `text`. The bridge holds the vehicle and drops the order. The controller withdraws the pass at once and gives that machine its next order a minute later. A failed order is never counted as done, and the vehicle is never sent back onto its previous mission.
 - **Completion.** A pass counts as done only when the vehicle has finished it.
 
 The bridges steer only. Blade height stays with the machine's own grade control,
@@ -110,7 +115,10 @@ loam opera site.loam --machine ex1 --namespace zx200 --kind excavator --broker h
 - **The trajectory** goes to the arm's ros2_control controller (`/<ns>/upper_arm_controller`), timed to OPERA's
   joint speed limits. Joints the plan doesn't move, such as `bucket_end_joint`, are held.
 
-On both machine kinds, pause cancels the goal and resume sends what was left. The map frame is the site grid
+On both machine kinds, pause cancels the goal and resume sends what was left. An action server that is
+missing or not yet active is waited for and retried, and reported after 10 s (`vehicleNavUnavailable`,
+`vehicleArmUnavailable`). An aborted Nav2 goal is retried 3 times, 2 s apart, before the order is
+reported as failed (`vehicleNavFailed`), because Nav2 also aborts while it is still starting up. The map frame is the site grid
 in metres; `--map-offset` and `--map-yaw` place the site in it.
 
 Measured in `tests/test_opera.py`, a site in feet driven over Loam Wire:
@@ -196,7 +204,8 @@ loam export site.loam --to landxml -o next.xml --ground odm_project/ --crs EPSG:
 
 ## Metrics
 
-`loam monitor` serves `/metrics` in the Prometheus text format. It reports:
+`loam monitor` serves `/metrics` in the Prometheus text format. It listens on 127.0.0.1 unless given
+`--host`; use `--host 0.0.0.0` for a Prometheus server on another machine. It reports:
 
 - machine progress, safety state and stop latency;
 - task passes and completion;

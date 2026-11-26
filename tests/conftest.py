@@ -1,7 +1,11 @@
+import contextlib
+import gc
 import os
+import re
 import shutil
 import socket
 import subprocess
+import threading
 import time
 
 import pytest
@@ -64,3 +68,46 @@ def mqtt_broker():
     yield f"127.0.0.1:{port}"
     proc.terminate()
     proc.wait(5)
+
+
+# -- leak check: every test must leave no thread, child process or open file behind ------------------------
+# Read-only library data that a library opens once and keeps for the life of the process is not a leak.
+CACHES = re.compile(r"(proj\.db|\.(ttf|otf|ttc))$")
+
+
+def _resources() -> tuple[dict, dict, dict]:
+    fds = {}
+    if os.path.isdir("/proc/self/fd"):
+        for f in os.listdir("/proc/self/fd"):
+            with contextlib.suppress(OSError):
+                fds[f] = os.readlink(f"/proc/self/fd/{f}")
+    out = subprocess.run(["ps", "-o", "pid=,args=", "--ppid", str(os.getpid())], capture_output=True, text=True,
+                         check=False).stdout
+    kids = {ln.split()[0]: ln.strip()[:100] for ln in out.splitlines() if ln.strip() and "ps -o" not in ln}
+    threads = {t.ident: t.name for t in threading.enumerate() if t.is_alive()}
+    return fds, kids, threads
+
+
+def _new(before: tuple, after: tuple) -> list[str]:
+    fds = sorted({v for k, v in after[0].items() if k not in before[0] and not CACHES.search(v)})
+    kids = sorted(v for k, v in after[1].items() if k not in before[1])
+    threads = sorted(v for k, v in after[2].items() if k not in before[2])
+    return [f"{what}: {items}" for what, items in (("files", fds), ("processes", kids), ("threads", threads))
+            if items]
+
+
+@pytest.fixture(autouse=True)
+def no_leaks(request):
+    if os.environ.get("LOAM_LEAKCHECK", "1") == "0":
+        yield
+        return
+    gc.collect()
+    before = _resources()
+    yield
+    for _ in range(20):                       # shutdown threads and child processes may take a moment
+        gc.collect()
+        left = _new(before, _resources())
+        if not left:
+            return
+        time.sleep(0.1)
+    pytest.fail(f"{request.node.nodeid} left resources behind: " + "; ".join(left), pytrace=False)

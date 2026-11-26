@@ -25,7 +25,7 @@ from .. import wire
 from ..checker import Model
 from ..grid import SiteGrid, polygon_mask
 from ..sim import Soil
-from .bus import Bus, Clock
+from .bus import Bus, Clock, tolerant
 
 # Site minutes. Machines read their own entries; the world runs the site-level ones.
 DEFAULT_FAULTS: dict[str, Any] = {
@@ -34,7 +34,7 @@ DEFAULT_FAULTS: dict[str, Any] = {
     "rain": [{"from": 150, "to": 175, "rate_m_per_s": 0.4 * 0.0254 / 3600}],
     "gnss_float": [{"machine": "dz2", "from": 60, "to": 70}],
     "link_loss": [{"machine": "dz1", "at": 130, "wall_s": 4.0}],
-    "estop": [{"at": 200, "for_min": 3}],
+    "estop": [{"at": 200, "for_min": 3, "resume_after_min": 1}],   # a person resumes after a walk-around
     "crash": [],                      # e.g. {"machine": "dz2", "at": 240}: the process dies
 }
 
@@ -239,22 +239,24 @@ def run_world(model: Model, base_dir: str, broker: str, speed: float, faults: di
     bus.pub(f"sim/{site}/faults", faults, retain=True, qos=1)
     poses: dict[str, tuple[float, float]] = {}
     seq, last_truth, person_on, rain_on, estop_on = 0, -1e9, False, False, False
+    resumed: set[int] = set()
     last_seen = 0.0                                          # sensors report at most twice a second (wall)
     try:
         while clock.minutes() < stop_after_min:
             t = clock.minutes()
             for topic, msg in bus.drain(0.02):
-                if topic == f"sim/{site}/end":
-                    return
-                if topic.endswith("/state"):
-                    poses[msg["machine"]] = (msg["pose"]["x"], msg["pose"]["y"])
-                elif topic == f"sim/{site}/world/apply":
-                    res = w.apply(msg["order"])
-                    res["t"] = t
-                    bus.pub(f"sim/{site}/world/applied/{msg['machine']}", res, qos=1)
-                elif topic == f"sim/{site}/world/scan":
-                    bus.pub(f"sim/{site}/world/scan/{msg['probe']}",
-                            {"data": wire.encode_heights(w.z), "shape": list(w.g.shape), "t": t}, qos=1)
+                with tolerant(topic):
+                    if topic == f"sim/{site}/end":
+                        return
+                    if topic.endswith("/state"):
+                        poses[msg["machine"]] = (msg["pose"]["x"], msg["pose"]["y"])
+                    elif topic == f"sim/{site}/world/apply":
+                        res = w.apply(msg["order"])
+                        res["t"] = t
+                        bus.pub(f"sim/{site}/world/applied/{msg['machine']}", res, qos=1)
+                    elif topic == f"sim/{site}/world/scan":
+                        bus.pub(f"sim/{site}/world/scan/{msg['probe']}",
+                                {"data": wire.encode_heights(w.z), "shape": list(w.g.shape), "t": t}, qos=1)
             # site sensors: a person detected near a machine; a rain gauge; an e-stop button
             p = active(faults.get("person", []), t)
             if p and p.get("near") in poses and time.time() - last_seen >= 0.5:
@@ -283,6 +285,14 @@ def run_world(model: Model, base_dir: str, broker: str, speed: float, faults: di
                 bus.pub(f"loam/v0/{site}/estop", {"site": site, "pressed": bool(e), "ts": clock.ts(t),
                                                   "wall": time.time()}, qos=1)
                 estop_on = bool(e)
+            # releasing the e-stop restarts nothing (ISO 13850): the site supervisor resumes the machines
+            r = next((s for s in faults.get("estop", []) if s.get("resume_after_min") is not None
+                      and s["at"] + s["for_min"] + s["resume_after_min"] <= t and id(s) not in resumed), None)
+            if r is not None:
+                resumed.add(id(r))
+                seq += 1
+                bus.pub(f"loam/v0/{site}/safety", wire.safety(site, seq, "resume", "e-stop reset, site checked",
+                                                              ts=clock.ts(t)), qos=1)
             if t - last_truth >= truth_every_min:
                 last_truth = t
                 bus.pub(f"sim/{site}/world/truth", {"t": t, **w.truth()}, retain=True)

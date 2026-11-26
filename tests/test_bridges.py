@@ -64,7 +64,7 @@ class VdaRobot(threading.Thread):
         self.map_id, self.x, self.y, self.theta, self.speed = map_id, x, y, 0.0, speed
         self.nodes, self.edges, self.actions, self.instant = [], [], [], []
         self.order_id, self.last_node, self.last_seq = "", "", 0
-        self.paused = self.hw_estop = False
+        self.paused = self.hw_estop = self.refuse = False
         self.problems, self.received = [], []
         self.header, self.running = 0, True
         will = (f"{self.base}/connection", self.msg(connectionState="CONNECTION_BROKEN"))
@@ -104,6 +104,8 @@ class VdaRobot(threading.Thread):
                 kind = topic.rsplit("/", 1)[-1]
                 self.check(kind, m)
                 self.received.append((kind, m))
+                if kind == "order" and self.refuse:
+                    continue                                    # a robot that does not take the order
                 if kind == "order":
                     self.order_id = m["orderId"]
                     first, *rest = m["nodes"]
@@ -219,7 +221,8 @@ def test_vda_order_matches_the_schema(model):
     assert not list(v["order"].iter_errors(one))
 
 
-def test_vda5050_robot_runs_loam_orders(model, mqtt_broker):
+def test_vda5050_robot_runs_loam_orders(model, mqtt_broker, monkeypatch):
+    monkeypatch.setattr("loam.runtime.vda5050.ORDER_ACK_S", 2.0)
     robot = VdaRobot(mqtt_broker, "yard", speed=3.0)
     robot.start()
     ctl = Controller(mqtt_broker, "yard", "dz1")
@@ -236,6 +239,16 @@ def test_vda5050_robot_runs_loam_orders(model, mqtt_broker):
         end = ctl.wait(lambda m: m["orderId"] == "o1" and m["progress"] == 1.0)
         assert math.hypot(end["pose"]["x"] - 60, end["pose"]["y"] - 45) < 0.01
         assert robot.x == pytest.approx(60 * FT, abs=1e-3)
+        # a robot that does not take an order is reported; the pass is never left silently "driving"
+        robot.refuse = True
+        ctl.send("order", loam_order("yard", "dz1", "ox", [(60, 40), (160, 40), (160, 50), (60, 50)]))
+        st = ctl.wait(lambda m: m["orderId"] == "ox" and m["errors"], timeout=10)
+        assert st["safetyState"] == "stopped" and not st["driving"] and st["progress"] < 1
+        assert wire.error("orderFailed", "vehicleOrderRejected") in st["errors"]
+        free = ctl.wait(lambda m: m["orderId"] is None, timeout=5)         # the order is dropped: free again
+        assert free["safetyState"] == "ok" and free["errors"] == []
+        assert robot.x == pytest.approx(60 * FT, abs=1e-3)
+        robot.refuse = False
         # 2: stop pauses it, resume goes on, the robot's own e-stop holds the machine
         ctl.send("order", loam_order("yard", "dz1", "o2", [(60, 40), (160, 40), (160, 50), (60, 50)]))
         ctl.wait(lambda m: m["orderId"] == "o2" and m["driving"])
@@ -252,7 +265,7 @@ def test_vda5050_robot_runs_loam_orders(model, mqtt_broker):
         assert not robot.paused and robot.x > x_paused
         robot.hw_estop = True
         st = ctl.wait(lambda m: m["safetyState"] == "stopped")
-        assert {"code": "vehicleEstop", "detail": ""} in st["errors"]
+        assert wire.error("vehicleEstop") in st["errors"]
         robot.hw_estop = False
         ctl.wait(lambda m: m["safetyState"] == "ok")
         # 3: the site e-stop cancels the order on the robot

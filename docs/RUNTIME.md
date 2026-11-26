@@ -87,6 +87,10 @@ The launcher starts the world, one probe and one process per machine. Each machi
 - takes one order at a time and drives the work window and the haul;
 - stops at once on `stop`, a site e-stop, a missing safety heartbeat (3 s) or a GNSS solution that is
   not RTK fixed;
+- stays stopped when the e-stop is released (`estopReset`): resetting an e-stop must not restart a
+  machine (ISO 13850). A person restarts the site with `loam resume job.loam`, or one machine with
+  `--machine`, which sends `resume` on the safety topic or as an instant action;
+- on SIGTERM (systemd, Docker), as on Ctrl-C, holds its vehicle and reports itself offline before it exits;
 - reports state four times a second;
 - has a retained connection status with `connectionBroken` as its last will;
 - never executes an order twice, and drops its current order if its radio comes back after a loss.
@@ -100,13 +104,16 @@ machine that can install them.
 
 ### Faults (`--faults`, site minutes)
 
+`resume_after_min` is the simulated supervisor: a site-wide `resume` that many minutes after the
+e-stop is released. Leave it out and the site stays stopped, as a real one would until someone resumes it.
+
 ```json
 {"person":       [{"from": 42, "to": 45, "near": "dz1", "distance_m": 9.0}],
  "probe_outage": [{"from": 95, "to": 118}],
  "rain":         [{"from": 150, "to": 175, "rate_m_per_s": 2.8e-06}],
  "gnss_float":   [{"machine": "dz2", "from": 60, "to": 70}],
  "link_loss":    [{"machine": "dz1", "at": 130, "wall_s": 4.0}],
- "estop":        [{"at": 200, "for_min": 3}],
+ "estop":        [{"at": 200, "for_min": 3, "resume_after_min": 1}],
  "crash":        [{"machine": "dz2", "at": 170}]}
 ```
 

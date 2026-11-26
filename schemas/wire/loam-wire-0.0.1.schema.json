@@ -349,7 +349,11 @@
               "text": {
                 "type": "string"
               }
-            }
+            },
+            "required": [
+              "code"
+            ],
+            "additionalProperties": false
           }
         }
       },

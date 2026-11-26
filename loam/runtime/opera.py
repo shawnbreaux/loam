@@ -39,9 +39,10 @@ from .. import wire
 from ..checker import Model
 from ..grid import SiteGrid, polygon_mask
 from .bridge import run_bridge
-from .bus import Bus
+from .bus import Bus, tolerant
 
 STALE_S = 1.0
+NAV_RETRIES = 3               # an aborted goal is retried this many times (2 s apart) before the order fails
 UNAVAILABLE_S = 10.0          # a missing action server is reported after this, and still retried
 OPERA_JOINT_SPEED = {"swing_joint": 1.1, "boom_joint": 0.45, "arm_joint": 1.1, "bucket_joint": 1.1}  # rad/s
 
@@ -202,16 +203,33 @@ class Ros:
             raise ValueError("OPERA machines need ROS 2 (rclpy): run inside a ROS 2 Humble/Jazzy environment") from e
         self.rclpy = rclpy
         if not rclpy.ok():
-            rclpy.init()
+            try:                               # Loam handles SIGINT/SIGTERM: the vehicle is held on the way out
+                from rclpy.signals import SignalHandlerOptions
+                rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
+            except (ImportError, TypeError):   # older rclpy
+                rclpy.init()
         self.node = rclpy.create_node(name)
         self.ex = MultiThreadedExecutor()
         self.ex.add_node(self.node)
-        self.thread = threading.Thread(target=self.ex.spin, daemon=True)
+        self.running = True
+        self.thread = threading.Thread(target=self._spin, daemon=True)
         self.thread.start()
 
+    def _spin(self) -> None:
+        while self.running and self.rclpy.ok():    # short waits, so close() can always stop this thread
+            try:
+                self.ex.spin_once(timeout_sec=0.1)
+            except Exception:                       # rclpy raises several types once its context is gone
+                if self.rclpy.ok():
+                    raise
+                break
+
     def close(self) -> None:
+        self.running = False
+        self.thread.join(timeout=5)            # the thread is out of rcl before the context goes
         self.ex.shutdown()
         self.node.destroy_node()
+        self.rclpy.try_shutdown()
 
 
 class _Odom:
@@ -264,6 +282,7 @@ class Carrier:
         self.goal = None
         self.state = "idle"                  # idle | driving | waiting (for Nav2) | paused | dumping | done | failed
         self.waiting_since = self.tried_at = 0.0
+        self.aborts = 0
         self.lock = threading.Lock()
         self.total = 1
         self.max_speed: float | None = None
@@ -279,6 +298,10 @@ class Carrier:
             return "vehicleLinkLost"
         if self.state == "waiting" and time.time() - self.waiting_since > UNAVAILABLE_S:
             return "vehicleNavUnavailable"
+        return None
+
+    @property
+    def order_error(self) -> str | None:
         return "vehicleNavFailed" if self.state == "failed" else None
 
     def poll(self) -> None:
@@ -319,7 +342,7 @@ class Carrier:
         if not steps:
             steps = [{"mode": "nav", "poses": [self.frame.to_map(*path[0])], "dump": False}]
         with self.lock:
-            self.steps, self.k, self.left = steps, 0, list(steps[0]["poses"])
+            self.steps, self.k, self.left, self.aborts = steps, 0, list(steps[0]["poses"]), 0
             self.total = sum(len(st["poses"]) + st["dump"] for st in steps)
             self.max_speed, self.speed_at = max_speed_ms, 0.0
             self.state = "paused"                     # the bridge un-pauses it when it is safe to go
@@ -419,8 +442,12 @@ class Carrier:
                 return                                 # a cancelled or replaced goal
             self.goal = None
             if f.result().status == GoalStatus.STATUS_SUCCEEDED:
-                self.left, self.sent = self.left[self.sent:], 0
+                self.left, self.sent, self.aborts = self.left[self.sent:], 0, 0
                 self._send()
+            elif self.aborts < NAV_RETRIES:            # e.g. Nav2 still waiting for its transforms
+                self.aborts += 1
+                self._wait_retry()
+                self.tried_at = time.time() + 1.0      # retried 2 s from now
             else:
                 self.state = "failed"
 
@@ -546,6 +573,10 @@ class Excavator:
             return "vehicleLinkLost"
         if self.state == "waiting" and time.time() - self.waiting_since > UNAVAILABLE_S:
             return "vehicleArmUnavailable"
+        return None
+
+    @property
+    def order_error(self) -> str | None:
         return self.reason if self.state == "failed" else None
 
     def _joints(self, m) -> None:
@@ -559,9 +590,10 @@ class Excavator:
                     self.tried_at = time.time()
                     self._send()
         for _, msg in self.bus.drain(0.0):
-            z = wire.decode_heights(msg["data"], tuple(msg["shape"])).astype(float)
-            if z.shape == self.g.shape:
-                self.ground = z
+            with tolerant("terrain"):
+                z = wire.decode_heights(msg["data"], tuple(msg["shape"])).astype(float)
+                if z.shape == self.g.shape:
+                    self.ground = z
 
     # -- planning -----------------------------------------------------------------------------
     def target_surface(self, order: dict) -> tuple[np.ndarray, np.ndarray]:

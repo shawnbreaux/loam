@@ -4,34 +4,51 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:                                   # a newer push to the same ref supersedes a running check
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         python: ["3.10", "3.11", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
-      - run: sudo apt-get install -y -q mosquitto      # the end-to-end test runs a real MQTT broker
-      - name: RTKLIB str2str (BSD-2) for the positioning-stream test
+          cache: pip
+      - name: Mosquitto (the end-to-end and bridge tests run a real MQTT broker)
+        run: sudo apt-get update -q && sudo apt-get install -y -q mosquitto
+      - name: RTKLIB str2str (BSD-2) for the positioning-stream test, pinned to the tested commit
         run: |
-          git clone -q --depth 1 https://github.com/rtklibexplorer/RTKLIB.git /tmp/RTKLIB
+          git init -q /tmp/RTKLIB
+          git -C /tmp/RTKLIB fetch -q --depth 1 https://github.com/rtklibexplorer/RTKLIB.git \
+            38875383435046c3011d60811ee3749072ad72f2
+          git -C /tmp/RTKLIB checkout -q FETCH_HEAD
           make -s -C /tmp/RTKLIB/app/consapp/str2str/gcc -j4
           echo "STR2STR=/tmp/RTKLIB/app/consapp/str2str/gcc/str2str" >> "$GITHUB_ENV"
       - run: pip install -e ".[test,plot,all]"
+      # Every test also fails if it leaves a thread, child process or open file behind (tests/conftest.py).
+      # ArduPilot SITL, ROS 2 (OPERA) and Project Chrono tests need tools/integration-envs.sh and skip here.
       - run: pytest -q --cov=loam --cov-report=term --cov-fail-under=85
 
   lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
+          cache: pip
       - run: pip install -e ".[dev]"
       - run: ruff check loam tests examples
       - run: mypy loam

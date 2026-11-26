@@ -141,7 +141,7 @@ def nmea_states(lines: Iterable[str], frame: Frame, site: str, machine: str,
         seq += 1
         msg = wire.state(site, machine, seq, None, round(x, 4), round(y, 4), round(heading, 5), False, 0.0,
                          safety="ok" if ok else "degraded",
-                         errors=[] if ok else [{"code": "gnssQuality", "detail": g["fix"]}])
+                         errors=[] if ok else [wire.error("gnssQuality", g["fix"], "warning")])
         msg["pose"]["z"] = round(float(frame.height_to_local(g["alt"])), 4)
         msg["gnss"] = {"fix": g["fix"], "sats": g["sats"], "hdop": g["hdop"], "age": g["age"]}
         yield msg

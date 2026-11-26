@@ -48,6 +48,12 @@ def test_every_builder_matches_schema():
                                   {"surface": "design"}, {"maxCut": 0.1}))
     _validate("instantAction", wire.instant_action("s", "m", 2, "stop", "person"))
     _validate("state", wire.state("s", "m", 3, None, 1.0, 2.0, 0.0, False, 0.0))
+    _validate("state", wire.state("s", "m", 3, "o", 1.0, 2.0, 0.0, False, 0.5, "stopped",
+                                  [wire.error("orderFailed", "vehicleNavFailed"),
+                                   wire.error("gnssQuality", "rtk-float", "warning")]))
+    with pytest.raises(Exception, match="detail"):               # the field is `text`; nothing else passes
+        _validate("state", wire.state("s", "m", 3, None, 1.0, 2.0, 0.0, False, 0.0, "stopped",
+                                      [{"code": "estop", "detail": ""}]))
     _validate("connection", wire.connection("s", "m", 4, "online"))
     _validate("safety", wire.safety("s", 5))
     z = np.arange(6, dtype=float).reshape(2, 3)

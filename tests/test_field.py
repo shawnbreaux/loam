@@ -15,6 +15,7 @@ import numpy as np
 import pytest
 from conftest import EXAMPLE, EXAMPLES
 
+from loam import wire
 from loam.checker import check, has_errors
 from loam.cli import main
 from loam.export import agd, agopengps, landxml
@@ -206,7 +207,7 @@ def test_nmea_states_heading_and_quality():
     assert out[2]["pose"]["heading"] == pytest.approx(math.pi / 2, abs=1e-3)       # moved +y
     assert out[3]["pose"]["heading"] == pytest.approx(math.pi / 4, abs=0.02)       # GGA rounds to ~2 cm
     assert out[0]["safetyState"] == "ok" and out[4]["safetyState"] == "degraded"
-    assert out[4]["errors"][0]["detail"] == "rtk-float"
+    assert out[4]["errors"][0] == wire.error("gnssQuality", "rtk-float", "warning")
     assert out[0]["pose"]["z"] == pytest.approx(100.0)
 
 

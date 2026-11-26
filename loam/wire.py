@@ -85,6 +85,13 @@ def connection(site: str, machine: str, seq: int, state: str, ts: float = 0) -> 
     return msg
 
 
+def error(code: str, text: str = "", level: str = "fatal") -> dict:
+    """An entry of a state message's `errors`. `orderFailed` means the machine cannot carry out its
+    current order (`text` says why): the controller withdraws the pass and the machine is free again."""
+    assert level in ("warning", "fatal")
+    return {"code": code, "level": level, "text": text}
+
+
 def safety(site: str, seq: int, command: str = "heartbeat", reason: str = "", ts: float = 0) -> dict:
     """Site-wide message on loam/v0/<site>/safety. Machines stop if no message arrives for 3 s."""
     assert command in ("heartbeat", "stop", "hold", "resume")

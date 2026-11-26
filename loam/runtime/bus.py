@@ -13,8 +13,10 @@ from __future__ import annotations
 import contextlib
 import json
 import queue
+import sys
 import threading
 import time
+from collections.abc import Iterator
 from typing import Any
 
 try:
@@ -35,6 +37,7 @@ class Bus:
         self.host, self.port = parse_broker(broker)
         self.c = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=client_id, clean_session=True)
         self.inbox: queue.Queue[tuple[str, Any]] = queue.Queue()
+        self.pushback: list[tuple[str, Any]] = []     # handed back by the consumer; drained first, in order
         self.subs: list[str] = []
         self.connected = threading.Event()
         if will:
@@ -51,13 +54,20 @@ class Bus:
 
     def _on_message(self, client, userdata, msg) -> None:
         with contextlib.suppress(ValueError, UnicodeDecodeError):   # not ours: ignore malformed traffic
-            self.inbox.put((msg.topic, json.loads(msg.payload)))
+            payload = json.loads(msg.payload)
+            if isinstance(payload, dict):                           # every Loam message is a JSON object
+                self.inbox.put((msg.topic, payload))
 
     def start(self, subs: list[str], timeout: float = 10.0) -> Bus:
         self.subs = subs
-        self.c.connect(self.host, self.port, keepalive=5)
+        try:
+            self.c.connect(self.host, self.port, keepalive=5)
+        except OSError as e:                          # refused, unreachable, unknown host
+            self._close_wakeup()
+            raise SystemExit(f"cannot reach the MQTT broker at {self.host}:{self.port}: {e}") from e
         self.c.loop_start()
         if not self.connected.wait(timeout):
+            self.stop()                               # no network thread or sockets left behind
             raise SystemExit(f"cannot reach the MQTT broker at {self.host}:{self.port}")
         return self
 
@@ -69,7 +79,9 @@ class Bus:
         self.c.publish(topic, b"", qos=1, retain=True)
 
     def drain(self, timeout: float = 0.0) -> list[tuple[str, Any]]:
-        out = []
+        out, self.pushback = self.pushback, []
+        if out:
+            timeout = 0.0
         try:
             out.append(self.inbox.get(timeout=timeout) if timeout else self.inbox.get_nowait())
             while True:
@@ -97,6 +109,16 @@ class Bus:
         if sock is not None:
             sock.close()
         self._close_wakeup()
+
+
+@contextlib.contextmanager
+def tolerant(topic: str) -> Iterator[None]:
+    """Handle one message; a malformed one (missing or ill-typed fields) is reported and skipped, so
+    nobody on the broker can crash a site process with a bad message."""
+    try:
+        yield
+    except (KeyError, TypeError, ValueError, AttributeError, IndexError) as e:
+        print(f"loam: ignored a malformed message on {topic}: {e!r}", file=sys.stderr, flush=True)
 
 
 class Clock:
@@ -135,8 +157,7 @@ def wait_clock(bus: Bus, site: str, timeout: float = 30.0) -> Clock:
                 else:
                     others.append((topic, msg))
     finally:
-        for item in others:                    # hand everything else back to the caller, in order
-            bus.inbox.put(item)
+        bus.pushback = others + bus.pushback   # hand everything else back, ahead of anything newer
     if clock is not None:
         return clock
     raise SystemExit(f"no clock on sim/{site}/clock; is `loam simulate-site` running?")

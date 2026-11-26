@@ -146,7 +146,7 @@ Loam Wire is the JSON-over-MQTT layer that carries orders to machines and state 
 | `loam/v0/<site>/<machine>/connection` | machine → controller | `online`, `offline`, `connectionBroken`, retained and set as the MQTT last will |
 | `loam/v0/<site>/terrain` | probe → controller | Measured surface tiles: origin, cell size, shape, σ, encoded heights |
 | `loam/v0/<site>/safety` | controller → all | Site-wide stop or hold, plus a 1 Hz heartbeat |
-| `loam/v0/<site>/estop` | e-stop radio → all | `pressed` true/false. Machines stop at once without waiting for the controller |
+| `loam/v0/<site>/estop` | e-stop radio → all | `pressed` true/false. Machines stop at once without waiting for the controller. Releasing it restarts nothing: machines stay stopped (`estopReset`) until a `resume` (ISO 13850) |
 | `loam/v0/<site>/detection` | site sensors → controller | A person or vehicle seen at (x, y); `kind: "clear"` ends it. Feeds `proximity()` |
 | `loam/v0/<site>/weather` | site sensors → controller | Rain rate (m/s). Feeds `weather(rain)` |
 | `loam/v0/<site>/status` | controller → monitors | Tasks, machines, active rules, replans, measured % in tolerance (retained) |

@@ -26,9 +26,10 @@ import numpy as np
 from .. import wire
 from ..checker import Model
 from ..sim import Events, Sim
-from .bus import Bus, Clock
+from .bus import Bus, Clock, tolerant
 
 STATE_TIMEOUT_S = 3.0
+ORDER_RETRY_MIN = 1.0     # after a machine reports it cannot run an order, before it is given another
 HELD_PASS_MIN = 30.0      # a pass whose machine has not been in a safe, working state for this long is withdrawn
 
 
@@ -87,7 +88,12 @@ class Controller(Sim):
                      order=msg.get("orderId"), progress=msg.get("progress", 0.0), ts=max(s["ts"], ts))
             if s["conn"] == "unknown":
                 s["conn"] = "online"
-            if n in self.inflight and msg.get("orderId") == self.order_of.get(n) and msg.get("progress", 0) >= 1:
+            mine = n in self.inflight and msg.get("orderId") == self.order_of.get(n)
+            failed = next((e for e in msg.get("errors", []) if e.get("code") == "orderFailed"), None)
+            if mine and failed is not None:               # the machine cannot run it: do not wait for it
+                self.abandon(n, f"machine could not run it: {failed.get('text') or 'no reason given'}",
+                             cooldown=ORDER_RETRY_MIN)
+            elif mine and msg.get("progress", 0) >= 1:
                 self.machines[n].busy_until = self.t
                 s["finished"] = ts
         elif kind == "connection" and msg.get("machine") in self.mstate:
@@ -117,14 +123,16 @@ class Controller(Sim):
                 self.abandon(n, f"machine not working safely for {HELD_PASS_MIN:.0f} min")
         return super().step()
 
-    def abandon(self, n: str, why: str) -> None:
-        """Withdraw a pass that will not complete: its predicted effect never reaches the plan."""
+    def abandon(self, n: str, why: str, cooldown: float = 0.0) -> None:
+        """Withdraw a pass that will not complete: its predicted effect never reaches the plan.
+        The machine gets no new order for `cooldown` site minutes."""
         ps = self.inflight.pop(n, None)
         if ps is None:
             return
         np.add.at(self.plan_dz.ravel(), ps.idx, -ps.dz_pred)
         np.add.at(self.plan_dloose.ravel(), ps.idx, -ps.dloose_pred)
         self.machines[n].busy_until = self.t
+        self.mstate[n]["retry_at"] = self.t + cooldown
         self.abandoned += 1
         self.log(f"{n}: pass {self.order_of.get(n)} abandoned ({why}); the next survey shows what was done")
 
@@ -190,7 +198,8 @@ class Controller(Sim):
     def machine_ready(self, name: str) -> bool:
         s = self.mstate[name]
         fresh = time.time() - s["seen"] < STATE_TIMEOUT_S
-        return s["conn"] == "online" and fresh and s["safety"] == "ok" and not self.estop
+        return s["conn"] == "online" and fresh and s["safety"] == "ok" and not self.estop \
+            and self.t >= s.get("retry_at", 0.0)
 
     # -- reporting ---------------------------------------------------------------------------
     def status(self) -> dict:
@@ -247,8 +256,9 @@ def run_controller(model: Model, base_dir: str, broker: str, record: str | None 
     try:
         while True:
             for topic, msg in bus.drain(0.002):
-                if topic.startswith(f"loam/v0/{site}/"):
-                    ctl.handle(topic, msg)
+                with tolerant(topic):
+                    if topic.startswith(f"loam/v0/{site}/"):
+                        ctl.handle(topic, msg)
             ctl.t = clock.minutes()
             done = ctl.step()
             now = time.time()

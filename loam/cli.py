@@ -5,6 +5,7 @@ import argparse
 import json
 import os
 import sys
+import time
 from typing import TextIO
 
 from .checker import check, has_errors
@@ -30,6 +31,21 @@ def load(path: str):
     return model
 
 
+# commands that run until stopped: a service manager's SIGTERM must still run their cleanup (hold the
+# vehicle, cancel its goal, report it offline), which Python's default SIGTERM action skips
+LONG_RUNNING = {"run", "simulate-site", "monitor", "_role", "mavlink", "vda5050", "opera", "nmea"}
+
+
+def _stop_cleanly_on_sigterm() -> None:
+    import signal
+    import threading
+
+    def stop(signum, frame):
+        raise SystemExit(128 + signum)
+    if threading.current_thread() is threading.main_thread():
+        signal.signal(signal.SIGTERM, stop)
+
+
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser(prog="loam", description="Loam: an open language for programmable earthmoving")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -53,6 +69,8 @@ def main(argv=None) -> None:
         cmd_plan(a)
         return
     model = load(a.file)
+    if a.cmd in LONG_RUNNING:
+        _stop_cleanly_on_sigterm()
     if a.cmd in FIELD_COMMANDS:
         try:
             FIELD_COMMANDS[a.cmd](model, a)
@@ -255,6 +273,12 @@ def add_field_commands(sub) -> None:
     p.add_argument("--interface", default="uagv", help="first MQTT topic level (default uagv)")
     p.add_argument("--broker", default="localhost:1883")
     p.add_argument("--sim-world", action="store_true", help="part of `loam simulate-site`: its clock and world")
+    p = sub.add_parser("resume", help="restart machines after an e-stop or a stop: the deliberate human step")
+    p.add_argument("file")
+    p.add_argument("--machine", help="one machine (default: the whole site)")
+    p.add_argument("--reason", default="resumed by operator")
+    p.add_argument("--broker", default="localhost:1883")
+    p.add_argument("--json", action="store_true")
     p = sub.add_parser("opera", help="drive an OPERA (ROS 2) machine as a Loam machine: IC120 carrier, ZX200")
     p.add_argument("file")
     p.add_argument("--machine", required=True, help="the Loam machine this is")
@@ -279,6 +303,8 @@ def add_field_commands(sub) -> None:
     p.add_argument("file")
     p.add_argument("--broker", default="localhost:1883")
     p.add_argument("--port", type=int, default=8080)
+    p.add_argument("--host", default="127.0.0.1",
+                   help="address to listen on; 0.0.0.0 lets other machines (a Prometheus server) reach it")
     p.add_argument("--record", help="record dashboard frames as JSON lines")
     p.add_argument("--replay", help="a recording to turn into a self-contained page (with --html)")
     p.add_argument("--html", help="where to write the replay page")
@@ -508,7 +534,28 @@ def cmd_soil_calibrate(model, a) -> None:
     with open(a.out, "w", encoding="utf-8") as f:
         _json.dump(tables, f, indent=1)
     _show({"machine": a.machine, **{k: table[k] for k in ("settlement_m", "first_pass_sinkage_m",
-                                                         "bekker_wong_sinkage_m")}}, a)
+                                                         "bekker_wong_sinkage_m")}}, a.json)
+
+
+def cmd_resume(model, a) -> None:
+    from . import wire
+    from .runtime.bus import Bus
+    site = model.site["name"]
+    if a.machine and a.machine not in model.machines:
+        raise ValueError(f"no machine named {a.machine!r}")
+    bus = Bus(a.broker, f"loam-resume-{os.getpid()}").start([])
+    try:
+        seq = int(time.time())
+        if a.machine:
+            bus.pub(wire.topic(site, a.machine, "instantAction"),
+                    wire.instant_action(site, a.machine, seq, "resume", a.reason, ts=time.time()), qos=1)
+        else:
+            bus.pub(wire.topic(site, None, "safety"), wire.safety(site, seq, "resume", a.reason, ts=time.time()),
+                    qos=1)
+        time.sleep(0.3)                                  # let the QoS 1 publish complete
+    finally:
+        bus.stop()
+    _show({"resumed": a.machine or "site", "reason": a.reason}, a.json)
 
 
 def cmd_opera(model, a) -> None:
@@ -531,7 +578,7 @@ def cmd_monitor(model, a) -> None:
             raise ValueError("--replay needs --html OUT")
         _show(monitor.replay_html(a.replay, a.html, split=a.split), False)
         return
-    monitor.serve(model, os.path.dirname(os.path.abspath(a.file)), a.broker, a.port, a.record)
+    monitor.serve(model, os.path.dirname(os.path.abspath(a.file)), a.broker, a.port, a.record, a.host)
 
 
 def cmd_role(model, a) -> None:
@@ -541,6 +588,7 @@ def cmd_role(model, a) -> None:
 
 FIELD_COMMANDS = {"run": cmd_run, "simulate-site": cmd_simulate_site, "mavlink": cmd_mavlink, "vda5050": cmd_vda5050,
                   "soil-calibrate": cmd_soil_calibrate, "opera": cmd_opera,
+                  "resume": cmd_resume,
                   "_role": cmd_role, "monitor": cmd_monitor,
                   "export": cmd_export, "terrain": cmd_terrain, "score": cmd_score, "nmea": cmd_nmea}
 

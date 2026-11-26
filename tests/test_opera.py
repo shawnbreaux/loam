@@ -43,10 +43,14 @@ FT = 0.3048
 DOMAIN = str(1 + os.getpid() % 100)            # this run's own ROS graph: no cross-talk with stray nodes
 
 
-def ros(cmd: str, **kw) -> subprocess.Popen:
-    """A shell command inside the ROS environment with the OPERA workspace sourced."""
+def ros(cmd: str, log=None, **kw) -> subprocess.Popen:
+    """A shell command inside the ROS environment with the OPERA workspace sourced; output to `log`."""
     full = (f"source {WS}/install/setup.bash && export PYTHONPATH={ROOT}:$PYTHONPATH "
             f"ROS_DOMAIN_ID={DOMAIN} && exec {cmd}")
+    if log is not None:
+        with open(log, "w", encoding="utf-8") as f:           # the child keeps its own copy of the handle
+            return subprocess.Popen([*RUN, "bash", "-c", full], start_new_session=True, stdout=f,
+                                    stderr=subprocess.STDOUT, **kw)
     return subprocess.Popen([*RUN, "bash", "-c", full], start_new_session=True, **kw)
 
 
@@ -66,11 +70,6 @@ def read(path) -> str:
 
 def jsonl(path) -> list[dict]:
     return [json.loads(ln) for ln in read(path).splitlines() if ln.strip()]
-
-
-def log(path):
-    """A log file for a child process; the process owns it from here."""
-    return open(path, "w", encoding="utf-8")
 
 
 def wait_for(path: str, text: str, timeout: float = 90) -> None:
@@ -135,13 +134,13 @@ def test_zx200_cuts_to_the_design_surface(site, mqtt_broker):
     design_grid = g.surface(m.site["design"])
     (tmp / "zx200.urdf").write_text(urdf())
     rig = ros(f"python {HERE}/ros/excavator_rig.py {tmp}/zx200.urdf {tmp}/rig {10.0} {10.0} {100.0} 0.0",
-              stdout=log(tmp / "rig.log"), stderr=subprocess.STDOUT)
+              log=tmp / "rig.log")
     bridge = None
     ctl = Controller(mqtt_broker, "yard", "ex1")
     try:
         wait_for(str(tmp / "rig.log"), "RIG READY", 120)
         bridge = ros(f"python -m loam.cli opera {tmp}/s.loam --machine ex1 --namespace zx200 --kind excavator "
-                     f"--broker {mqtt_broker}", stdout=log(tmp / "bridge.log"), stderr=subprocess.STDOUT)
+                     f"--broker {mqtt_broker}", log=tmp / "bridge.log")
         ctl.wait(lambda s: s["safetyState"] == "ok", timeout=60)
         # the survey: 1 ft of material on the window, design elsewhere
         poly = [(win[0], win[1]), (win[2], win[1]), (win[2], win[3]), (win[0], win[3])]
@@ -213,13 +212,13 @@ def _seg_dist(p, a, b):
 def test_ic120_hauls_dumps_and_stops_on_nav2(site, mqtt_broker):
     _, tmp, _ = site
     rig = ros(f"python {HERE}/ros/carrier_rig.py {HERE}/ros/nav2_ic120.yaml {tmp}/rig 5.0 10.0 0.0",
-              stdout=log(tmp / "rig.log"), stderr=subprocess.STDOUT)
+              log=tmp / "rig.log")
     bridge = None
     ctl = Controller(mqtt_broker, "yard", "dt1")
     try:
         wait_for(str(tmp / "rig.log"), "SIM UP", 120)       # Nav2 is still coming up: the bridge must wait for it
         bridge = ros(f"python -m loam.cli opera {tmp}/s.loam --machine dt1 --namespace ic120 --kind carrier --dump "
-                     f"--broker {mqtt_broker}", stdout=log(tmp / "bridge.log"), stderr=subprocess.STDOUT)
+                     f"--broker {mqtt_broker}", log=tmp / "bridge.log")
         first = ctl.wait(lambda s: s["safetyState"] == "ok", timeout=60)
         assert math.hypot(first["pose"]["x"] - 5 / FT, first["pose"]["y"] - 10 / FT) < 0.1
         # 1: through a work window, to the deposit (dump there), and back; at most 0.8 m/s

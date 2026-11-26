@@ -156,13 +156,13 @@ See [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
 | `loam/monitor.py`, `loam/monitor.html` | Live dashboard and replay pages |
 | `loam/target.py`, `loam/export.py` | Next-pass surface; LandXML (Cat Grade 3D), OpenGrade3D `.agd`, AgOpenGPS field folder |
 | `examples/` | Example program and surfaces, comparison plot, Monte Carlo study |
-| `tests/` | 145 tests: language, I/O, simulator invariants, field adapters, planner, controller loopback, a full multi-process MQTT run with faults, vehicle bridges (ArduPilot SITL, VDA 5050, RTKLIB, OPERA on Nav2 and ros2_control), Chrono soil, integrations, memory and handle bounds, parser fuzzing |
+| `tests/` | 165 tests: language, I/O, simulator invariants, field adapters, planner, controller loopback, a full multi-process MQTT run with faults, vehicle bridges (ArduPilot SITL and a fake ArduPilot, VDA 5050, RTKLIB, OPERA on Nav2 and ros2_control), e-stop and SIGTERM safety, Chrono soil, integrations, parser fuzzing; every test also fails on a leaked thread, process or file |
 
 ## Development
 
 ```bash
 pip install -e ".[dev]"
-pytest -q --cov=loam          # 118 tests, about 2 min; the MQTT test needs mosquitto
+pytest -q --cov=loam          # 165 tests, about 3 min; the MQTT tests need mosquitto
 ruff check loam tests examples
 mypy loam
 python examples/study.py      # about 1 min on 2 cores; rewrites results/

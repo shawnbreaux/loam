@@ -13,7 +13,7 @@ import numpy as np
 from .. import wire
 from ..checker import Model
 from ..grid import SiteGrid
-from .bus import Bus, wait_clock
+from .bus import Bus, tolerant, wait_clock
 
 
 def run_probe(model: Model, base_dir: str, broker: str, seed: int = 11) -> None:
@@ -33,18 +33,19 @@ def run_probe(model: Model, base_dir: str, broker: str, seed: int = 11) -> None:
     while True:
         t = clock.minutes()
         for topic, msg in bus.drain(0.02):
-            if topic == f"sim/{site}/end":
-                bus.stop()
-                return
-            if topic == f"sim/{site}/faults":
-                faults = msg
-            elif topic.startswith(f"sim/{site}/world/scan/"):
-                z = wire.decode_heights(msg["data"], tuple(msg["shape"])).astype(float)
-                z = z + rng.normal(0, sigma, z.shape)
-                seq += 1
-                bus.pub(wire.topic(site, None, "terrain"),
-                        wire.terrain(site, name, seq, (g.x0, g.y0), g.cell, g.shape, data=wire.encode_heights(z),
-                                     sigma=sigma, ts=clock.ts(msg["t"])), qos=1)
+            with tolerant(topic):
+                if topic == f"sim/{site}/end":
+                    bus.stop()
+                    return
+                if topic == f"sim/{site}/faults":
+                    faults = msg
+                elif topic.startswith(f"sim/{site}/world/scan/"):
+                    z = wire.decode_heights(msg["data"], tuple(msg["shape"])).astype(float)
+                    z = z + rng.normal(0, sigma, z.shape)
+                    seq += 1
+                    bus.pub(wire.topic(site, None, "terrain"),
+                            wire.terrain(site, name, seq, (g.x0, g.y0), g.cell, g.shape, data=wire.encode_heights(z),
+                                         sigma=sigma, ts=clock.ts(msg["t"])), qos=1)
         out = any(f["from"] <= t < f["to"] for f in faults.get("probe_outage", []))
         if not out and t - last >= rate:
             last = t

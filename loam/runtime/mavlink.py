@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import math
 import os
+import sys
 import time
 from typing import Any
 
@@ -74,11 +75,13 @@ class Vehicle:
         self.frame, self.min_fix = frame, min_fix
         self.m: Any = mavutil.mavlink_connection(url, source_system=254, source_component=191)
         if self.m.wait_heartbeat(timeout=timeout) is None:
+            self.m.close()
             raise ValueError(f"no MAVLink heartbeat on {url}")
         self.pose: tuple[float, float, float] | None = None
         self.fix, self.armed, self.mode, self.reached = 0, False, -1, -1
         self.n_wp, self.paused, self.stopped_hard = 0, True, False
         self.sent_at = 0.0
+        self.failed: str | None = None          # why the current order cannot run, until the next order
         self.last_hb = time.time()
         for msg_id, hz in ((33, 10), (24, 5)):                 # GLOBAL_POSITION_INT, GPS_RAW_INT
             self.command(511, msg_id, 1e6 / hz)                # MAV_CMD_SET_MESSAGE_INTERVAL
@@ -95,6 +98,10 @@ class Vehicle:
     @property
     def fault(self) -> str | None:
         return None if time.time() - self.last_hb < HEARTBEAT_TIMEOUT_S else "vehicleLinkLost"
+
+    @property
+    def order_error(self) -> str | None:
+        return self.failed
 
     def poll(self) -> None:
         while (msg := self.m.recv_match(blocking=False)) is not None:
@@ -116,14 +123,24 @@ class Vehicle:
                 self.reached = msg.seq
 
     def start(self, path: list[tuple[float, float]], order: dict, max_speed_ms: float | None) -> None:
-        items = mission_items(path, self.frame, max_speed_ms)
+        """Upload the order as a mission. The vehicle is in HOLD for the upload (which blocks for up to
+        10 s). If it refuses or does not answer, the last mission is still on board: nothing of it may
+        count toward this order, and the vehicle must not be put in AUTO to run it again."""
+        self.n_wp, self.reached, self.paused, self.failed = 0, -1, True, None
         self.set_mode(MODE_HOLD)
-        self.upload(items)
-        self.n_wp, self.reached, self.paused = len(items) - 1, -1, True
+        try:
+            items = mission_items(path, self.frame, max_speed_ms)
+            self.upload(items)
+        except ValueError as e:
+            self.failed = "vehicleMissionRejected"
+            print(f"loam: {order.get('orderId')}: {e}", file=sys.stderr, flush=True)
+            return
+        self.n_wp = len(items) - 1
         if not self.armed and not self.stopped_hard:
             self.arm(True)
 
     def pause(self, on: bool) -> None:
+        on = on or self.n_wp == 0               # no mission of ours on board: HOLD is the only mode
         want = MODE_HOLD if on else MODE_AUTO
         if on != self.paused or (self.mode != want and time.time() - self.sent_at > 1.0):
             self.sent_at = time.time()          # resend until the vehicle's heartbeat shows the mode

@@ -142,7 +142,7 @@ def test_geotiff_dem_in_another_crs_and_as_design(tmp_path, capsys):
     pytest.importorskip("rasterio")
     pyproj = pytest.importorskip("pyproj")
     import rasterio
-    from rasterio.transform import from_origin
+    from rasterio.transform import Affine
     _, g = site(tmp_path)
     e0, n0 = pyproj.Transformer.from_crs(UTM, SP, always_xy=True).transform(E0, N0)
     frame = Frame(1.0, 0.0, None, None, e0, n0, 1.0, 0.0, SP)
@@ -151,7 +151,7 @@ def test_geotiff_dem_in_another_crs_and_as_design(tmp_path, capsys):
     se, sn = to_site.transform(ce, cn)
     dem = design(np.asarray(se) - e0, np.asarray(sn) - n0).astype("float32")
     with rasterio.open(tmp_path / "dtm.tif", "w", driver="GTiff", width=280, height=240, count=1,
-                       dtype="float32", crs=UTM, transform=from_origin(E0 - 10, N0 + 30, 0.25, 0.25)) as d:
+                       dtype="float32", crs=UTM, transform=Affine(0.25, 0.0, E0 - 10, 0.0, -0.25, N0 + 30)) as d:
         d.write(dem, 1)
     from loam.surfaces import geotiff_ground
     z = geotiff_ground(str(tmp_path / "dtm.tif"), g, frame)

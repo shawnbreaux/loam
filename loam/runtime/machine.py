@@ -24,7 +24,7 @@ import numpy as np
 from .. import wire
 from ..checker import Model
 from ..units import Quantity
-from .bus import Bus, Clock, wait_clock
+from .bus import Bus, Clock, tolerant, wait_clock
 
 HEARTBEAT_TIMEOUT_S = 3.0
 STATE_EVERY_S = 0.25
@@ -53,6 +53,7 @@ class MachineSim:
         self.progress = 0.0
         self.waiting = False
         self.stopped = self.held = self.estop = False
+        self.latched = False                 # e-stop released but not yet resumed (ISO 13850: no auto-restart)
         self.last_hb = time.time()
         self.gnss_bad = False
         self.seq = 0
@@ -123,14 +124,46 @@ class MachineSim:
                 return
             d -= leg
 
+    def control(self, kind: str, msg: dict, on_estop=None) -> None:
+        """Apply an instantAction, safety or e-stop message. `on_estop()` runs as soon as an e-stop is
+        pressed (the vehicle's hardest stop), before the stop latency is measured.
+
+        Releasing the e-stop does not restart the machine: it stays stopped (estopReset) until a
+        deliberate `resume`, site-wide on the safety topic or for this machine as an instant action."""
+        if kind == "instantAction":
+            a = msg["action"]
+            if a == "resume":
+                self.stopped = self.held = self.latched = False
+            elif a == "stop":
+                self.stopped = True
+            elif a == "hold":
+                self.held = True
+        elif kind == "safety":
+            self.last_hb = time.time()
+            if msg["command"] == "stop":
+                self.stopped = True
+            elif msg["command"] == "resume":
+                self.stopped = self.latched = False
+        elif kind == "estop":
+            pressed, was = bool(msg["pressed"]), self.estop
+            self.estop = pressed
+            if was and not pressed:
+                self.latched = True
+            if pressed and not was:
+                if on_estop is not None:
+                    on_estop()
+                if "wall" in msg:                         # simulated sites stamp the press for latency
+                    self.stop_latency_s.append(time.time() - float(msg["wall"]))
+
     def safety_state(self) -> tuple[str, list]:
         if self.rolled:
-            return "stopped", [{"code": "rollover", "detail": f"tilt {math.degrees(self.max_tilt or 0):.0f} deg"}]
-        if self.estop or self.stopped or time.time() - self.last_hb > HEARTBEAT_TIMEOUT_S:
-            reason = "estop" if self.estop else "stop" if self.stopped else "heartbeatLost"
-            return "stopped", [{"code": reason, "detail": ""}]
+            return "stopped", [wire.error("rollover", f"tilt {math.degrees(self.max_tilt or 0):.0f} deg")]
+        if self.estop or self.latched or self.stopped or time.time() - self.last_hb > HEARTBEAT_TIMEOUT_S:
+            reason = "estop" if self.estop else "estopReset" if self.latched else \
+                "stop" if self.stopped else "heartbeatLost"
+            return "stopped", [wire.error(reason)]
         if self.gnss_bad:
-            return "degraded", [{"code": "gnssQuality", "detail": "rtk-float"}]
+            return "degraded", [wire.error("gnssQuality", "rtk-float", "warning")]
         return "ok", []
 
 
@@ -178,35 +211,27 @@ def run_machine(model: Model, name: str, broker: str, park: tuple[float, float],
             ms.order, ms.waiting = None, False    # never resume a pass without the controller re-issuing it
         # -- messages ------------------------------------------------------------------
         for topic, msg in bus.drain(0.02):
-            kind = topic.rsplit("/", 1)[-1]
-            if topic == f"sim/{site}/end":
-                bus.pub(ms.topic("connection"), wire.connection(site, name, ms.seq + 1, "offline"), retain=True, qos=1)
-                time.sleep(0.1)
-                bus.stop()
-                return
-            if topic == f"sim/{site}/faults":
-                faults = msg
-            elif kind == "order" and (ms.order is None or msg["orderId"] != ms.order["orderId"]):
-                ms.take(msg)
-                travelled, stall_xy, stall_t = 0.0, (ms.x, ms.y), clock.minutes()
-            elif kind == "instantAction":
-                a = msg["action"]
-                ms.stopped = a == "stop" or (ms.stopped and a != "resume")
-                ms.held = a == "hold" or (ms.held and a != "resume")
-            elif kind == "safety":
-                ms.last_hb = time.time()
-                if msg["command"] in ("stop", "resume"):
-                    ms.stopped = msg["command"] == "stop"
-            elif kind == "estop":
-                if msg["pressed"] and not ms.estop:
-                    ms.stop_latency_s.append(time.time() - msg["wall"])
-                ms.estop = bool(msg["pressed"])
-            elif topic.startswith(f"sim/{site}/world/applied/") and ms.waiting and ms.order \
-                    and msg["orderId"] == ms.order["orderId"]:
-                ms.progress, ms.waiting = 1.0, False
-                ms.seq += 1
-                bus.pub(ms.topic("state"), _state(ms, clock, msg.get("t", t)), qos=1)
-                ms.order = None
+            with tolerant(topic):
+                kind = topic.rsplit("/", 1)[-1]
+                if topic == f"sim/{site}/end":
+                    bus.pub(ms.topic("connection"), wire.connection(site, name, ms.seq + 1, "offline"),
+                            retain=True, qos=1)
+                    time.sleep(0.1)
+                    bus.stop()
+                    return
+                if topic == f"sim/{site}/faults":
+                    faults = msg
+                elif kind == "order" and (ms.order is None or msg["orderId"] != ms.order["orderId"]):
+                    ms.take(msg)
+                    travelled, stall_xy, stall_t = 0.0, (ms.x, ms.y), clock.minutes()
+                elif kind in ("instantAction", "safety", "estop"):
+                    ms.control(kind, msg)
+                elif topic.startswith(f"sim/{site}/world/applied/") and ms.waiting and ms.order \
+                        and msg["orderId"] == ms.order["orderId"]:
+                    ms.progress, ms.waiting = 1.0, False
+                    ms.seq += 1
+                    bus.pub(ms.topic("state"), _state(ms, clock, msg.get("t", t)), qos=1)
+                    ms.order = None
         # -- motion --------------------------------------------------------------------
         safety, _ = ms.safety_state()
         moving = ms.order is not None and not ms.waiting and safety == "ok"

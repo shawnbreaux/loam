@@ -26,10 +26,11 @@ from datetime import datetime, timezone
 from ..checker import Model
 from ..units import Quantity
 from .bridge import run_bridge
-from .bus import Bus
+from .bus import Bus, tolerant
 
 VERSION = "3.0.0"
 STATE_STALE_S = 35.0                     # robots publish state on change and at least every 30 s
+ORDER_ACK_S = 10.0                       # a robot whose state does not show a new order by then has not taken it
 
 
 def iso(t: float | None = None) -> str:
@@ -54,6 +55,7 @@ class Robot:
         self.order_id: str | None = None
         self.last_seq = 0
         self.paused_sent: bool | None = None
+        self.ordered_at = 0.0
 
     def _msg(self, **body) -> dict:
         self.header += 1
@@ -69,13 +71,14 @@ class Robot:
     # -- adapter -------------------------------------------------------------------------
     def poll(self) -> None:
         for topic, msg in self.bus.drain(0.0):
-            if topic.endswith("/connection"):
-                self.connection = msg.get("connectionState", "OFFLINE")
-            elif topic.endswith("/state"):
-                self.state, self.state_at = msg, time.time()
-                p = msg.get("mobileRobotPosition")
-                if p and p.get("mapId") == self.map_id:
-                    self.pose = (p["x"] / self.u, p["y"] / self.u, float(p["theta"]))
+            with tolerant(topic):
+                if topic.endswith("/connection"):
+                    self.connection = msg.get("connectionState", "OFFLINE")
+                elif topic.endswith("/state"):
+                    self.state, self.state_at = msg, time.time()
+                    p = msg.get("mobileRobotPosition")
+                    if p and p.get("mapId") == self.map_id:
+                        self.pose = (p["x"] / self.u, p["y"] / self.u, float(p["theta"]))
 
     @property
     def fix_ok(self) -> bool:
@@ -98,11 +101,18 @@ class Robot:
             return "vehicleError"
         return None
 
+    @property
+    def order_error(self) -> str | None:
+        if self.order_id is not None and self.state.get("orderId") != self.order_id \
+                and time.time() - self.ordered_at > ORDER_ACK_S:
+            return "vehicleOrderRejected"            # it never took the order: do not wait on it forever
+        return None
+
     def start(self, path: list[tuple[float, float]], order: dict, max_speed_ms: float | None) -> None:
         self.bus.pub(f"{self.base}/order", vda_order(self._msg, order, path, self.map_id, self.u, max_speed_ms),
                      qos=1)
         self.order_id, self.last_seq = order["orderId"], 2 * (len(path) - 1)
-        self.paused_sent = None
+        self.paused_sent, self.ordered_at = None, time.time()
 
     def pause(self, on: bool) -> None:
         if on != self.paused_sent and (self.order_id is not None or on):
