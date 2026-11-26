@@ -48,6 +48,8 @@ Leaks and errors
 - OPERA: the ROS executor thread stops before its context is shut down, and Loam keeps
   SIGINT/SIGTERM. An aborted Nav2 goal is retried 3 times, 2 s apart, before the order fails, since
   Nav2 also aborts while it is still starting up.
+- Controller: incoming messages were handled with the clock one loop behind (it was read only after
+  them), so log stamps and time-based decisions lagged by a planning cycle. Found by CI on Python 3.13.
 - CLI: `soil-calibrate` and `resume` always printed JSON; they now honour `--json`.
 
 Tests and CI

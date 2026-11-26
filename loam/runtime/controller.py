@@ -255,7 +255,9 @@ def run_controller(model: Model, base_dir: str, broker: str, record: str | None 
     hb_seq = 0
     try:
         while True:
-            for topic, msg in bus.drain(0.002):
+            msgs = bus.drain(0.002)
+            ctl.t = clock.minutes()                  # messages are handled, and logged, at the current time
+            for topic, msg in msgs:
                 with tolerant(topic):
                     if topic.startswith(f"loam/v0/{site}/"):
                         ctl.handle(topic, msg)
