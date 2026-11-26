@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "loam-lang"
-version = "0.0.2"
+version = "0.0.3"
 description = "Loam: an open language for programmable, closed-loop earthmoving"
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -19,9 +19,17 @@ classifiers = [
 
 [project.optional-dependencies]
 plot = ["matplotlib>=3.7"]
-run = ["paho-mqtt>=2.0"]
-physics = ["pybullet>=3.2"]
-test = ["pytest>=7", "pytest-cov>=4", "coverage>=7.10", "hypothesis>=6", "jsonschema>=4", "paho-mqtt>=2.0"]
+# Every extra is OSI-licensed (see docs/INTEGRATIONS.md); the core needs numpy only.
+run = ["paho-mqtt>=2.0"]                                  # EPL-2.0 OR BSD-3-Clause
+physics = ["pybullet>=3.2"]                               # zlib
+crs = ["pyproj>=3.6"]                                     # MIT
+lidar = ["laspy>=2.5", "lazrs>=0.6"]                      # BSD-2-Clause, MIT
+raster = ["rasterio>=1.3"]                                # BSD-3-Clause (GDAL: MIT)
+ifc = ["ifcopenshell>=0.8"]                               # LGPL-3.0-or-later, used unmodified
+mavlink = ["pymavlink>=2.4", "paho-mqtt>=2.0"]            # LGPL-3.0, used unmodified
+all = ["loam-lang[run,physics,crs,lidar,raster,ifc,mavlink]"]
+test = ["pytest>=7", "pytest-cov>=4", "coverage>=7.10", "hypothesis>=6", "jsonschema>=4", "paho-mqtt>=2.0",
+        "prometheus-client>=0.20"]
 dev = ["loam-lang[test,plot]", "ruff>=0.6", "mypy>=1.10"]
 
 [project.scripts]

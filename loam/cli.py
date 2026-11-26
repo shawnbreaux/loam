@@ -5,6 +5,7 @@ import argparse
 import json
 import os
 import sys
+from typing import TextIO
 
 from .checker import check, has_errors
 from .compiler import explain, manifest
@@ -101,6 +102,9 @@ def _frame_args(p: argparse.ArgumentParser) -> None:
     g.add_argument("--rotation", type=float, default=0.0, metavar="DEG",
                    help="bearing of the site +y axis, degrees clockwise from north")
     g.add_argument("--dz", type=float, default=0.0, help="site units added to incoming heights")
+    g.add_argument("--crs", help="CRS of the projected coordinates, e.g. EPSG:6355 (needs pyproj)")
+    g.add_argument("--source-crs", help="CRS of the input file when it differs from --crs "
+                   "(GeoTIFF and LAZ declare their own)")
 
 
 def _frame(grid, a):
@@ -108,7 +112,7 @@ def _frame(grid, a):
     from .units import length_unit_si
     lat0, lon0 = a.origin if a.origin else (None, None)
     return Frame(grid.u, a.rotation, lat0, lon0, a.world_origin[0], a.world_origin[1],
-                 length_unit_si(a.world_units), a.dz)
+                 length_unit_si(a.world_units), a.dz, getattr(a, "crs", None))
 
 
 def _grid(model, a):
@@ -127,7 +131,10 @@ def _is_survey_csv(path: str) -> bool:
 
 
 def load_ground(path: str, grid, frame, a):
-    """Measured ground on the site grid from 'existing', a survey CSV or a point cloud."""
+    """Measured ground on the site grid from 'existing', a survey CSV, a point cloud, a GeoTIFF DEM or an
+    OpenDroneMap project folder."""
+    import os
+
     import numpy as np
 
     from .pointcloud import fill_gaps, grid_cloud
@@ -142,13 +149,31 @@ def load_ground(path: str, grid, frame, a):
         z = idw(grid, s.x, s.y, s.z, a.radius / grid.u)
         return z, {"source": "survey", "points": len(s.z),
                    "cells_covered_pct": round(100 * float(np.isfinite(z).mean()), 2)}
-    z, info = grid_cloud(path, grid, frame, a.stat, a.ground_only)
+    src = getattr(a, "source_crs", None)
+    pmf: dict | None = {} if getattr(a, "ground_filter", False) else None
+    if os.path.isdir(path):                              # OpenDroneMap project: DTM, else filtered cloud
+        dtm = os.path.join(path, "odm_dem", "dtm.tif")
+        laz = os.path.join(path, "odm_georeferencing", "odm_georeferenced_model.laz")
+        if os.path.exists(dtm):
+            path = dtm
+        elif os.path.exists(laz):
+            path, pmf = laz, pmf if pmf is not None else {}
+        else:
+            raise ValueError(f"{path}: no odm_dem/dtm.tif or odm_georeferencing/odm_georeferenced_model.laz")
+    if path.lower().endswith((".tif", ".tiff")):
+        from .surfaces import geotiff_ground
+        z = fill_gaps(geotiff_ground(path, grid, frame, src), a.fill)
+        return z, {"source": "geotiff", "file": os.path.basename(path),
+                   "cells_covered_pct": round(100 * float(np.isfinite(z).mean()), 2)}
+    z, info = grid_cloud(path, grid, frame, a.stat, a.ground_only, pmf=pmf, src_crs=src)
     return fill_gaps(z, a.fill), {"source": "point cloud", **info}
 
 
 def _ground_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--stat", choices=["mean", "min"], default="mean", help="per-cell statistic for clouds")
-    p.add_argument("--ground-only", action="store_true", help="LAS: keep only class 2 (ground) points")
+    p.add_argument("--ground-only", action="store_true", help="LAS/LAZ: keep only class 2 (ground) points")
+    p.add_argument("--ground-filter", action="store_true",
+                   help="clouds: drop machines, people and brush with a morphological ground filter")
     p.add_argument("--fill", type=int, default=2, metavar="CELLS", help="fill cloud holes up to this deep")
     p.add_argument("--radius", type=float, default=3.0, metavar="M",
                    help="survey CSV: interpolation radius in metres (default 3)")
@@ -169,8 +194,9 @@ def add_field_commands(sub) -> None:
     p.add_argument("--json", action="store_true")
     p = sub.add_parser("export", help="write a surface or field files for grade-control and guidance tools")
     p.add_argument("file")
-    p.add_argument("--to", required=True, choices=["landxml", "agd", "agopengps"],
-                   help="landxml: Cat Grade 3D and most machine control; agd: OpenGrade3D; agopengps: field folder")
+    p.add_argument("--to", required=True, choices=["landxml", "agd", "agopengps", "geotiff", "geojson"],
+                   help="landxml: Cat Grade 3D and most machine control; agd: OpenGrade3D; agopengps: field "
+                        "folder; geotiff: surface raster (QGIS, GDAL); geojson: boundary, zones, stockpiles")
     p.add_argument("-o", "--out", required=True, help="output file (folder for agopengps)")
     p.add_argument("--surface", choices=["design", "next"], default="next",
                    help="design, or the next-pass target computed from --ground (default)")
@@ -210,6 +236,24 @@ def add_field_commands(sub) -> None:
     p.add_argument("--faults", help="JSON fault script (default: person, outage, rain, GNSS, link loss, e-stop)")
     p.add_argument("--quiet", action="store_true")
     p.add_argument("--physics", action="store_true", help="drive machines as PyBullet bodies (try --speed 60)")
+    p = sub.add_parser("mavlink", help="drive an ArduPilot Rover (or any MAVLink ground vehicle) as a Loam machine")
+    p.add_argument("file")
+    p.add_argument("--machine", required=True, help="the Loam machine this vehicle is")
+    p.add_argument("--vehicle", required=True, metavar="URL", help="pymavlink connection, e.g. udpin:0.0.0.0:14550, "
+                   "tcp:127.0.0.1:5760, /dev/ttyACM0")
+    p.add_argument("--broker", default="localhost:1883")
+    p.add_argument("--min-fix", type=int, default=6, choices=range(0, 7), metavar="0-6",
+                   help="lowest GPS fix type to work on (6 RTK fixed, 5 float, 3 3D; default 6)")
+    p.add_argument("--sim-world", action="store_true", help="part of `loam simulate-site`: its clock and world")
+    _frame_args(p)
+    p = sub.add_parser("vda5050", help="drive a VDA 5050 3.0 mobile robot as a Loam machine")
+    p.add_argument("file")
+    p.add_argument("--machine", required=True, help="the Loam machine this robot is")
+    p.add_argument("--manufacturer", required=True)
+    p.add_argument("--serial", required=True, help="the robot's serialNumber")
+    p.add_argument("--interface", default="uagv", help="first MQTT topic level (default uagv)")
+    p.add_argument("--broker", default="localhost:1883")
+    p.add_argument("--sim-world", action="store_true", help="part of `loam simulate-site`: its clock and world")
     p = sub.add_parser("monitor", help="live web dashboard for a site, or a replay page from a recording")
     p.add_argument("file")
     p.add_argument("--broker", default="localhost:1883")
@@ -227,11 +271,13 @@ def add_field_commands(sub) -> None:
     p.add_argument("--name")
     p.add_argument("--index", type=int, default=0)
     p.add_argument("--physics", action="store_true")
-    p = sub.add_parser("nmea", help="turn a GGA stream (file or stdin) into Wire state messages")
+    p = sub.add_parser("nmea", help="turn a GGA stream into Wire state messages")
     p.add_argument("file")
-    p.add_argument("input", nargs="?", default="-", help="NMEA file, or - for stdin (e.g. piped from nc)")
+    p.add_argument("input", nargs="?", default="-",
+                   help="NMEA file, - for stdin, or tcp://host:port (RTKLIB str2str/rtkrcv, RTKBase, a receiver)")
     p.add_argument("--machine", required=True)
     p.add_argument("-o", "--out", help="write JSON lines here (default stdout)")
+    p.add_argument("--broker", help="publish the states to this MQTT broker instead of writing them")
     _frame_args(p)
 
 
@@ -256,9 +302,18 @@ def cmd_export(model, a) -> None:
     out: dict = {"to": a.to, "out": a.out}
     if a.to == "agopengps":
         out.update(export.agopengps(a.out, grid, frame))
+    elif a.to == "geojson":
+        import json as _json
+
+        from .surfaces import site_geojson
+        fc = site_geojson(model, grid, frame)
+        with open(a.out, "w") as fh:
+            _json.dump(fc, fh)
+        out["features"] = len(fc["features"])
     else:
-        ground, gi = load_ground(a.ground, grid, frame, a)
-        out["ground"] = gi
+        ground = design
+        if a.surface != "design" or a.to == "agd":
+            ground, out["ground"] = load_ground(a.ground, grid, frame, a)
         if a.surface == "design":
             surf = design
         else:
@@ -269,6 +324,10 @@ def cmd_export(model, a) -> None:
             out["triangles"] = export.landxml(a.out, grid, surf, world,
                                               "FG" if a.surface == "design" else "LOAM_NEXT", a.world_units)
             out["coordinates"] = "projected" if world else "site"
+        elif a.to == "geotiff":
+            from .surfaces import write_geotiff
+            write_geotiff(a.out, surf, grid, frame)
+            out["cells"] = int(surf.size)
         else:
             out["grid_points"] = export.agd(a.out, grid, ground, surf, frame, a.benchmark)
     _show(out, a.json)
@@ -317,18 +376,34 @@ def cmd_nmea(model, a) -> None:
     from .survey import nmea_states
     grid = _grid(model, a)
     frame = _frame(grid, a)
-    src = sys.stdin if a.input == "-" else open(a.input, encoding="ascii", errors="replace")  # noqa: SIM115
+    src: TextIO
+    if a.input.startswith("tcp://"):
+        import socket
+        host, _, port = a.input[6:].rpartition(":")
+        conn = socket.create_connection((host or "localhost", int(port)), timeout=30)
+        src = conn.makefile("r", encoding="ascii", errors="replace")
+    else:
+        src = sys.stdin if a.input == "-" else open(a.input, encoding="ascii", errors="replace")  # noqa: SIM115
+    bus = None
+    if a.broker:
+        from .runtime.bus import Bus
+        bus = Bus(a.broker, f"loam-nmea-{a.machine}-{os.getpid()}").start([])
     dst = open(a.out, "w", encoding="utf-8") if a.out else sys.stdout  # noqa: SIM115
     try:
         topic = wire.topic(model.site["name"], a.machine, "state")
         for msg in nmea_states(src, frame, model.site["name"], a.machine):
-            dst.write(_json.dumps({"topic": topic, "payload": msg}) + "\n")
-            dst.flush()
+            if bus is not None:
+                bus.pub(topic, msg)
+            else:
+                dst.write(_json.dumps({"topic": topic, "payload": msg}) + "\n")
+                dst.flush()
     finally:
         if src is not sys.stdin:
             src.close()
         if dst is not sys.stdout:
             dst.close()
+        if bus is not None:
+            bus.stop()
 
 
 def _show(d: dict, as_json: bool) -> None:
@@ -359,6 +434,16 @@ def cmd_simulate_site(model, a) -> None:
     print(json.dumps(r, indent=2))
 
 
+def cmd_mavlink(model, a) -> None:
+    from .runtime.mavlink import run_mavlink
+    run_mavlink(model, a.machine, a.broker, a.vehicle, _frame(_grid(model, a), a), a.min_fix, a.sim_world)
+
+
+def cmd_vda5050(model, a) -> None:
+    from .runtime.vda5050 import run_vda5050
+    run_vda5050(model, a.machine, a.broker, a.manufacturer, a.serial, a.interface, a.sim_world)
+
+
 def cmd_monitor(model, a) -> None:
     from . import monitor
     if a.replay:
@@ -374,7 +459,8 @@ def cmd_role(model, a) -> None:
     role(a.file, model, a)
 
 
-FIELD_COMMANDS = {"run": cmd_run, "simulate-site": cmd_simulate_site, "_role": cmd_role, "monitor": cmd_monitor,
+FIELD_COMMANDS = {"run": cmd_run, "simulate-site": cmd_simulate_site, "mavlink": cmd_mavlink, "vda5050": cmd_vda5050,
+                  "_role": cmd_role, "monitor": cmd_monitor,
                   "export": cmd_export, "terrain": cmd_terrain, "score": cmd_score, "nmea": cmd_nmea}
 
 

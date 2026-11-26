@@ -219,17 +219,22 @@ behaves under that model, not field performance.
 | Standard | How Loam uses it |
 | --- | --- |
 | [LandXML](https://highways.dot.gov/federal-lands/pddm/dpg/data-exchange-standards) | Design and existing surfaces (`format landxml`); the reference tool reads TIN surfaces |
-| [IFC 4.3](https://www.autodesk.com/blogs/aec/2023/05/12/whats-new-in-openbim-and-infrastructure-ifc-4-3-for-civil-3d/) | Accepted as `format ifc` in the language; reading it is on the roadmap |
+| [IFC 4.3](https://www.autodesk.com/blogs/aec/2023/05/12/whats-new-in-openbim-and-infrastructure-ifc-4-3-for-civil-3d/) | Design and existing surfaces (`format ifc`): triangulated face sets and TINs, through IfcOpenShell |
+| GeoTIFF | Surfaces (`format geotiff`) and measured ground (an OpenDroneMap DTM, say); `loam export --to geotiff` |
+| GeoJSON | Areas (`area file "x.geojson"`), drawn in QGIS; `loam export --to geojson` |
+| [VDA 5050 3.0](https://github.com/VDA5050/VDA5050) | Template for Loam Wire, and `loam vda5050` drives VDA 5050 robots as Loam machines |
+| [MAVLink 2](https://mavlink.io/) | `loam mavlink` drives ArduPilot Rover and other MAVLink ground vehicles as Loam machines |
 | [ISO/TS 15143-4:2025](https://www.iso.org/standard/74485.html) | Server-to-server design and as-built exchange. It excludes machine-to-server and machine-to-machine traffic; Loam Wire covers that |
 | [ISO 23725:2024](https://www.iso.org/standard/76769.html) | Fleet-to-autonomy dispatch for mining haul trucks; a model for Loam's task assignment |
-| [VDA 5050](https://www.ifl.kit.edu/english/vda5050.php) | Template for Loam Wire's order, state and connection messages over MQTT |
 | [ISO 17757:2019](https://www.iso.org/standard/76126.html) | Safety requirements for the autonomous machines Loam directs |
 
 Roadmap:
 
 - [ ] **0.0.2 language:** trench and haul tasks in the simulator, multiple probes fused by accuracy, machine-mounted probes, `deposit` windows
-- [ ] **0.0.2 tooling:** Assembly port (x86-64 and ARM64), IFC 4.3 surface reader, LAZ point-cloud terrain messages, a `loam fmt` formatter, editor syntax highlighting
-- [ ] **Runtime:** a reference MQTT controller that runs a `.loam` file against real Loam Wire machines, plus a ROS 2 bridge
+- [x] **0.0.3 tooling:** IFC 4.3 and GeoTIFF surfaces, LAZ point clouds with ground filtering, CRSs, GeoJSON areas
+- [x] **Runtime:** a reference MQTT controller that runs a `.loam` file against Loam Wire machines; MAVLink and VDA 5050 bridges
+- [ ] **Tooling:** Assembly port (x86-64 and ARM64), a `loam fmt` formatter, editor syntax highlighting
+- [ ] **Bridges:** ROS 2 (OPERA), Project Chrono soil physics
 - [ ] **Conformance suite:** test programs and message traces any runtime or machine adapter must pass
 - [ ] **Governance:** public repository, an RFC process for language changes, versioned spec releases
 

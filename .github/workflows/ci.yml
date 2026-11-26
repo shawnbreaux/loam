@@ -17,7 +17,12 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - run: sudo apt-get install -y -q mosquitto      # the end-to-end test runs a real MQTT broker
-      - run: pip install -e ".[test,plot]"
+      - name: RTKLIB str2str (BSD-2) for the positioning-stream test
+        run: |
+          git clone -q --depth 1 https://github.com/rtklibexplorer/RTKLIB.git /tmp/RTKLIB
+          make -s -C /tmp/RTKLIB/app/consapp/str2str/gcc -j4
+          echo "STR2STR=/tmp/RTKLIB/app/consapp/str2str/gcc/str2str" >> "$GITHUB_ENV"
+      - run: pip install -e ".[test,plot,all]"
       - run: pytest -q --cov=loam --cov-report=term --cov-fail-under=85
 
   lint:

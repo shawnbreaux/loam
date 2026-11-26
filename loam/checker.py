@@ -21,8 +21,8 @@ ENUMS = {
     "caps": {"cut", "push", "spread", "dig", "load", "trench", "haul", "compact", "finish"},
     "zone.role": {"cut", "fill", "finish", "exclusion"},
     "task.op": {"cut", "fill", "spread", "compact", "trench", "haul", "finish", "load"},
-    "site.units": {"ft", "m"},
-    "design.format": {"landxml", "grid", "ifc"},
+    "site.units": {"ft", "usft", "m"},
+    "design.format": {"landxml", "ifc", "geotiff"},
     "action": {"stop", "hold", "pause", "resume", "slow", "alert"},
     "subject": {"person", "machine", "vehicle"},
     "weather": {"rain", "wind"},
@@ -376,8 +376,6 @@ class Checker:
             else:
                 out["surface"] = self.string(v, "surface name")
             i += 2
-        if out.get("format") == "ifc":
-            self.warn("IFC surfaces are part of the spec but not yet read by this reference tool", s.pos)
         return out
 
     def decl_probe(self, d: A.Decl) -> None:

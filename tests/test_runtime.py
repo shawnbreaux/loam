@@ -231,6 +231,36 @@ def test_monitor_frames_and_replay_page(tmp_path):
     assert r["frames"] == 2 and r["maps"] == 1 and '"site":"pad_north"' in html and "/*LOAM_DATA*/" not in html
 
 
+def test_monitor_prometheus_metrics():
+    m = load(EXAMPLE)
+    fr = Frames(m, EXAMPLES)
+    design = fr.design.copy()
+    z = design + np.where(np.arange(design.shape[1]) % 4 == 0, 0.5, 0.01)      # a quarter of columns out
+    fr.feed("loam/v0/pad_north/terrain", wire.terrain("pad_north", "p", 1, (0, 0), 1, z.shape,
+                                                      data=wire.encode_heights(z), ts=1796108400))
+    st = wire.state("pad_north", 'dz"1', 2, "a-1", 5, 5, 0, True, 0.25, "stopped", ts=1796108460)
+    st["stopLatencyS"] = 0.004
+    fr.feed('loam/v0/pad_north/dz"1/state', st)
+    fr.feed("loam/v0/pad_north/status", wire.status("pad_north", 3, {"t": 42.0, "tasks": {"strip_A": {
+        "done": None, "passes": 9}}, "surveys": 4, "replans": 1, "probe_age_min": 3.5}, 1796108470))
+    text = fr.metrics()
+    pc = pytest.importorskip("prometheus_client.parser")
+    fams = {f.name: f for f in pc.text_string_to_metric_families(text)}
+    val = {(x.name, tuple(sorted(x.labels.items()))): x.value for f in fams.values() for x in f.samples}
+
+    def get(name, **lab):
+        return val[(name, tuple(sorted({"site": "pad_north", **lab}.items())))]
+    assert get("loam_machine_progress", machine='dz"1') == 0.25               # label escaping round-trips
+    assert get("loam_machine_safety", machine='dz"1', state="stopped") == 1
+    assert get("loam_machine_stop_latency_seconds", machine='dz"1') == 0.004
+    assert get("loam_task_passes_total", task="strip_A") == 9 and get("loam_task_done", task="strip_A") == 0
+    assert get("loam_site_minutes") == 42 and get("loam_probe_age_minutes") == 3.5
+    ok = np.isfinite(z - design)
+    expect = float(np.mean(np.abs((z - design)[ok]) <= fr.tol))
+    assert 0.7 < expect < 0.8 and get("loam_terrain_within_tolerance_ratio") == pytest.approx(expect, rel=1e-5)
+    assert fams["loam_messages"].type == "counter" and get("loam_messages_total") == 3
+
+
 # -- the real thing: a broker and one process per role ------------------------------------------------
 def _free_port():
     with socket.socket() as s:

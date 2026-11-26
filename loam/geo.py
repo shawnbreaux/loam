@@ -16,11 +16,18 @@ Latitude/longitude use the same local tangent plane as AgOpenGPS
 origin is site (0, 0) has exactly the site's rotated metre grid. Over a few
 kilometres this plane is accurate to millimetres, which is far inside RTK
 error; it is not a substitute for a proper projection over large sites.
+
+With `crs` set (any CRS pyproj understands, e.g. "EPSG:6355" for Alabama East
+US-ft, or a compound "EPSG:32616+5703" for UTM with NAVD88 heights), the
+projected coordinates are in that CRS, WGS84 goes through a real projection,
+and `reproject` brings data from other CRSs (including heights, when both are
+compound) into it. pyproj (MIT) is needed only then.
 """
 from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from functools import lru_cache
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
@@ -38,6 +45,15 @@ def m_per_deg_lon(lat: ArrayLike) -> F:
     return 111412.84 * np.cos(r) - 93.5 * np.cos(3 * r) + 0.118 * np.cos(5 * r)
 
 
+@lru_cache(maxsize=16)
+def _transformer(src: str, dst: str):
+    try:
+        from pyproj import Transformer
+    except ImportError as e:
+        raise ValueError("coordinate reference systems need pyproj: pip install pyproj") from e
+    return Transformer.from_crs(src, dst, always_xy=True)
+
+
 @dataclass(frozen=True)
 class Frame:
     unit_m: float                    # metres per site unit
@@ -48,6 +64,7 @@ class Frame:
     n0: float = 0.0
     world_m: float = 1.0             # metres per world unit of projected data and its heights
     dz: float = 0.0                  # site units added to incoming heights
+    crs: str | None = None           # CRS of the projected coordinates (needs pyproj)
 
     # -- rotation between site axes and east/north metres -------------------
     def local_to_en(self, x: ArrayLike, y: ArrayLike) -> tuple[F, F]:
@@ -73,12 +90,18 @@ class Frame:
         return self.lat0, self.lon0
 
     def local_to_wgs84(self, x: ArrayLike, y: ArrayLike) -> tuple[F, F]:
+        if self.crs:
+            lon, lat = _transformer(self.crs, "EPSG:4326").transform(*self.local_to_projected(x, y))
+            return np.asarray(lat, float), np.asarray(lon, float)
         lat0, lon0 = self.wgs84_origin()
         e, n = self.local_to_en(x, y)
         lat = lat0 + n / m_per_deg_lat(lat0)
         return lat, lon0 + e / m_per_deg_lon(lat)
 
     def wgs84_to_local(self, lat: ArrayLike, lon: ArrayLike) -> tuple[F, F]:
+        if self.crs:
+            e, n = _transformer("EPSG:4326", self.crs).transform(np.asarray(lon, float), np.asarray(lat, float))
+            return self.projected_to_local(e, n)
         lat0, lon0 = self.wgs84_origin()
         lat, lon = np.asarray(lat, float), np.asarray(lon, float)
         n = (lat - lat0) * m_per_deg_lat(lat0)
@@ -99,3 +122,11 @@ class Frame:
 
     def height_to_world(self, z: ArrayLike) -> F:
         return (np.asarray(z, float) - self.dz) * self.unit_m / self.world_m
+
+    def reproject(self, e: ArrayLike, n: ArrayLike, z: ArrayLike, src: str | None) -> tuple[F, F, F]:
+        """Coordinates in CRS `src` to this frame's CRS (no-op when either is unset or they match)."""
+        e, n, z = np.asarray(e, float), np.asarray(n, float), np.asarray(z, float)
+        if not src or not self.crs or src == self.crs:
+            return e, n, z
+        e2, n2, z2 = _transformer(src, self.crs).transform(e, n, z)
+        return np.asarray(e2, float), np.asarray(n2, float), np.asarray(z2, float)

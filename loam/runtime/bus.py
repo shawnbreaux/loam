@@ -79,8 +79,16 @@ class Bus:
         return out
 
     def stop(self) -> None:
+        self.c.disconnect()                     # the network loop sends DISCONNECT, then exits
         self.c.loop_stop()
-        self.c.disconnect()
+        self._close_wakeup()
+
+    def _close_wakeup(self) -> None:
+        """paho keeps a wake-up socket pair until the client is garbage-collected; close it now, so a
+        process that reconnects many times (a machine on a flaky radio) does not accumulate descriptors."""
+        reset = getattr(self.c, "_reset_sockets", None)
+        if reset is not None:
+            reset(sockpair_only=True)
 
     def sever(self) -> None:
         """Drop the connection without a clean disconnect, so the broker sends the last will."""
@@ -88,6 +96,7 @@ class Bus:
         sock = self.c.socket()
         if sock is not None:
             sock.close()
+        self._close_wakeup()
 
 
 class Clock:

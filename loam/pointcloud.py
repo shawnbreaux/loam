@@ -3,8 +3,9 @@
 Readers stream points in bounded chunks, so a 100-million-point scan costs a
 few tens of megabytes, not gigabytes:
 
-* LAS 1.0-1.4, point formats 0-10, uncompressed. DJI Terra exports Zenmuse L2
-  scans as LAS; most lidar tools can. LAZ needs `pip install laspy[lazrs]`.
+* LAS 1.0-1.4, point formats 0-10, uncompressed: built in.
+* LAZ (compressed LAS), as OpenDroneMap, PDAL and most lidar tools write it:
+  `pip install laspy lazrs` (BSD-2 / Apache-2.0).
 * PCD (ascii and binary), as written by livox_ros_driver2 + PCL tools, the
   usual way to record a Livox Mid-360.
 * Plain text "x y z" (or comma separated), one point per line.
@@ -177,12 +178,23 @@ def read_xyz(path: str, chunk: int = CHUNK) -> Iterator[Points]:
             yield np.array(rows)
 
 
+def read_laz(path: str, classes: set[int] | None = None, chunk: int = CHUNK) -> Iterator[Points]:
+    try:
+        import laspy
+    except ImportError as e:
+        raise ValueError("LAZ needs laspy and lazrs: pip install laspy lazrs") from e
+    with laspy.open(path) as r:
+        for pts in r.chunk_iterator(chunk):
+            keep = np.isin(np.asarray(pts.classification), list(classes)) if classes is not None else slice(None)
+            yield np.column_stack([np.asarray(pts.x)[keep], np.asarray(pts.y)[keep], np.asarray(pts.z)[keep]])
+
+
 def read_points(path: str, ground_only: bool = False, chunk: int = CHUNK) -> Iterator[Points]:
     ext = os.path.splitext(path)[1].lower()
     if ext == ".las":
         return read_las(path, {2} if ground_only else None, chunk)
     if ext == ".laz":
-        raise ValueError("LAZ is compressed; convert to LAS (e.g. laszip or laspy) first")
+        return read_laz(path, {2} if ground_only else None, chunk)
     if ext == ".pcd":
         return read_pcd(path, chunk)
     if ext in (".xyz", ".txt", ".pts", ".csv"):
@@ -219,18 +231,107 @@ class Binner:
         return np.where(n >= max(min_points, 1), z, np.nan), n
 
 
+def cloud_crs(path: str) -> str | None:
+    """The CRS a LAS/LAZ file declares, when laspy and pyproj can read it."""
+    if os.path.splitext(path)[1].lower() not in (".las", ".laz"):
+        return None
+    try:
+        import laspy
+        with laspy.open(path) as r:
+            c = r.header.parse_crs()
+    except Exception:          # laspy/pyproj missing, or no CRS record: the caller's --source-crs applies
+        return None
+    return c.to_string() if c is not None else None
+
+
 def grid_cloud(path: str, grid: SiteGrid, frame: Frame, stat: str = "mean", ground_only: bool = False,
-               min_points: int = 1, chunk: int = CHUNK) -> tuple[Grid, dict]:
-    """Rasterize a point cloud file onto the site grid. Returns (heights, stats)."""
+               min_points: int = 1, chunk: int = CHUNK, pmf: dict | None = None,
+               src_crs: str | None = None) -> tuple[Grid, dict]:
+    """Rasterize a point cloud file onto the site grid. Returns (heights, stats).
+
+    `pmf` = parameters for `ground_surface` (or {} for its defaults): a first pass finds the lowest point
+    per cell, the morphological filter turns that into a ground surface, and the second pass keeps only
+    points within `dh_final` of it, so grass, machines and people do not count as ground.
+    """
     if stat not in ("mean", "min"):
         raise ValueError("stat must be 'mean' or 'min'")
+
+    src = src_crs or (cloud_crs(path) if frame.crs else None)
+
+    def points():
+        for p in read_points(path, ground_only, chunk):
+            e, n, h = frame.reproject(p[:, 0], p[:, 1], p[:, 2], src)
+            x, y = frame.projected_to_local(e, n)
+            yield x, y, frame.height_to_local(h)
+    ground = None
+    if pmf is not None:
+        b0 = Binner(grid)
+        for x, y, z in points():
+            b0.add(x, y, z)
+        ground = ground_surface(b0.result("min")[0] * grid.u, grid.cell * grid.u, **pmf) / grid.u
+        tol = pmf.get("dh_final", 0.15) / grid.u
     b = Binner(grid)
-    for p in read_points(path, ground_only, chunk):
-        x, y = frame.projected_to_local(p[:, 0], p[:, 1])
-        b.add(x, y, frame.height_to_local(p[:, 2]))
+    for x, y, z in points():
+        if ground is not None:
+            i, j, ok = grid.cell_of(x, y)
+            g = np.full(len(z), np.nan)
+            g[ok] = ground[j[ok], i[ok]]
+            keep = np.isfinite(g) & (z <= g + tol)
+            x, y, z = x[keep], y[keep], z[keep]
+        b.add(x, y, z)
     z, _ = b.result(stat, min_points)
-    return z, {"points_read": int(b.seen), "points_on_grid": int(b.used),
+    return z, {"points_read": int(b.seen if ground is None else b0.seen), "points_on_grid": int(b.used),
+               "ground_filter": "pmf" if ground is not None else ("class 2" if ground_only else "none"),
                "cells_covered_pct": round(100 * float(np.isfinite(z).mean()), 2)}
+
+
+def _morph(z: Grid, w: int, op) -> Grid:
+    """Square-window grey erosion (op=np.min) or dilation (op=np.max); edges padded with the edge value."""
+    from numpy.lib.stride_tricks import sliding_window_view as win
+    p = np.pad(z, w // 2, mode="edge")
+    return op(win(op(win(p, w, axis=1), axis=-1), w, axis=0), axis=-1)
+
+
+def ground_surface(zmin: Grid, cell_m: float, max_window_m: float = 10.0, slope: float = 0.3,
+                   dh0: float = 0.1, dh_max: float = 1.5, dh_final: float = 0.15) -> Grid:
+    """Progressive morphological filter (Zhang et al., 2003) on a lowest-point grid (metres expected).
+
+    Openings with growing windows flag cells that stand more than the slope-scaled threshold above the
+    opened surface (machines, people, brush). Ground cells keep their measured height; flagged cells and
+    holes are filled from the surrounding ground, so the surface is not biased low on slopes.
+    `dh_final` is used by `grid_cloud` for the point pass.
+
+    `slope` trades banks against low objects: at 0.3 (3:1 banks) a wide object must stand about 1.3 m
+    above ground to be removed at 1 m cells, which catches machines and people seen from above; on flat
+    sites a lower slope also catches low objects. Returns the ground surface."""
+    z = fill_gaps(zmin, max(zmin.shape))
+    if np.isnan(z).all():
+        return z
+    obj = np.zeros(z.shape, bool)
+    cur, w_prev, k = z, 3, 1
+    while (2 * k - 1) * cell_m <= max_window_m:
+        w = 2 * k + 1
+        opened = _morph(_morph(cur, w, np.min), w, np.max)
+        obj |= cur - opened > min(dh_max, dh0 + slope * (w - w_prev) * cell_m)
+        cur, w_prev, k = opened, w, k * 2
+    holes = obj | np.isnan(zmin)
+    return relax(fill_gaps(np.where(holes, np.nan, zmin), max(zmin.shape)), holes)
+
+
+def relax(z: Grid, free: NDArray[np.bool_], tol: float = 1e-4, max_iter: int = 2000) -> Grid:
+    """Harmonic infill: iterate the `free` cells toward the mean of their four neighbours (fixed cells
+    hold), so filled patches follow planes and ramps exactly instead of sagging toward the rim."""
+    if not free.any():
+        return z
+    z = z.copy()
+    for _ in range(max_iter):
+        p = np.pad(z, 1, mode="edge")
+        new = 0.25 * (p[1:-1, :-2] + p[1:-1, 2:] + p[:-2, 1:-1] + p[2:, 1:-1])
+        d = np.abs(new[free] - z[free]).max()
+        z[free] = new[free]
+        if d < tol:
+            break
+    return z
 
 
 def fill_gaps(z: Grid, max_cells: int = 2) -> Grid:

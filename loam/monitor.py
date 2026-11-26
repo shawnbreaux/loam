@@ -54,7 +54,8 @@ class Frames:
             "machines": {n: md["class"] for n, md in model.machines.items()},
         }
         self.state: dict[str, Any] = {"t": None, "machines": {}, "orders": {}, "status": None, "truth": None,
-                                      "people": {}, "events": [], "map": None, "map_t": None, "estop": False}
+                                      "people": {}, "events": [], "map": None, "map_t": None, "estop": False,
+                                      "terrain": None, "messages": 0}
 
     def _t(self, msg: dict) -> float | None:
         if self.state["status"] is None and "timestamp" not in msg:
@@ -72,11 +73,17 @@ class Frames:
         kind = topic.rsplit("/", 1)[-1]
         s = self.state
         ts = self._t(msg)
+        s["messages"] += 1
         if ts is not None:
             s["t"] = max(s["t"] or ts, ts)
         if kind == "terrain" and msg.get("data"):
             z = wire.decode_heights(msg["data"], tuple(msg["shape"])).astype(float)
-            r = (z - self.design)[:: self.step, :: self.step]
+            full = z - self.design
+            ok = np.isfinite(full)
+            if ok.any():
+                s["terrain"] = {"within": float(np.mean(np.abs(full[ok]) <= self.tol)),
+                                "rms": float(np.sqrt(np.mean(full[ok] ** 2))), "mean": float(np.mean(full[ok]))}
+            r = full[:: self.step, :: self.step]
             q = np.clip(np.round(r / self.tol * 10), -127, 127)
             q = np.where(np.isfinite(q), q, -128).astype(np.int8)
             s["map"] = base64.b64encode(q.tobytes()).decode("ascii")
@@ -144,6 +151,58 @@ class Frames:
         return f
 
 
+    def metrics(self) -> str:
+        """The site state in the Prometheus text format (for Grafana and alerting)."""
+        s, st, site = self.state, self.state["status"] or {}, self.m.site["name"]
+        out: list[str] = []
+
+        def gauge(name: str, help_: str, rows: list[tuple[dict, float | None]], kind: str = "gauge") -> None:
+            vals = [(lab, float(v)) for lab, v in rows if v is not None]
+            if not vals:
+                return
+            out.append(f"# HELP loam_{name} {help_}")
+            out.append(f"# TYPE loam_{name} {kind}")
+            for lab, x in vals:
+                labels = ",".join(f'{k}="{_esc(str(w))}"' for k, w in {"site": site, **lab}.items())
+                out.append(f"loam_{name}{{{labels}}} {x:.6g}")
+
+        gauge("messages_total", "Wire messages seen by the monitor.", [({}, s["messages"])], "counter")
+        gauge("site_minutes", "Site clock, minutes since start.", [({}, st.get("t"))])
+        gauge("estop_active", "1 while the site e-stop is pressed.", [({}, float(s["estop"]))])
+        gauge("people_detected", "People currently detected in the work area.", [({}, len(s["people"]))])
+        gauge("surveys_total", "Surveys ingested by the controller.", [({}, st.get("surveys"))], "counter")
+        gauge("replans_total", "Replans by the controller.", [({}, st.get("replans"))], "counter")
+        gauge("probe_age_minutes", "Age of the newest survey, site minutes.", [({}, st.get("probe_age_min"))])
+        ms = s["machines"]
+        gauge("machine_progress", "Progress of the current pass (0-1).", [({"machine": n}, m["progress"])
+                                                                         for n, m in ms.items()])
+        gauge("machine_safety", "1 for the machine's current safetyState.",
+              [({"machine": n, "state": k}, float(m["safety"] == k)) for n, m in ms.items()
+               for k in ("ok", "degraded", "stopped")])
+        gauge("machine_stop_latency_seconds", "Worst e-stop latency the machine has reported.",
+              [({"machine": n}, m.get("stopLatencyS")) for n, m in ms.items()])
+        tasks = st.get("tasks") or {}
+        gauge("task_passes_total", "Passes issued per task.",
+              [({"task": n}, t.get("passes")) for n, t in tasks.items()], "counter")
+        gauge("task_done", "1 once the task's until-condition holds.",
+              [({"task": n}, float(t.get("done") is not None)) for n, t in tasks.items()])
+        tr = s["terrain"]
+        if tr:
+            gauge("terrain_within_tolerance_ratio", "Share of measured cells within the finish tolerance.",
+                  [({}, tr["within"])])
+            gauge("terrain_residual_rms", f"RMS of measured minus design, {self.g.unit}.", [({}, tr["rms"])])
+            gauge("terrain_residual_mean", f"Mean of measured minus design, {self.g.unit}.", [({}, tr["mean"])])
+        truth = (s["truth"] or {}).get("zones") or {}
+        gauge("truth_within_tolerance_ratio", "Simulated sites only: true share within tolerance per zone.",
+              [({"zone": z}, (v.get("within_tolerance_pct") or 0) / 100) for z, v in truth.items()
+               if isinstance(v, dict) and "within_tolerance_pct" in v])
+        return "\n".join(out) + "\n"
+
+
+def _esc(v: str) -> str:
+    return v.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+
+
 def page(site_info: dict, frames: list[dict] | None = None) -> str:
     with open(PAGE, encoding="utf-8") as f:
         html = f.read()
@@ -166,6 +225,15 @@ def serve(model: Model, base_dir: str, broker: str, port: int, record: str | Non
             pass
 
         def do_GET(self) -> None:
+            if self.path == "/metrics":
+                with lock:
+                    body = fr.metrics().encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
             if self.path == "/events":
                 self.send_response(200)
                 self.send_header("Content-Type", "text/event-stream")
@@ -195,7 +263,7 @@ def serve(model: Model, base_dir: str, broker: str, port: int, record: str | Non
 
     httpd = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
-    print(f"loam monitor: http://127.0.0.1:{port}/  (site {site})", flush=True)
+    print(f"loam monitor: http://127.0.0.1:{port}/  metrics: /metrics  (site {site})", flush=True)
     if rec is not None:
         rec.write(json.dumps({"site": fr.site_info}) + "\n")
     last_push, dirty_map = 0.0, False

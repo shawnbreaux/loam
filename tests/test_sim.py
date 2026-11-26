@@ -109,6 +109,7 @@ def test_closed_loop_recovers_soil_factors(example_model):
 
 def test_no_memory_or_file_handles_retained(example_model, tmp_path):
     fd_dir = f"/proc/{os.getpid()}/fd"
+    gc.collect()                                     # earlier tests' garbage is not this test's business
     fds = len(os.listdir(fd_dir)) if os.path.isdir(fd_dir) else None
     quiet(example_model).run()                       # warm numpy's internal caches
     gc.collect()

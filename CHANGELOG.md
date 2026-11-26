@@ -3,6 +3,29 @@
 All notable changes are recorded here. The project follows [Semantic Versioning](https://semver.org/);
 before 1.0 any minor release may change the language.
 
+## [0.0.3] - 2026-11-25
+
+Open-source integrations, all optional and all under OSI-approved licences (see docs/INTEGRATIONS.md).
+The core still needs numpy only; the language stays at 0.0.2 (`format geotiff` is a new value).
+
+- Vehicles: `loam mavlink` drives ArduPilot Rover (any MAVLink 2 ground vehicle) as a Loam machine:
+  orders become missions, stop is HOLD, e-stop is a forced disarm, GNSS fix is gated. Tested against
+  ArduPilot Rover SITL: 1.17 ft from the end of the work line, held within 0.62 ft of it, 9 ms e-stop.
+  `loam vda5050` is the VDA 5050 3.0 fleet-control side for one robot, checked against the official
+  schemas. Both share one bridge loop, so the safety rules are those of the simulated machines.
+- Positioning: `loam nmea` reads `tcp://host:port` (RTKLIB str2str/rtkrcv, RTKBase, receivers) and
+  publishes to MQTT with `--broker`. Tested through RTKLIB's str2str.
+- Survey data: LAZ (laspy, lazrs); `--ground-filter`, a progressive morphological ground filter with
+  harmonic infill (2 cm on clean ground, machines removed); OpenDroneMap project folders; GeoTIFF DEMs.
+- Coordinates: `--crs` and `--source-crs` (pyproj): real projections, reprojection of clouds and
+  rasters, heights too with compound CRSs.
+- Design data: IFC 4.3 surfaces (IfcOpenShell), GeoTIFF surfaces, GeoJSON area files (QGIS);
+  `loam export --to geotiff | geojson`, georeferenced and rotated as the site is.
+- `loam monitor` serves Prometheus `/metrics` (Grafana): machines, tasks, safety, survey age, share
+  of measured terrain in tolerance.
+- Fixes: MQTT clients now release paho's wake-up sockets on stop (a machine reconnecting on a flaky
+  radio no longer accumulates descriptors); `export --surface design` no longer needs measured ground.
+
 ## [0.0.2] - 2026-11-25
 
 From a grading file to a running, monitored site, tested end to end over MQTT (see docs/RUNTIME.md).

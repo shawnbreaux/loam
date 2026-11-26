@@ -114,6 +114,21 @@ In end-to-end runs on real design surfaces, with a person near a machine, a lida
 float, a lost radio, a site e-stop and a crashed dozer, every fault was handled and the jobs finished
 with 95.8–97.6 % of cells in tolerance on the simulated true ground.
 
+## Integrations
+
+Every integration is an optional, FOSS extra (`pip install "loam-lang[all]"`); the core needs numpy only.
+See [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
+
+- **Vehicles:** `loam mavlink` drives ArduPilot Rover and other MAVLink ground vehicles as Loam
+  machines; `loam vda5050` does the same for VDA 5050 3.0 robots. Both are tested end to end, against
+  ArduPilot SITL and against the official VDA 5050 schemas.
+- **Positioning:** `loam nmea tcp://…` reads RTKLIB, RTKBase or a receiver directly and publishes to MQTT.
+- **Survey data:** OpenDroneMap project folders, LAZ with a ground filter that removes machines, people
+  and brush, GeoTIFF DEMs, and real CRSs through pyproj.
+- **Design data:** IFC 4.3 surfaces through IfcOpenShell; GeoTIFF surfaces; GeoJSON areas from QGIS;
+  `export --to geotiff | geojson`.
+- **Operations:** `loam monitor` serves Prometheus `/metrics` for Grafana.
+
 ## Repository layout
 
 | Path | Purpose |
@@ -127,14 +142,16 @@ with 95.8–97.6 % of cells in tolerance on the simulated true ground.
 | `loam/rng.py` | Specified counter-based RNG, reproducible in any language |
 | `loam/wire.py` | Loam Wire message builders |
 | `loam/grid.py`, `loam/geo.py` | The site height grid; placing it on WGS84 and projected coordinates |
-| `loam/pointcloud.py` | Streaming LAS and PCD readers (DJI L2, Livox Mid-360) and gridding |
+| `loam/pointcloud.py` | Streaming LAS/LAZ and PCD readers (DJI L2, Livox Mid-360), gridding, ground filter |
+| `loam/surfaces.py` | IFC 4.3 and GeoTIFF surfaces, GeoJSON areas, GeoTIFF and GeoJSON export |
 | `loam/survey.py` | Emlid/RTK survey CSV, NMEA GGA to Wire state, scoring against design |
 | `loam/plan.py` | `loam plan`: grading LandXML to a site program |
 | `loam/runtime/` | Controller over MQTT, simulated world, machines (optionally PyBullet physics) and probe |
+| `loam/runtime/bridge.py`, `mavlink.py`, `vda5050.py` | Real vehicles as Loam machines: one safety loop, two protocols |
 | `loam/monitor.py`, `loam/monitor.html` | Live dashboard and replay pages |
 | `loam/target.py`, `loam/export.py` | Next-pass surface; LandXML (Cat Grade 3D), OpenGrade3D `.agd`, AgOpenGPS field folder |
 | `examples/` | Example program and surfaces, comparison plot, Monte Carlo study |
-| `tests/` | 118 tests: language, I/O, simulator invariants, field adapters, planner, controller loopback, a full multi-process MQTT run with faults, memory bounds, parser fuzzing |
+| `tests/` | 137 tests: language, I/O, simulator invariants, field adapters, planner, controller loopback, a full multi-process MQTT run with faults, vehicle bridges (ArduPilot SITL, VDA 5050, RTKLIB), integrations, memory and handle bounds, parser fuzzing |
 
 ## Development
 

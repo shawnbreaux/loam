@@ -6,7 +6,6 @@ polygon. Arrays are indexed `[j, i]` (row = y, column = x).
 """
 from __future__ import annotations
 
-import os
 from collections.abc import Callable
 from typing import Any
 
@@ -15,7 +14,7 @@ from numpy.typing import NDArray
 
 from . import ast as ast_
 from .checker import Model
-from .landxml import rasterize, read_tin
+from .surfaces import resolve_area_files, surface_grid
 from .units import Quantity, length_unit_si
 
 Grid = NDArray[np.float64]
@@ -67,6 +66,7 @@ class SiteGrid:
         self.m = model
         self.base_dir = base_dir
         site = model.site
+        resolve_area_files(model, base_dir)
         self.unit: str = site.get("units", "ft")
         self.u = length_unit_si(self.unit)          # metres per site unit
         self.cell = (site.get("grid") or Quantity(1, self.unit)).to(self.unit)
@@ -91,14 +91,10 @@ class SiteGrid:
         return (self.ny, self.nx)
 
     def surface(self, spec: dict, allow_gaps: bool = False) -> Grid:
-        """Rasterize a site surface (`design` or `existing`) given as a LandXML TIN."""
-        if spec.get("format", "landxml") != "landxml":
-            raise ValueError(f"only LandXML surfaces are supported; got format {spec.get('format')}")
-        path = spec["file"] if os.path.isabs(spec["file"]) else os.path.join(self.base_dir, spec["file"])
-        pts, faces, _ = read_tin(path, spec.get("surface"))
-        z = rasterize(pts, faces, self.x0, self.y0, self.cell, self.nx, self.ny)
+        """A site surface (`design` or `existing`): LandXML or IFC TIN, or GeoTIFF elevation model."""
+        z = surface_grid(spec, self.base_dir, self.x0, self.y0, self.cell, self.nx, self.ny, self.u)
         if not allow_gaps and np.isnan(z).any():
-            raise ValueError(f"{path}: surface does not cover the whole site grid")
+            raise ValueError(f"{spec['file']}: surface does not cover the whole site grid")
         return z
 
     def design_and_existing(self) -> tuple[Grid, Grid]:
