@@ -120,8 +120,11 @@ Every integration is an optional, FOSS extra (`pip install "loam-lang[all]"`); t
 See [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
 
 - **Vehicles:** `loam mavlink` drives ArduPilot Rover and other MAVLink ground vehicles as Loam
-  machines; `loam vda5050` does the same for VDA 5050 3.0 robots. Both are tested end to end, against
-  ArduPilot SITL and against the official VDA 5050 schemas.
+  machines; `loam vda5050` does the same for VDA 5050 3.0 robots; `loam opera` drives PWRI's OPERA
+  machines on ROS 2: IC120 carriers through Nav2, and the ZX200's arm cutting to grade. Tested against
+  ArduPilot SITL, the official VDA 5050 schemas, Nav2 and ros2_control.
+- **Soil physics:** `loam soil-calibrate` derives roller compaction per pass from Project Chrono's SCM
+  soil model; `simulate-site --soil-table` uses it.
 - **Positioning:** `loam nmea tcp://…` reads RTKLIB, RTKBase or a receiver directly and publishes to MQTT.
 - **Survey data:** OpenDroneMap project folders, LAZ with a ground filter that removes machines, people
   and brush, GeoTIFF DEMs, and real CRSs through pyproj.
@@ -147,11 +150,13 @@ See [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
 | `loam/survey.py` | Emlid/RTK survey CSV, NMEA GGA to Wire state, scoring against design |
 | `loam/plan.py` | `loam plan`: grading LandXML to a site program |
 | `loam/runtime/` | Controller over MQTT, simulated world, machines (optionally PyBullet physics) and probe |
-| `loam/runtime/bridge.py`, `mavlink.py`, `vda5050.py` | Real vehicles as Loam machines: one safety loop, two protocols |
+| `loam/runtime/bridge.py`, `mavlink.py`, `vda5050.py`, `opera.py` | Real vehicles as Loam machines: one safety loop, three protocols |
+| `loam/runtime/chrono_soil.py` | Roller compaction curves from Project Chrono's SCM soil model |
+| `tools/integration-envs.sh` | Conda environments for Chrono and ROS 2 (OPERA), for the integration tests |
 | `loam/monitor.py`, `loam/monitor.html` | Live dashboard and replay pages |
 | `loam/target.py`, `loam/export.py` | Next-pass surface; LandXML (Cat Grade 3D), OpenGrade3D `.agd`, AgOpenGPS field folder |
 | `examples/` | Example program and surfaces, comparison plot, Monte Carlo study |
-| `tests/` | 137 tests: language, I/O, simulator invariants, field adapters, planner, controller loopback, a full multi-process MQTT run with faults, vehicle bridges (ArduPilot SITL, VDA 5050, RTKLIB), integrations, memory and handle bounds, parser fuzzing |
+| `tests/` | 145 tests: language, I/O, simulator invariants, field adapters, planner, controller loopback, a full multi-process MQTT run with faults, vehicle bridges (ArduPilot SITL, VDA 5050, RTKLIB, OPERA on Nav2 and ros2_control), Chrono soil, integrations, memory and handle bounds, parser fuzzing |
 
 ## Development
 

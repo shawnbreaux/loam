@@ -9,6 +9,10 @@ none of it. The controller never subscribes to it.
 Soil truth differs from the planner's beliefs exactly as in the reference
 simulator (swell 1.30 vs 1.25, compaction keep 0.70 vs 0.80, blade cut error),
 and faults are scripted in site minutes (see `DEFAULT_FAULTS`).
+
+With roller tables from `loam soil-calibrate` (Project Chrono SCM), compaction
+follows the roller's settlement-per-pass curve, capped at full compaction of the
+loose lift, instead of happening all at once.
 """
 from __future__ import annotations
 
@@ -40,12 +44,15 @@ def active(spans: list[dict], t: float) -> dict | None:
 
 
 class World:
-    def __init__(self, model: Model, base_dir: str, seed: int = 7, soil: Soil | None = None):
+    def __init__(self, model: Model, base_dir: str, seed: int = 7, soil: Soil | None = None,
+                 compaction: dict[str, dict] | None = None):
         self.g = SiteGrid(model, base_dir)
         self.m = model
         self.design, self.z = self.g.design_and_existing()
         self.z0 = self.z.copy()
         self.loose = np.zeros_like(self.z)
+        self.rolled = np.zeros(self.z.shape, int)       # roller passes over the loose lift so far
+        self.compaction = compaction or {}
         self.soil = soil or Soil()
         self.rng = np.random.default_rng(seed)
         self.u, self.area = self.g.u, self.g.area
@@ -68,6 +75,7 @@ class World:
         self.z[mk] += dz
         if loose:
             self.loose[mk] += dz
+            self.rolled[mk] = 0                          # new loose material: its rolling starts over
         self.ledger += float(dz.sum()) * self.area
 
     def place(self, mk: np.ndarray, lift: float, loose_vol: float) -> float:
@@ -164,8 +172,22 @@ class World:
             out["bank"] = placed / self.soil.swell
         elif op == "compact":
             sel = win & (self.loose > 1e-9)
-            self._add(sel, -self.loose[sel] * (1 - self.soil.keep))
-            self.loose[sel] = 0.0
+            table = self.compaction.get(order.get("machine", "")) or self.compaction.get("*")
+            if table is None:
+                self._add(sel, -self.loose[sel] * (1 - self.soil.keep))
+                self.loose[sel] = 0.0
+            else:
+                from .chrono_soil import settlement
+                k = int(lim.get("passes", 4))
+                k0 = self.rolled[sel]
+                inc = np.array([settlement(table, a + k) - settlement(table, a) for a in k0]) / u
+                room = self.loose[sel] * (1 - self.soil.keep)        # what is left to compress in the lift
+                dz = np.minimum(inc, room)
+                self._add(sel, -dz)
+                self.loose[sel] -= dz / (1 - self.soil.keep)
+                self.loose[sel & (self.loose < 1e-9)] = 0.0
+                self.rolled[sel] += k
+                out["settled_mean"] = float(dz.mean() * u) if dz.size else 0.0
         elif op == "finish":
             step = lim.get("step", 0.0914) / u
             if planned is not None:
@@ -206,9 +228,10 @@ class World:
 
 
 def run_world(model: Model, base_dir: str, broker: str, speed: float, faults: dict, seed: int = 7,
-              truth_every_min: float = 5.0, stop_after_min: float = 48 * 60) -> None:
+              truth_every_min: float = 5.0, stop_after_min: float = 48 * 60,
+              compaction: dict[str, dict] | None = None) -> None:
     site = model.site["name"]
-    w = World(model, base_dir, seed)
+    w = World(model, base_dir, seed, compaction=compaction)
     bus = Bus(broker, f"loam-world-{site}").start([f"sim/{site}/world/#", f"loam/v0/{site}/+/state",
                                                      f"sim/{site}/end"])
     clock = Clock(time.time() + 3.0, speed, 1796108400.0)  # starts in 3 s, at 2026-12-01 07:00 UTC

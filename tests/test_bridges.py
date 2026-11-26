@@ -175,6 +175,16 @@ class Controller:
     def send(self, kind, m, topic_machine=True):
         self.bus.pub(wire.topic(self.site, self.machine if topic_machine else None, kind), m, qos=1)
 
+    def latest(self, settle=0.5):
+        """The newest state, after `settle` seconds of draining (older ones are consumed)."""
+        end = time.time() + settle
+        while time.time() < end:
+            for _, m in self.bus.drain(0.05):
+                self.states.append(m)
+                self.pending.append(m)
+        m, self.pending = (self.pending[-1] if self.pending else self.states[-1]), []
+        return m
+
     def wait(self, pred, timeout=20.0):
         """The next state (in arrival order) that satisfies `pred`; earlier ones are consumed."""
         end = time.time() + timeout
@@ -321,7 +331,7 @@ def test_ardupilot_rover_sitl(model, mqtt_broker, tmp_path):
         ctl.send("instantAction", wire.instant_action("yard", "dz1", 2, "stop", "test"))
         stop = ctl.wait(lambda m: m["safetyState"] == "stopped")
         time.sleep(4)
-        held = ctl.wait(lambda m: True)
+        held = ctl.latest()
         assert math.hypot(held["pose"]["x"] - stop["pose"]["x"], held["pose"]["y"] - stop["pose"]["y"]) < 1
         ctl.bus.pub(wire.topic("yard", None, "estop"), {"pressed": True, "wall": time.time()}, qos=1)
         ctl.wait(lambda m: "stopLatencyS" in m)

@@ -236,6 +236,7 @@ def add_field_commands(sub) -> None:
     p.add_argument("--faults", help="JSON fault script (default: person, outage, rain, GNSS, link loss, e-stop)")
     p.add_argument("--quiet", action="store_true")
     p.add_argument("--physics", action="store_true", help="drive machines as PyBullet bodies (try --speed 60)")
+    p.add_argument("--soil-table", help="roller compaction curves from `loam soil-calibrate` (Project Chrono)")
     p = sub.add_parser("mavlink", help="drive an ArduPilot Rover (or any MAVLink ground vehicle) as a Loam machine")
     p.add_argument("file")
     p.add_argument("--machine", required=True, help="the Loam machine this vehicle is")
@@ -254,6 +255,26 @@ def add_field_commands(sub) -> None:
     p.add_argument("--interface", default="uagv", help="first MQTT topic level (default uagv)")
     p.add_argument("--broker", default="localhost:1883")
     p.add_argument("--sim-world", action="store_true", help="part of `loam simulate-site`: its clock and world")
+    p = sub.add_parser("opera", help="drive an OPERA (ROS 2) machine as a Loam machine: IC120 carrier, ZX200")
+    p.add_argument("file")
+    p.add_argument("--machine", required=True, help="the Loam machine this is")
+    p.add_argument("--namespace", required=True, help="the machine's ROS namespace, e.g. ic120 or zx200")
+    p.add_argument("--kind", choices=["carrier", "excavator"], default="carrier")
+    p.add_argument("--broker", default="localhost:1883")
+    p.add_argument("--dump", action="store_true", help="carrier: raise the vessel at the deposit (com3_msgs)")
+    p.add_argument("--urdf", help="excavator: URDF file (default: /<ns>/robot_description)")
+    p.add_argument("--map-offset", default="0,0,0", metavar="X,Y,Z", help="site origin in the map frame (m)")
+    p.add_argument("--map-yaw", type=float, default=0.0, help="site +x axis in the map frame (deg)")
+    p.add_argument("--sim-world", action="store_true", help="part of `loam simulate-site`: its clock and world")
+    p = sub.add_parser("soil-calibrate", help="roller compaction per pass from Project Chrono's SCM soil model")
+    p.add_argument("file")
+    p.add_argument("--machine", required=True, help="the roller (its drum width comes from the program)")
+    p.add_argument("--mass", required=True, help="operating mass, e.g. 10t or 22000lb")
+    p.add_argument("--diameter", required=True, help="drum diameter, e.g. 1.5m or 59in")
+    p.add_argument("--passes", type=int, default=8)
+    p.add_argument("--soil", help="JSON of SCM soil parameters (default: an illustrative sandy loam)")
+    p.add_argument("-o", "--out", required=True)
+    p.add_argument("--json", action="store_true")
     p = sub.add_parser("monitor", help="live web dashboard for a site, or a replay page from a recording")
     p.add_argument("file")
     p.add_argument("--broker", default="localhost:1883")
@@ -265,6 +286,7 @@ def add_field_commands(sub) -> None:
     p = sub.add_parser("_role", help=argparse.SUPPRESS)
     p.add_argument("file")
     p.add_argument("--role", required=True, choices=["world", "probe", "machine"])
+    p.add_argument("--soil-table")
     p.add_argument("--broker", default="localhost:1883")
     p.add_argument("--speed", type=float, default=600.0)
     p.add_argument("--faults")
@@ -430,7 +452,8 @@ def cmd_run(model, a) -> None:
 
 def cmd_simulate_site(model, a) -> None:
     from .runtime.site import launch
-    r = launch(a.file, a.broker, a.speed, a.faults, model, quiet=a.quiet, physics=a.physics)
+    r = launch(a.file, a.broker, a.speed, a.faults, model, quiet=a.quiet, physics=a.physics,
+               soil_table=a.soil_table)
     print(json.dumps(r, indent=2))
 
 
@@ -442,6 +465,63 @@ def cmd_mavlink(model, a) -> None:
 def cmd_vda5050(model, a) -> None:
     from .runtime.vda5050 import run_vda5050
     run_vda5050(model, a.machine, a.broker, a.manufacturer, a.serial, a.interface, a.sim_world)
+
+
+MASS_UNITS = {"kg": 1.0, "t": 1000.0, "lb": 0.45359237, "ton": 907.18474}     # ton = US short ton
+
+
+def _si(text: str, units: dict[str, float]) -> float:
+    """'10t', '22000 lb', '1.5m' -> SI, for CLI options."""
+    import re
+    m = re.fullmatch(r"\s*([0-9]*\.?[0-9]+)\s*([a-z]+)\s*", text)
+    if not m or m.group(2) not in units:
+        raise ValueError(f"{text!r}: expected a number and one of {', '.join(sorted(units))}")
+    return float(m.group(1)) * units[m.group(2)]
+
+
+def cmd_soil_calibrate(model, a) -> None:
+    import json as _json
+
+    from .runtime.chrono_soil import SoilParams, calibrate
+    from .units import UNITS, Quantity
+    m = model.machines.get(a.machine)
+    if m is None or m.get("class") != "roller":
+        raise ValueError(f"{a.machine!r} is not a roller in this program")
+    if "drum" not in m:
+        raise ValueError(f"roller {a.machine!r} needs a drum width (drum 84 in)")
+    width = m["drum"].si if isinstance(m["drum"], Quantity) else float(m["drum"])
+    soil = SoilParams()
+    if a.soil:
+        with open(a.soil, encoding="utf-8") as f:
+            soil = SoilParams(**_json.load(f))
+    table = calibrate(_si(a.mass, MASS_UNITS), width, _si(a.diameter, {u: f for u, (d, f) in UNITS.items()
+                                                                      if d == "length"}), soil, a.passes)
+    tables = {}
+    try:
+        with open(a.out, encoding="utf-8") as f:
+            tables = _json.load(f)
+    except FileNotFoundError:
+        pass
+    if "settlement_m" in tables:
+        tables = {}
+    tables[a.machine] = table
+    with open(a.out, "w", encoding="utf-8") as f:
+        _json.dump(tables, f, indent=1)
+    _show({"machine": a.machine, **{k: table[k] for k in ("settlement_m", "first_pass_sinkage_m",
+                                                         "bekker_wong_sinkage_m")}}, a)
+
+
+def cmd_opera(model, a) -> None:
+    from .runtime.opera import run_opera
+    off = tuple(float(v) for v in a.map_offset.split(","))
+    if len(off) != 3:
+        raise ValueError("--map-offset takes X,Y,Z")
+    urdf = None
+    if a.urdf:
+        with open(a.urdf, encoding="utf-8") as f:
+            urdf = f.read()
+    run_opera(model, a.machine, a.broker, a.namespace, a.kind, off, a.map_yaw,
+              os.path.dirname(os.path.abspath(a.file)), a.dump, urdf, a.sim_world)
 
 
 def cmd_monitor(model, a) -> None:
@@ -460,6 +540,7 @@ def cmd_role(model, a) -> None:
 
 
 FIELD_COMMANDS = {"run": cmd_run, "simulate-site": cmd_simulate_site, "mavlink": cmd_mavlink, "vda5050": cmd_vda5050,
+                  "soil-calibrate": cmd_soil_calibrate, "opera": cmd_opera,
                   "_role": cmd_role, "monitor": cmd_monitor,
                   "export": cmd_export, "terrain": cmd_terrain, "score": cmd_score, "nmea": cmd_nmea}
 

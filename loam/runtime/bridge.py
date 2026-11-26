@@ -86,7 +86,7 @@ def run_bridge(model: Model, name: str, broker: str, adapter: Adapter, sim_world
                         and msg["orderId"] == ms.order["orderId"]:
                     _finish(ms, adapter, bus, clock, t)
             if ms.order is not None and not ms.waiting:
-                go = ms.safety_state()[0] == "ok" and adapter.fault is None
+                go = ms.safety_state()[0] == "ok" and adapter.fault is None and adapter.pose is not None
                 adapter.pause(not go)
                 ms.progress = min(0.999, max(ms.progress, adapter.fraction()))
                 if go and adapter.done():
@@ -119,8 +119,9 @@ def _finish(ms: MachineSim, adapter: Adapter, bus: Bus, clock: Clock, t: float) 
 
 def bridge_state(ms: MachineSim, adapter: Adapter, clock: Clock, t: float) -> dict:
     safety, errors = ms.safety_state()
-    if adapter.fault is not None:
-        safety, errors = "stopped", [*errors, {"code": adapter.fault, "detail": ""}]
+    fault = adapter.fault or (None if adapter.pose is not None else "vehicleNoPose")
+    if fault is not None:
+        safety, errors = "stopped", [*errors, {"code": fault, "detail": ""}]
     errors = [e for e in errors if e["code"] != "gnssQuality"]
     if ms.gnss_bad:
         errors.append({"code": "gnssQuality", "detail": adapter.fix_name})

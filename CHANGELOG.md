@@ -3,6 +3,26 @@
 All notable changes are recorded here. The project follows [Semantic Versioning](https://semver.org/);
 before 1.0 any minor release may change the language.
 
+## [0.0.4] - 2026-11-26
+
+Project Chrono soil physics and OPERA machines on ROS 2. Both are FOSS; see docs/INTEGRATIONS.md.
+
+- `loam opera`: PWRI's OPERA machines as Loam machines.
+  - Carriers (IC120, or any Nav2 machine): work passes go to Nav2's `follow_path` so the machine holds the
+    work line; travel goes to `navigate_through_poses`. With `--dump`, the vessel is raised only once the
+    machine stands still.
+  - The ZX200 excavator cuts to the order's target surface: inverse kinematics from its own URDF, a
+    trajectory for its ros2_control arm controller, never below design.
+  - Measured: the ZX200 held the grade to 0.3 mm RMS and never went as much as 1 mm below it, on
+    ros2_control. An IC120 on Nav2 Jazzy held the work line to 1.2 cm RMS at its 0.8 m/s limit.
+- `loam soil-calibrate`: roller compaction per pass from Project Chrono's SCM soil model. A towed drum
+  stays within 1.25–1.31x of the Bekker–Wong closed form, mesh-converged. `simulate-site --soil-table`
+  makes the simulated world compact loose fill by that curve.
+- Bridges: no "ok" before the vehicle has reported a position (`vehicleNoPose`). A vehicle's action
+  server that is missing or not yet active is waited for and retried (reported after 10 s), never
+  turned into a failed order. MAVLink: positions are ignored until ArduPilot's EKF has an origin.
+- `tools/integration-envs.sh`: conda environments for Chrono and ROS 2, plus PWRI's OPERA packages.
+
 ## [0.0.3] - 2026-11-25
 
 Open-source integrations, all optional and all under OSI-approved licences (see docs/INTEGRATIONS.md).

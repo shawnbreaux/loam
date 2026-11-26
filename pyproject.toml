@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "loam-lang"
-version = "0.0.3"
+version = "0.0.4"
 description = "Loam: an open language for programmable, closed-loop earthmoving"
 readme = "README.md"
 license = { text = "Apache-2.0" }

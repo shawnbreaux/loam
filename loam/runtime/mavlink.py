@@ -104,6 +104,8 @@ class Vehicle:
                 self.armed = bool(msg.base_mode & 128)
                 self.mode = msg.custom_mode
             elif t == "GLOBAL_POSITION_INT":
+                if msg.lat == 0 and msg.lon == 0:      # ArduPilot sends zeros until the EKF has an origin
+                    continue
                 x, y = self.frame.wgs84_to_local(msg.lat / 1e7, msg.lon / 1e7)
                 h = bearing_to_heading(msg.hdg / 100.0, self.frame) if msg.hdg != 65535 else \
                     (self.pose[2] if self.pose else 0.0)

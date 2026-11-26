@@ -8,6 +8,8 @@ never links them.
 | Integration | What Loam does with it | Install | Licence | Tested against |
 | --- | --- | --- | --- | --- |
 | ArduPilot Rover (MAVLink 2) | `loam mavlink`: a vehicle is a Loam machine | `.[mavlink]` | pymavlink LGPL-3.0 | ArduPilot Rover SITL |
+| OPERA (PWRI, ROS 2) | `loam opera`: IC120 carriers on Nav2, the ZX200 excavator's arm | ROS 2 env | Apache-2.0 | Nav2 and ros2_control |
+| Project Chrono | `loam soil-calibrate`: roller compaction per pass from SCM soil | conda env | BSD-3 | Bekker–Wong closed form |
 | VDA 5050 3.0 robots | `loam vda5050`: a robot is a Loam machine | `.[run]` | paho EPL-2.0/BSD-3 | official VDA 5050 3.0 JSON schemas |
 | openTCS | A VDA 5050 fleet control; see below | — | MIT | — |
 | RTKLIB / RTKBase | `loam nmea tcp://host:port` → Wire states, `--broker` to publish | `.[run]` | BSD-2 (RTKLIB) | RTKLIB `str2str` relay |
@@ -24,7 +26,7 @@ never links them.
 
 ## Vehicles
 
-Both bridges share one loop (`loam/runtime/bridge.py`). The stop, e-stop,
+All three vehicle bridges (MAVLink, VDA 5050, OPERA) share one loop (`loam/runtime/bridge.py`). The stop, e-stop,
 heartbeat and GNSS rules are therefore the same as for the simulated machines.
 
 - **Orders.** An order becomes the path the simulated machine drives: through the work window, then the haul.
@@ -77,6 +79,90 @@ openTCS (from 7.x) is a VDA 5050 fleet control in its own right. A robot answers
 to one fleet control at a time, so take it out of openTCS while Loam runs the
 job. Loam and openTCS can share a site and a broker.
 
+### OPERA (ROS 2)
+
+OPERA is the Public Works Research Institute's open platform for earthwork autonomy (github.com/pwri-opera,
+Apache-2.0). `loam opera` runs inside the machine's ROS 2 environment (Humble or Jazzy):
+
+```
+loam opera site.loam --machine dt1 --namespace ic120 --kind carrier --dump --broker host:1883
+loam opera site.loam --machine ex1 --namespace zx200 --kind excavator --broker host:1883
+```
+
+**Carriers** (the IC120 crawler dump, or any machine running Nav2) take each segment differently:
+
+- **Work passes**, the segments inside the order's window, go to Nav2's controller as an explicit path
+  (`/<ns>/follow_path`). The machine holds the work line instead of re-planning from wherever it happens to be.
+- **Travel and haul segments** go to `/<ns>/navigate_through_poses`, so Nav2 plans them. A path that comes back
+  to where it started is sent in pieces, because Nav2 ends a through-poses goal as soon as the machine is at
+  its last pose.
+- **Speed:** the order's speed goes to `/<ns>/speed_limit`, repeated every second so a late subscriber still
+  gets it.
+- **Dumping:** with `--dump`, the vessel is raised and lowered at the deposit (com3_msgs `SetDumpAngle`), and
+  only once odometry shows the machine standing still.
+
+**Excavators** (the ZX200) cut to the target surface:
+
+- **What the bucket follows:** the order's target surface, which is the latest Loam terrain survey plus the
+  order's planned change per cell, never below design.
+- **How:** in radial strokes across the part of the window within reach.
+- **Joint angles** come from the machine's own URDF (`/<ns>/robot_description`).
+- **The trajectory** goes to the arm's ros2_control controller (`/<ns>/upper_arm_controller`), timed to OPERA's
+  joint speed limits. Joints the plan doesn't move, such as `bucket_end_joint`, are held.
+
+On both machine kinds, pause cancels the goal and resume sends what was left. The map frame is the site grid
+in metres; `--map-offset` and `--map-yaw` place the site in it.
+
+Measured in `tests/test_opera.py`, a site in feet driven over Loam Wire:
+
+- **ZX200 on OPERA's URDF:** ros2_control's JointTrajectoryController on mock hardware cut a window from 1 ft
+  above grade. While dragging, the bucket tip held the design surface to 0.3 mm RMS (under 1 mm worst). It never
+  went as much as 1 mm below grade, including after a stop and resume mid-cut.
+- **IC120 on Nav2 Jazzy:** NavFn, Regulated Pure Pursuit and the behaviour-tree navigator drove a kinematic
+  crawler.
+  - **Work line:** held to 1.2 cm RMS (5.4 cm worst) after a 2 m entry.
+  - **Speed:** capped at the order's 0.8 m/s.
+  - **Dump:** inside the deposit window, standing still.
+  - **Stop:** held position within 5 cm.
+  - **Lost odometry:** reported as stopped.
+
+These are the platform's own kinematics and controllers. The vehicle dynamics are a simple model, not a real
+machine.
+
+`com3_msgs` (OPERA's vessel and swing actions) carries no licence. It is never shipped; the dump is used only
+where the machine already has it.
+
+## Soil physics (Project Chrono)
+
+```
+loam soil-calibrate site.loam --machine rl1 --mass 11t --diameter 1.5m -o soil.json
+loam simulate-site site.loam --soil-table soil.json
+```
+
+Chrono's SCM terrain (Bekker–Wong pressure-sinkage, Mohr–Coulomb and Janosi–Hanamoto shear, plastic memory)
+rolls the roller's drum back and forth over loose soil. It records the settlement after each pass. The
+simulated world then compacts loose fill by that curve, capped at the lift's full compaction, rather than all
+at once. So a light roller, or too few passes, leaves fill high, and the closed loop has to catch it.
+
+**Accuracy against theory.** A towed drum sinks 1.25–1.31× the Bekker–Wong closed form for a rigid wheel. That
+holds over twice the load, half the width and twice the mesh resolution, and the result is mesh-converged
+within 1 %. The closed form is itself an approximation for towed wheels.
+
+**The example table** (`examples/soil_rl1.json`): an 11 t roller with a 7 ft drum settles 80 mm on the first
+pass and 156 mm after eight. Each pass adds less than the one before.
+
+**How the check was run.** Loading has to be quasi-static: a load dropped onto SCM soil overshoots, and the
+plastic memory keeps the overshoot.
+
+The default soil parameters are illustrative. Measure them on site (plate-sinkage or bevameter test) for real
+work. Calibration needs pychrono; running a site from a saved table does not.
+
+## Setting up Chrono and ROS 2
+
+pip cannot install pychrono or ROS 2. `tools/integration-envs.sh` builds both as conda environments with
+micromamba (conda-forge, projectchrono and RoboStack channels). It also builds a workspace with OPERA's
+`zx200_description`, `ic120_description` and `com3_msgs`, and prints the environment variables the tests use.
+
 ## Positioning
 
 `loam nmea` reads GGA from a file, from stdin, or from `tcp://host:port`. RTKLIB's
@@ -126,7 +212,6 @@ scrape_configs:
     static_configs: [{ targets: ["monitor-host:8080"] }]
 ```
 
-## Not yet
+## Left out
 
-- **Project Chrono (BSD-3) soil physics** and **OPERA (ROS 2) bridges** need conda-forge and RoboStack. Their install needs permission on the build machine. They are planned as the next bridges.
-- **TimescaleDB.** Loam does not use it: its community edition is under the TSL, which is not OSI-approved. Prometheus covers metrics.
+- **TimescaleDB.** Its community edition is under the TSL, which is not OSI-approved. Prometheus covers metrics.

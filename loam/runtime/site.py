@@ -19,7 +19,8 @@ from .bus import Bus
 
 
 def launch(path: str, broker: str, speed: float, faults_path: str | None, model, until_done: bool = True,
-           timeout_min: float = 48 * 60, quiet: bool = False, physics: bool = False) -> dict:
+           timeout_min: float = 48 * 60, quiet: bool = False, physics: bool = False,
+           soil_table: str | None = None) -> dict:
     site = model.site["name"]
     bus = Bus(broker, f"loam-site-launcher-{site}").start([])
     for t in [f"loam/v0/{site}/status", f"sim/{site}/world/truth", f"sim/{site}/clock", f"sim/{site}/faults",
@@ -30,7 +31,8 @@ def launch(path: str, broker: str, speed: float, faults_path: str | None, model,
     base = [sys.executable, "-m", "loam.cli", "_role", path, "--broker", broker]
     out = subprocess.DEVNULL if quiet else None
     world = subprocess.Popen([*base, "--role", "world", "--speed", str(speed)]
-                             + (["--faults", faults_path] if faults_path else []), stdout=out)
+                             + (["--faults", faults_path] if faults_path else [])
+                             + (["--soil-table", soil_table] if soil_table else []), stdout=out)
     time.sleep(1.0)                                  # the world publishes the clock first
     procs = [world, subprocess.Popen([*base, "--role", "probe"], stdout=out)]
     procs += [subprocess.Popen([*base, "--role", "machine", "--name", n, "--index", str(i)]
@@ -78,7 +80,11 @@ def role(path: str, model, a) -> None:
         if a.faults:
             with open(a.faults, encoding="utf-8") as f:
                 faults = json.load(f)
-        run_world(model, base, a.broker, a.speed, faults)
+        compaction = None
+        if getattr(a, "soil_table", None):
+            from .chrono_soil import load_tables
+            compaction = load_tables(a.soil_table)
+        run_world(model, base, a.broker, a.speed, faults, compaction=compaction)
     elif a.role == "probe":
         run_probe(model, base, a.broker)
     elif a.role == "machine":

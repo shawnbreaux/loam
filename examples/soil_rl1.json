@@ -1,0 +1,30 @@
+{
+ "rl1": {
+  "model": "Project Chrono SCM, towed rigid drum",
+  "mass_kg": 11000.0,
+  "width_m": 2.1336,
+  "diameter_m": 1.5,
+  "soil": {
+   "Kphi": 1515000.0,
+   "Kc": 5270.0,
+   "n": 0.7,
+   "cohesion": 1720.0,
+   "friction_deg": 29.0,
+   "janosi": 0.01,
+   "elastic_k": 200000000.0,
+   "damping_r": 30000.0
+  },
+  "settlement_m": [
+   0.08005,
+   0.10672,
+   0.12394,
+   0.13718,
+   0.14261,
+   0.14755,
+   0.15203,
+   0.15614
+  ],
+  "first_pass_sinkage_m": 0.08081,
+  "bekker_wong_sinkage_m": 0.06192
+ }
+}
