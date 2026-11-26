@@ -7,16 +7,39 @@ polygon. Arrays are indexed `[j, i]` (row = y, column = x).
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
 
+from . import ast as ast_
 from .checker import Model
 from .landxml import rasterize, read_tin
 from .units import Quantity, length_unit_si
 
 Grid = NDArray[np.float64]
 Mask = NDArray[np.bool_]
+
+
+def cell_eval(node: Any, actual: Grid, design: Grid, u: float) -> Any:
+    """Evaluate an `area where` condition per cell (names: residual, design, actual), SI units."""
+    if isinstance(node, ast_.Ident):
+        return {"residual": actual - design, "design": design, "actual": actual}[node.name] * u
+    if isinstance(node, ast_.Num):
+        return node.value
+    if isinstance(node, ast_.Qty):
+        return node.q.si
+    if isinstance(node, ast_.Not):
+        return ~cell_eval(node.expr, actual, design, u)
+    if isinstance(node, ast_.BinOp):
+        a, b = cell_eval(node.left, actual, design, u), cell_eval(node.right, actual, design, u)
+        ops: dict[str, Callable[[], Any]] = {
+            "and": lambda: a & b, "or": lambda: a | b, "<": lambda: a < b, "<=": lambda: a <= b,
+            ">": lambda: a > b, ">=": lambda: a >= b, "+": lambda: a + b, "-": lambda: a - b,
+            "*": lambda: a * b, "/": lambda: a / b}
+        return ops[node.op]()
+    raise ValueError("unsupported 'area where' expression")
 
 
 def polygon_mask(poly: list, xs: Grid, ys: Grid) -> Mask:
@@ -77,6 +100,28 @@ class SiteGrid:
         if not allow_gaps and np.isnan(z).any():
             raise ValueError(f"{path}: surface does not cover the whole site grid")
         return z
+
+    def design_and_existing(self) -> tuple[Grid, Grid]:
+        """Design and existing ground on the grid. Where the design surface stops (outside the job's
+        limits), the design is the existing ground: no work is wanted there. Existing ground must
+        cover the whole grid."""
+        ex = self.m.site.get("existing") or {}
+        if "file" not in ex:
+            raise ValueError("the site needs an existing-ground surface file")
+        z = self.surface(ex)
+        d = self.surface(self.m.site["design"], allow_gaps=True)
+        if np.isnan(d).all():
+            raise ValueError("the design surface does not overlap the site grid")
+        return np.where(np.isnan(d), z, d), z
+
+    def zone_mask(self, name: str, actual: Grid, design: Grid) -> Mask:
+        """A zone's cells: its polygon, or its `area where` condition evaluated on `actual`."""
+        mk = self.masks.get(name)
+        if mk is not None:
+            return mk
+        if name in self.m.stockpiles:
+            return np.zeros(self.shape, bool)
+        return np.asarray(cell_eval(self.m.zones[name]["area"]["where"], actual, design, self.u), bool)
 
     def valid_shift(self, dj: int, di: int) -> Mask:
         v = np.ones(self.shape, bool)

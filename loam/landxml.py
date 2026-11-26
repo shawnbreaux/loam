@@ -127,3 +127,62 @@ def write_grid_tin(path: str, name: str, xs: np.ndarray, ys: np.ndarray, z: np.n
     if not len(faces):
         raise ValueError("nothing to write: the grid has no complete cells")
     write_tin(path, name, pts, faces, units)
+
+
+UNIT_OF_LINEAR = {"foot": "ft", "USSurveyFoot": "usft", "meter": "m", "metre": "m"}
+
+
+def read_project(path: str) -> dict:
+    """Project-level facts of a LandXML file: length unit, coordinate system, surface names."""
+    root = _parse(path).getroot()
+    out: dict = {"unit": None, "epsg": None, "crs_name": None, "surfaces": [], "application": None}
+    for el in root.iter():
+        tag = _local(el.tag)
+        if tag in ("Imperial", "Metric") and out["unit"] is None:
+            out["unit"] = UNIT_OF_LINEAR.get(el.get("linearUnit", ""))
+        elif tag == "CoordinateSystem":
+            out["epsg"] = el.get("epsgCode") or out["epsg"]
+            out["crs_name"] = el.get("name") or el.get("desc") or out["crs_name"]
+        elif tag == "Application":
+            out["application"] = " ".join(filter(None, (el.get("manufacturer"), el.get("name"), el.get("version"))))
+        elif tag == "Surface":
+            out["surfaces"].append({"name": el.get("name"), "desc": el.get("desc"),
+                                    "state": el.get("state") or el.get("stateType")})
+    return out
+
+
+def tin_boundary(pts: np.ndarray, faces: np.ndarray) -> list[tuple[float, float]]:
+    """Outer boundary of a TIN as a polygon: the longest closed loop of edges used by one face."""
+    e = np.sort(np.concatenate([faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]]]), axis=1)
+    uniq, count = np.unique(e, axis=0, return_counts=True)
+    edges = uniq[count == 1]
+    nxt: dict[int, list[int]] = {}
+    for a, b in edges:
+        nxt.setdefault(int(a), []).append(int(b))
+        nxt.setdefault(int(b), []).append(int(a))
+    seen: set[tuple[int, int]] = set()
+    best: list[int] = []
+    for start in list(nxt):
+        for first in nxt[start]:
+            if (start, first) in seen:
+                continue
+            loop, prev, cur = [start], start, first
+            seen.add((start, first))
+            while cur != start and len(loop) <= len(edges):
+                loop.append(cur)
+                cand = [v for v in nxt[cur] if v != prev and (cur, v) not in seen] or \
+                       [v for v in nxt[cur] if (cur, v) not in seen]
+                if not cand:
+                    break
+                seen.add((cur, cand[0]))
+                prev, cur = cur, cand[0]
+            if cur == start and (not best or _area(pts[loop]) > _area(pts[best])):
+                best = loop
+    if not best:
+        raise ValueError("surface has no closed outer boundary")
+    return [(float(pts[i, 0]), float(pts[i, 1])) for i in best]
+
+
+def _area(p: np.ndarray) -> float:
+    x, y = p[:, 0], p[:, 1]
+    return abs(float(np.dot(x, np.roll(y, -1)) - np.dot(y, np.roll(x, -1)))) / 2

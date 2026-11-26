@@ -63,11 +63,13 @@ cut with 6 % random error. The table gives means with 95 % bootstrap confidence 
 
 | Pad cells within ±0.1 ft | Open loop (one survey) | Closed loop (survey every 5 min) |
 | --- | --- | --- |
-| On the true ground | 61.7 % [61.6, 61.7] | 99.7 % [99.7, 99.8] |
-| As the program believed | 96.8 % [96.8, 96.8] | 98.5 % [98.5, 98.6] |
+| On the true ground | 60.8 % [60.7, 60.9] | 98.5 % [98.4, 98.6] |
+| As the program believed | 95.5 % [95.4, 95.6] | 97.4 % [97.2, 97.5] |
 
-The open-loop run reports success while 38 % of the pad is out of tolerance. A 2×2 factorial separates
-the causes. Belief error accounts for most of the gap (open loop 93.1 % → 61.7 %); execution noise
+The open-loop run reports success while 39 % of the pad is out of tolerance. The closed loop stops as soon
+as the program's own completion rule holds on measured ground (95 % of cells in tolerance), so its
+true-ground figure sits a little above that line rather than at 100 %. A 2×2 factorial separates
+the causes. Belief error accounts for most of the gap (open loop 92.2 % → 60.8 %); execution noise
 accounts for the rest. With correct beliefs and noiseless blades, open loop is unbiased and meets its
 completion rule. That control is checked in the test suite, so the gap cannot be an artefact of the
 simulator favouring feedback.
@@ -92,6 +94,26 @@ loam export  site.loam --to landxml -o next.xml --ground scan.las --world-origin
 loam score   site.loam rover.csv --zone pad --world-origin 600000,3812000
 ```
 
+## From a grading file to a running site
+
+`loam plan` turns the LandXML a project manager receives (existing and finished-grade surfaces) into a
+checked site program. `loam run` is the site controller: it sends Loam Wire orders over MQTT, reads
+terrain and machine state, replans, and enforces the safety rules. `loam simulate-site` starts a world,
+a lidar probe and one process per machine to test it against, with scripted faults, and
+`loam monitor` is a live web dashboard. See [docs/RUNTIME.md](docs/RUNTIME.md).
+
+```bash
+pip install -e ".[run]"   &&   mosquitto -p 1883 &
+loam plan job.xml -o job.loam
+loam simulate-site job.loam --speed 300 &
+loam monitor job.loam --port 8080 &        # http://127.0.0.1:8080/
+loam run job.loam
+```
+
+In end-to-end runs on real design surfaces, with a person near a machine, a lidar outage, rain, GNSS
+float, a lost radio, a site e-stop and a crashed dozer, every fault was handled and the jobs finished
+with 95.8–97.6 % of cells in tolerance on the simulated true ground.
+
 ## Repository layout
 
 | Path | Purpose |
@@ -107,15 +129,18 @@ loam score   site.loam rover.csv --zone pad --world-origin 600000,3812000
 | `loam/grid.py`, `loam/geo.py` | The site height grid; placing it on WGS84 and projected coordinates |
 | `loam/pointcloud.py` | Streaming LAS and PCD readers (DJI L2, Livox Mid-360) and gridding |
 | `loam/survey.py` | Emlid/RTK survey CSV, NMEA GGA to Wire state, scoring against design |
+| `loam/plan.py` | `loam plan`: grading LandXML to a site program |
+| `loam/runtime/` | Controller over MQTT, simulated world, machines (optionally PyBullet physics) and probe |
+| `loam/monitor.py`, `loam/monitor.html` | Live dashboard and replay pages |
 | `loam/target.py`, `loam/export.py` | Next-pass surface; LandXML (Cat Grade 3D), OpenGrade3D `.agd`, AgOpenGPS field folder |
 | `examples/` | Example program and surfaces, comparison plot, Monte Carlo study |
-| `tests/` | 108 tests: language, I/O, simulator invariants, field adapters, memory bounds, property-based parser fuzzing |
+| `tests/` | 118 tests: language, I/O, simulator invariants, field adapters, planner, controller loopback, a full multi-process MQTT run with faults, memory bounds, parser fuzzing |
 
 ## Development
 
 ```bash
 pip install -e ".[dev]"
-pytest -q --cov=loam          # 108 tests, about 40 s
+pytest -q --cov=loam          # 118 tests, about 2 min; the MQTT test needs mosquitto
 ruff check loam tests examples
 mypy loam
 python examples/study.py      # about 1 min on 2 cores; rewrites results/
@@ -126,7 +151,7 @@ example surfaces. Contributions: see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Status and safety
 
-v0.0.1 is a first public draft; the language and wire format will change. **Loam does not make a
+v0.0.2 is an early draft; the language and wire format will change. **Loam does not make a
 machine safe.** Machines directed by Loam need their own certified safety systems and a site risk
 assessment (ISO 17757). The reference simulator is a test tool, not a planner for real equipment.
 

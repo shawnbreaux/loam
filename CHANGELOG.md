@@ -3,20 +3,35 @@
 All notable changes are recorded here. The project follows [Semantic Versioning](https://semver.org/);
 before 1.0 any minor release may change the language.
 
-## [Unreleased]
+## [0.0.2] - 2026-11-25
 
-Field adapters for testing on real equipment (see docs/FIELD.md).
+From a grading file to a running, monitored site, tested end to end over MQTT (see docs/RUNTIME.md).
 
-- `loam export --to landxml | agd | agopengps`: next-pass target surface (or the design) for Cat Grade
-  with 3D and other machine control, OpenGrade3D design grids, and AgOpenGPS field folders.
-- `loam terrain`: streaming LAS 1.0-1.4 and PCD readers (DJI Zenmuse L2, Livox Mid-360) gridded onto
-  the site, as a Wire terrain message or an as-built LandXML surface. Memory stays near 25 MB.
-- `loam score`: Emlid Flow / RTK survey CSVs scored against the design, with a bootstrap 95 % interval.
-- `loam nmea`: NMEA GGA from an RTK receiver to Wire `state` messages; non-fixed solutions are flagged.
-- Site placement on WGS84 and projected grids (`--origin`, `--world-origin`, `--rotation`), matching
-  AgOpenGPS's local plane.
-- `usft` (US survey foot) length unit. Wire `pose.heading` convention documented.
-- The simulator's grid code moved to `loam/grid.py`; simulator output is byte-identical.
+- `loam plan`: writes a checked Loam program from the LandXML a project manager receives (existing
+  and finished-grade surfaces, one file or two): job limits traced from the design surface, derived cut
+  and fill zones, earthwork balance, stockpile, tasks, safety rules. Assumptions are marked `CHECK`.
+- `loam run`: the site controller over MQTT. Same planner as the reference simulator; surveys come from
+  terrain messages, passes land when machines report them done, and survey and completion times are
+  reconciled so no pass counts twice. Withdraws passes from machines that drop off.
+- `loam simulate-site`: a world, a lidar probe and one process per machine speaking Loam Wire, with
+  scripted faults (person near a machine, lidar outage, rain, GNSS float, radio loss, e-stop, crash).
+- `loam monitor`: live web dashboard (measured-vs-design map, machines, tasks, events) and
+  self-contained replay pages of recorded runs.
+- Wire: `estop`, `detection`, `weather` and `status` topics; per-cell `target.pattern` for cut and finish
+  orders and `deposit.pattern` for spoil and fill; millisecond timestamps; idempotent orders.
+- Planner fixes found by the end-to-end tests: a roller compacts everything under its window; no new
+  passes once a task's `until` already holds on measured ground. Study numbers regenerated.
+- Language 0.0.2: `usft` unit; design surfaces may stop short of the site (outside them, no work).
+- Field adapters for testing on real equipment (see docs/FIELD.md):
+  - `loam export --to landxml | agd | agopengps`: next-pass target surface (or the design) for Cat
+    Grade with 3D and other machine control, OpenGrade3D design grids, and AgOpenGPS field folders.
+  - `loam terrain`: streaming LAS 1.0-1.4 and PCD readers (DJI Zenmuse L2, Livox Mid-360) gridded onto
+    the site, as a Wire terrain message or an as-built LandXML surface. Memory stays near 25 MB.
+  - `loam score`: Emlid Flow / RTK survey CSVs scored against the design, with a bootstrap 95 % interval.
+  - `loam nmea`: NMEA GGA from an RTK receiver to Wire `state` messages; non-fixed solutions are flagged.
+  - Site placement on WGS84 and projected grids (`--origin`, `--world-origin`, `--rotation`), matching
+    AgOpenGPS's local plane.
+- The simulator's grid code moved to `loam/grid.py`.
 
 ## [0.0.1] - 2026-11-25
 

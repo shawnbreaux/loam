@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Loam site monitor</title>
+<style>
+:root {
+  --surface-0: #f6f6f4; --surface-1: #ffffff; --line: #e2e2de; --text-primary: #191919; --text-secondary: #666666;
+  --neutral: #efefef; --high: #ec4647; --low: #257de0; --zone: #191919;
+  --good: #0aac23; --warning: #fbb315; --serious: #f18a59; --critical: #dc3c3d;
+  --machine: #191919; --machine-ring: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --surface-0: #111111; --surface-1: #191919; --line: #2c2c2c; --text-primary: #efefef; --text-secondary: #9c9c9c;
+          --neutral: #383838; --high: #eb6263; --low: #338ced; --zone: #efefef; --machine: #efefef; --machine-ring: #191919; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--surface-0);
+       color: var(--text-primary); }
+header { display: flex; align-items: center; gap: 16px; padding: 12px 20px; background: var(--surface-1);
+         border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+.clock { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-weight: 600;
+        font-size: 12px; border: 1px solid var(--line); }
+.chip i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+main { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; padding: 16px 20px; }
+@media (max-width: 960px) { main { grid-template-columns: 1fr; } }
+.card { background: var(--surface-1); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+.card h2 { font-size: 13px; margin: 0 0 10px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase;
+           letter-spacing: .04em; }
+#mapwrap { position: relative; }
+canvas { width: 100%; display: block; }
+#tip { position: absolute; pointer-events: none; background: var(--surface-1); border: 1px solid var(--line);
+       border-radius: 6px; padding: 6px 8px; font-size: 12px; display: none; white-space: nowrap;
+       box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 10px; font-size: 12px; color: var(--text-secondary); }
+.legend span { display: inline-flex; align-items: center; gap: 5px; }
+.legend b { width: 14px; height: 10px; border-radius: 2px; display: inline-block; }
+.kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.kpi { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+.kpi .v { font-size: 24px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.kpi .l { font-size: 12px; color: var(--text-secondary); }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; font-weight: 600; color: var(--text-secondary); font-size: 12px; padding: 4px 6px;
+     border-bottom: 1px solid var(--line); }
+td { padding: 5px 6px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.side { display: flex; flex-direction: column; gap: 16px; }
+.events { max-height: 260px; overflow: auto; font-size: 12.5px; }
+.events div { padding: 3px 0; border-bottom: 1px solid var(--line); display: flex; gap: 8px; }
+.events .t { color: var(--text-secondary); font-variant-numeric: tabular-nums; flex: none; }
+.bar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--text-secondary); }
+#replay { display: none; align-items: center; gap: 12px; padding: 10px 20px; background: var(--surface-1);
+          border-top: 1px solid var(--line); position: sticky; bottom: 0; }
+#replay input[type=range] { flex: 1; }
+button { font: inherit; padding: 4px 12px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface-0);
+         color: var(--text-primary); cursor: pointer; }
+.muted { color: var(--text-secondary); font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">Loam site monitor</h1>
+  <span class="clock" id="clock">waiting for data…</span>
+  <span class="chip" id="state"><i></i><span>connecting</span></span>
+  <span class="muted" id="source"></span>
+</header>
+<main>
+  <section class="card">
+    <h2>Measured ground vs design</h2>
+    <div id="mapwrap"><canvas id="map"></canvas><div id="tip"></div></div>
+    <div class="legend" id="legend"></div>
+    <p class="muted" id="mapnote"></p>
+  </section>
+  <div class="side">
+    <section class="card">
+      <h2>Progress</h2>
+      <div class="kpis" id="kpis"></div>
+    </section>
+    <section class="card"><h2>Tasks</h2><table id="tasks"></table></section>
+    <section class="card"><h2>Machines</h2><table id="machines"></table></section>
+    <section class="card"><h2>Events</h2><div class="events" id="events"></div></section>
+  </div>
+</main>
+<div id="replay">
+  <button id="play">Play</button>
+  <input type="range" id="scrub" min="0" value="0">
+  <select id="speed"><option value="1">1×</option><option value="4" selected>4×</option><option value="16">16×</option></select>
+  <span class="clock" id="rtime"></span>
+</div>
+<script>
+const EMBED = /*LOAM_DATA*/null;
+(EMBED ? Promise.resolve(EMBED) : fetch("run.json").then((r) => r.json())).then(start).catch((e) => {
+  document.getElementById("clock").textContent = "could not load the recording: " + e.message;
+});
+function start(DATA) {
+const site = DATA.site;
+const $ = (id) => document.getElementById(id);
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+let view = {map: null, mapShape: site.shape, machines: {}, orders: {}, status: null, truth: null, people: {}, events: [], t: null, estop: false};
+$("title").textContent = `Loam · ${site.site}`;
+
+function hex(c) { const n = parseInt(c.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; }
+function mix(a, b, k) { return a.map((v, i) => Math.round(v + (b[i] - v) * k)); }
+function bands() {
+  const n = hex(css("--neutral")), hi = hex(css("--high")), lo = hex(css("--low"));
+  return {n, hi: [mix(n, hi, .38), mix(n, hi, .7), hi], lo: [mix(n, lo, .38), mix(n, lo, .7), lo]};
+}
+function colorFor(q, b) {          // q = residual / tolerance × 10
+  const a = Math.abs(q), arm = q > 0 ? b.hi : b.lo;
+  if (a <= 10) return b.n;
+  return a <= 20 ? arm[0] : a <= 40 ? arm[1] : arm[2];
+}
+function legend() {
+  const b = bands(), u = site.unit, t = site.tol;
+  const items = [[b.hi[2], `> ${fmt(4*t)} ${u} high`], [b.hi[1], `${fmt(2*t)}–${fmt(4*t)} high`], [b.hi[0], `${fmt(t)}–${fmt(2*t)} high`],
+                 [b.n, `within ±${fmt(t)} ${u}`], [b.lo[0], `${fmt(t)}–${fmt(2*t)} low`], [b.lo[1], `${fmt(2*t)}–${fmt(4*t)} low`],
+                 [b.lo[2], `> ${fmt(4*t)} ${u} low`]];
+  $("legend").innerHTML = items.map(([c, l]) => `<span><b style="background:rgb(${c})"></b>${l}</span>`).join("") +
+    `<span>▲ machine</span><span>▭ work window</span><span>┅ deposit</span>`;
+  $("mapnote").textContent = "High ground (red) still needs cutting; low ground (blue) needs fill. From the latest probe survey.";
+}
+function fmt(v) { return (+v.toFixed(3)).toString(); }
+
+// -- geometry -------------------------------------------------------------------------
+const cv = $("map"), cx = cv.getContext("2d");
+let geo = null;
+function layout() {
+  const [rows, cols] = site.shape, pad = 10;
+  const xs = [], ys = [];
+  const add = (p) => p.forEach(([x, y]) => { xs.push(x); ys.push(y); });
+  add([[site.origin[0], site.origin[1]], [site.origin[0] + cols * site.cell, site.origin[1] + rows * site.cell]]);
+  Object.values(site.stockpiles).forEach(add);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const w = cv.clientWidth, s = (w - 2 * pad) / (x1 - x0), h = Math.round((y1 - y0) * s + 2 * pad);
+  const dpr = window.devicePixelRatio || 1;
+  cv.width = w * dpr; cv.height = h * dpr; cv.style.height = h + "px";
+  cx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  geo = {s, px: (x) => pad + (x - x0) * s, py: (y) => h - pad - (y - y0) * s, ux: (px) => x0 + (px - pad) / s, uy: (py) => y0 + (h - pad - py) / s};
+}
+function decodeMap(b64) { const raw = atob(b64), a = new Int8Array(raw.length); for (let i = 0; i < raw.length; i++) a[i] = raw.charCodeAt(i) << 24 >> 24; return a; }
+let mapCanvas = null, mapArr = null;
+function buildMap() {
+  if (!view.map) return;
+  mapArr = decodeMap(view.map);
+  const [rows, cols] = site.shape, b = bands();
+  mapCanvas = document.createElement("canvas"); mapCanvas.width = cols; mapCanvas.height = rows;
+  const ctx = mapCanvas.getContext("2d"), img = ctx.createImageData(cols, rows);
+  for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
+    const q = mapArr[j * cols + i], o = ((rows - 1 - j) * cols + i) * 4;
+    if (q === -128) { img.data[o + 3] = 0; continue; }
+    const c = colorFor(q, b); img.data[o] = c[0]; img.data[o + 1] = c[1]; img.data[o + 2] = c[2]; img.data[o + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+}
+function poly(p, dash, color, width) {
+  if (!p || !p.length) return;
+  cx.beginPath(); p.forEach(([x, y], i) => i ? cx.lineTo(geo.px(x), geo.py(y)) : cx.moveTo(geo.px(x), geo.py(y)));
+  cx.closePath(); cx.setLineDash(dash || []); cx.strokeStyle = color; cx.lineWidth = width || 1; cx.stroke(); cx.setLineDash([]);
+}
+function draw() {
+  if (!geo) layout();
+  cx.clearRect(0, 0, cv.width, cv.height);
+  const [rows, cols] = site.shape;
+  if (mapCanvas) {
+    cx.imageSmoothingEnabled = false;
+    const x = geo.px(site.origin[0]), y = geo.py(site.origin[1] + rows * site.cell);
+    cx.drawImage(mapCanvas, x, y, cols * site.cell * geo.s, rows * site.cell * geo.s);
+  }
+  const ink = css("--zone"), sec = css("--text-secondary");
+  Object.entries(site.zones).forEach(([n, z]) => poly(z.polygon, z.role === "exclusion" ? [2, 3] : [], z.role === "finish" ? ink : sec, z.role === "finish" ? 1.5 : 1));
+  Object.entries(site.stockpiles).forEach(([n, p]) => { poly(p, [], sec, 1); label(n, p[0][0], p[0][1], sec, 0, 14); });
+  Object.entries(view.orders).forEach(([m, o]) => {
+    const live = view.machines[m] && view.machines[m].order === o.id;
+    if (!live) return;
+    poly(o.window, [], ink, 2); poly(o.deposit, [5, 4], ink, 1.5);
+  });
+  Object.values(view.people).forEach(([x, y]) => {
+    cx.beginPath(); cx.arc(geo.px(x), geo.py(y), 7, 0, 7); cx.fillStyle = css("--critical"); cx.fill();
+    cx.lineWidth = 2; cx.strokeStyle = css("--machine-ring"); cx.stroke(); label("person", x, y, css("--critical"), 10, 4);
+  });
+  const placed = [];
+  Object.entries(view.machines).forEach(([n, m]) => {
+    const X = geo.px(m.x), Y = geo.py(m.y), h = -m.h;
+    let dy = -8;                                   // keep labels of nearby machines apart
+    while (placed.some(([px, py]) => Math.abs(px - X) < 40 && Math.abs(py - (Y + dy)) < 12)) dy += 13;
+    placed.push([X, Y + dy]);
+    cx.save(); cx.translate(X, Y); cx.rotate(h);
+    cx.beginPath(); cx.moveTo(10, 0); cx.lineTo(-7, 6); cx.lineTo(-7, -6); cx.closePath();
+    cx.fillStyle = m.safety === "ok" ? css("--machine") : m.safety === "degraded" ? css("--warning") : css("--critical");
+    cx.lineWidth = 2; cx.strokeStyle = css("--machine-ring"); cx.stroke(); cx.fill(); cx.restore();
+    label(n, m.x, m.y, css("--text-primary"), 12, dy);
+  });
+}
+function label(t, x, y, color, dx, dy) {
+  cx.font = "600 11px system-ui, sans-serif"; cx.lineWidth = 3; cx.strokeStyle = css("--surface-1");
+  cx.strokeText(t, geo.px(x) + dx, geo.py(y) + dy); cx.fillStyle = color; cx.fillText(t, geo.px(x) + dx, geo.py(y) + dy);
+}
+cv.addEventListener("mousemove", (e) => {
+  const tip = $("tip");
+  if (!geo || !mapArr) { tip.style.display = "none"; return; }
+  const r = cv.getBoundingClientRect(), x = geo.ux(e.clientX - r.left), y = geo.uy(e.clientY - r.top);
+  const i = Math.floor((x - site.origin[0]) / site.cell), j = Math.floor((y - site.origin[1]) / site.cell);
+  const [rows, cols] = site.shape;
+  if (i < 0 || j < 0 || i >= cols || j >= rows || mapArr[j * cols + i] === -128) { tip.style.display = "none"; return; }
+  const v = mapArr[j * cols + i] * site.tol / 10;
+  const what = Math.abs(v) <= site.tol ? "in tolerance" : v > 0 ? "above design: cut" : "below design: fill";
+  tip.innerHTML = `<b>${v >= 0 ? "+" : ""}${fmt(v)} ${site.unit}</b> ${what}<br><span class="muted">x ${x.toFixed(1)}, y ${y.toFixed(1)}</span>`;
+  tip.style.display = "block"; tip.style.left = (e.clientX - r.left + 14) + "px"; tip.style.top = (e.clientY - r.top + 10) + "px";
+});
+cv.addEventListener("mouseleave", () => $("tip").style.display = "none");
+
+// -- panels ---------------------------------------------------------------------------
+function hhmm(ts) { return ts == null ? "–" : new Date(ts * 1000).toISOString().slice(11, 16); }
+function chip(level, text) {
+  const c = {good: "--good", warning: "--warning", serious: "--serious", critical: "--critical", info: "--text-secondary"}[level];
+  return `<span class="chip"><i style="background:${css(c)}"></i>${text}</span>`;
+}
+function panels() {
+  const st = view.status || {};
+  $("clock").textContent = view.t ? new Date(view.t * 1000).toISOString().replace("T", " ").slice(0, 16) + " UTC (site clock)" : "waiting for data…";
+  let state = ["info", "running"];
+  if (st.done) state = ["good", "done"];
+  if ((st.rules || []).length) state = ["warning", "hold: " + st.rules.join(", ")];
+  if (view.estop || st.estop) state = ["critical", "E-STOP"];
+  $("state").outerHTML = chip(state[0], state[1]).replace('class="chip"', 'class="chip" id="state"');
+  const meas = st.measured || {}, zone = Object.keys(meas)[0];
+  const truth = view.truth && view.truth.zones && zone && view.truth.zones[zone];
+  const kp = [[zone ? `${meas[zone]}%` : "–", `in tolerance, measured (${zone || "zone"})`],
+              [truth ? `${truth.within_tolerance_pct}%` : "–", "in tolerance, true ground (simulation only)"],
+              [st.surveys ?? "–", `surveys · probe age ${st.probe_age_min ?? "–"} min`],
+              [st.replans ?? "–", `replans · ${st.abandoned ?? 0} passes abandoned`]];
+  $("kpis").innerHTML = kp.map(([v, l]) => `<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div></div>`).join("");
+  const tasks = st.tasks || {};
+  $("tasks").innerHTML = "<tr><th>Task</th><th>Status</th><th>Passes</th></tr>" + Object.entries(tasks).map(([n, t]) =>
+    `<tr><td>${n}</td><td>${t.done != null ? chip("good", "done") : t.started != null ? chip("info", "working") : chip("info", "waiting")}</td><td>${t.passes}</td></tr>`).join("");
+  const ms = st.machines || {};
+  $("machines").innerHTML = "<tr><th>Machine</th><th>Link</th><th>Safety</th><th>Pass</th></tr>" + Object.keys(site.machines).map((n) => {
+    const m = view.machines[n] || {}, c = ms[n] || {};
+    const safe = m.safety === "ok" ? chip("good", "ok") : m.safety === "degraded" ? chip("warning", (m.errors || []).join(" ") || "degraded") :
+                 m.safety ? chip("critical", (m.errors || []).join(" ") || m.safety) : "–";
+    const link = c.conn === "online" ? chip("good", "online") : c.conn ? chip("critical", c.conn) : "–";
+    const p = m.order ? `<div class="bar" title="${m.order}"><i style="width:${Math.round(100 * (m.progress || 0))}%"></i></div>` : '<span class="muted">idle</span>';
+    return `<tr><td>${n} <span class="muted">${site.machines[n]}</span></td><td>${link}</td><td>${safe}</td><td style="width:90px">${p}</td></tr>`;
+  }).join("");
+  $("events").innerHTML = (view.events || []).map((e) => `<div><span class="t">${hhmm(e.ts)}</span>${e.level === "info" ? "" : chip(e.level, "")}<span>${e.text}</span></div>`).join("") || '<span class="muted">none yet</span>';
+}
+function apply(f) {
+  for (const k of ["t", "machines", "orders", "status", "truth", "people", "events", "estop"]) if (f[k] !== undefined) view[k] = f[k];
+  if (f.map) { view.map = f.map; buildMap(); }
+  draw(); panels();
+}
+
+// -- live or replay -------------------------------------------------------------------
+legend();
+window.addEventListener("resize", () => { geo = null; draw(); });
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { legend(); buildMap(); draw(); panels(); });
+if (DATA.frames) {
+  const frames = DATA.frames, sc = $("scrub");
+  $("replay").style.display = "flex"; $("source").textContent = `replay · ${frames.length} frames`;
+  sc.max = frames.length - 1;
+  const mapAt = []; let last = null;                  // the latest map at or before each frame
+  frames.forEach((f, i) => { if (f.map) last = f.map; mapAt[i] = last; });
+  function show(i) { const f = frames[i]; const shown = view.map; apply({...f, map: mapAt[i] !== shown ? mapAt[i] : undefined}); $("rtime").textContent = hhmm(f.t); sc.value = i; }
+  let timer = null;
+  $("play").onclick = () => {
+    if (timer) { clearInterval(timer); timer = null; $("play").textContent = "Play"; return; }
+    $("play").textContent = "Pause";
+    timer = setInterval(() => { const i = +sc.value + 1; if (i >= frames.length) { clearInterval(timer); timer = null; $("play").textContent = "Play"; return; } show(i); }, 250 / +$("speed").value);
+  };
+  $("speed").onchange = () => { if (timer) { $("play").click(); $("play").click(); } };
+  sc.oninput = () => show(+sc.value);
+  show(frames.length - 1);
+} else {
+  $("source").textContent = "live";
+  const es = new EventSource("/events");
+  es.onmessage = (e) => apply(JSON.parse(e.data));
+  es.onerror = () => { $("source").textContent = "reconnecting…"; };
+  es.onopen = () => { $("source").textContent = "live"; };
+}
+}
+</script>
+</body>
+</html>

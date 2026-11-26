@@ -36,7 +36,7 @@ def next_target(grid: SiteGrid, design: Grid, ground: Grid) -> tuple[Grid, dict]
     for name, z in m.zones.items():
         if z.get("role") == "exclusion":
             continue
-        mk = grid.polygon_zone(name)
+        mk = grid.zone_mask(name, np.where(np.isfinite(ground), ground, design), design)
         covered |= mk
         tasks = [t for t in m.tasks.values() if t.get("zone") == name]
         cuts = [t["max_cut"] for t in tasks if t.get("max_cut")] or [DEFAULT_CUT]
@@ -45,7 +45,8 @@ def next_target(grid: SiteGrid, design: Grid, ground: Grid) -> tuple[Grid, dict]
         cut_cap[mk] = np.minimum(cut_cap[mk], min(q.to(unit) for q in cuts))
         lift_cap[mk] = np.minimum(lift_cap[mk], min(q.to(unit) for q in lifts))
         tol[mk] = np.minimum(tol[mk], z_tol)
-    live = covered & ~grid.exclusion() & np.isfinite(ground) & np.isfinite(design)
+    excl = grid.exclusion(lambda n: grid.zone_mask(n, ground, design))
+    live = covered & ~excl & np.isfinite(ground) & np.isfinite(design)
     r = ground - design
     with np.errstate(invalid="ignore"):
         tgt = np.where(r > tol, np.maximum(design, ground - cut_cap),

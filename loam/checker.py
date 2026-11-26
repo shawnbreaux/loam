@@ -12,7 +12,7 @@ from typing import Any
 from . import ast as A
 from .units import Quantity, UnitError
 
-SUPPORTED_VERSIONS = {"0.0.1"}
+SUPPORTED_VERSIONS = {"0.0.1", "0.0.2"}
 
 ENUMS = {
     "probe.kind": {"tethered_uav", "uav", "machine", "rover", "static"},

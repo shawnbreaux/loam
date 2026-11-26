@@ -46,6 +46,8 @@ A Loam program is a set of declarations. Order in the file doesn't matter; depen
 
 **The ground is a height grid.** The site is a raster of cells (`grid 1 ft` by default). Each cell holds three values: `design` (target elevation), `actual` (latest probe measurement) and `residual = actual - design`. A positive residual means material still to remove; a negative one means material still to place.
 
+**Design surfaces need not cover the site.** Outside the design surface the design is the existing ground, so no work is wanted there; the existing surface must cover the whole site grid.
+
 **Zones can be drawn or derived.** A zone is either a polygon (`area rect (...) (...)`, `area polygon [...]` or `area file "x.geojson"`) or computed from the grid (`area where residual > 0.1 ft`). Derived zones are re-evaluated after every probe update, so a cut zone shrinks as it is cut.
 
 **Machines are matched by capability.** A task names a class (`by class dozer`), a specific machine (`by dz1`) or a capability (`by cap compact`). The planner assigns any idle machine that matches.
@@ -58,7 +60,7 @@ A file starts with `loam 0.0.1`, then declarations of the form `kind name { fiel
 
 ```
 program    = header { decl } ;
-header     = "loam" VERSION ;          (* e.g. loam 0.0.1 *)
+header     = "loam" VERSION ;          (* loam 0.0.1 or loam 0.0.2 *)
 decl       = KIND NAME "{" { stmt ( NEWLINE | ";" ) } "}" ;
 KIND       = "site" | "probe" | "machine" | "zone" | "stockpile"
            | "task" | "rule" | "replan" ;
@@ -81,7 +83,7 @@ postfix    = primary { "(" args ")" | "." IDENT } ;
 
 | Dimension | Units |
 | --- | --- |
-| Length | `mm` `cm` `m` `in` `ft` `yd` |
+| Length | `mm` `cm` `m` `in` `ft` `usft` (US survey foot) `yd` |
 | Area | `ft2` `yd2` `m2` `ac` |
 | Volume | `ft3` `yd3` `m3` |
 | Time | `s` `min` `h` |
@@ -144,12 +146,19 @@ Loam Wire is the JSON-over-MQTT layer that carries orders to machines and state 
 | `loam/v0/<site>/<machine>/connection` | machine → controller | `online`, `offline`, `connectionBroken`, retained and set as the MQTT last will |
 | `loam/v0/<site>/terrain` | probe → controller | Measured surface tiles: origin, cell size, shape, σ, encoded heights |
 | `loam/v0/<site>/safety` | controller → all | Site-wide stop or hold, plus a 1 Hz heartbeat |
+| `loam/v0/<site>/estop` | e-stop radio → all | `pressed` true/false. Machines stop at once without waiting for the controller |
+| `loam/v0/<site>/detection` | site sensors → controller | A person or vehicle seen at (x, y); `kind: "clear"` ends it. Feeds `proximity()` |
+| `loam/v0/<site>/weather` | site sensors → controller | Rain rate (m/s). Feeds `weather(rain)` |
+| `loam/v0/<site>/status` | controller → monitors | Tasks, machines, active rules, replans, measured % in tolerance (retained) |
 
 Conventions:
 
 - Positions are in the site CRS and units. Every other quantity is SI: metres, seconds, m/s, m³.
 - `pose.heading` is in radians, counter-clockwise from the site +x axis (the VDA 5050 convention). A state may add `pose.z` (site units) and a `gnss` object (`fix`, `sats`, `hdop`, `age`).
-- A new `orderId` replaces the machine's current order; a higher `orderUpdateId` amends it.
+- A new `orderId` replaces the machine's current order; a higher `orderUpdateId` amends it. A machine never executes an `orderId` twice, and after losing its link it drops the current order rather than resume it unasked.
+- **Targets and spread patterns.** Cut and finish orders carry `target.pattern`: the planned height change per grid cell over the window (metres, negative = cut, `float32-le-base64`, row-major from the window's low corner, `target.shape` = rows, cols). Grade control holds the blade to it and never cuts below design. Deposits carry `deposit.pattern` the same way: the planned loose thickness per cell, with `volume` (m³ in the pattern), `planned` (all loose spoil of a cut, m³; the rest goes to `overflow`) or `bank` (m³ to take from `source`).
+- **Done means done.** A machine reports `progress: 1.0` for an order only once the work has really been done, and stamps that state with the time it finished. The controller matches each survey's timestamp against these, so a survey taken before a pass finished never counts that pass twice.
+- Timestamps are ISO 8601 UTC with optional milliseconds (`2026-12-01T07:00:00.250Z`).
 - **Fail-safe heartbeat:** a machine that hears no `safety` heartbeat for 3 s stops on its own and reports `safetyState: "stopped"`.
 - Every message carries `version`, `headerId` (increasing per sender) and a UTC `timestamp`.
 

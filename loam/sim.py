@@ -29,7 +29,6 @@ from typing import IO, Any
 import numpy as np
 from numpy.typing import NDArray
 
-from . import ast as ast_
 from . import wire
 from .checker import OP_CAP, Model
 from .evaluate import Context, evaluate
@@ -133,11 +132,7 @@ class Sim(Context):
         self.unit, self.u, self.cell = g.unit, g.u, g.cell
         self.x0, self.y0, self.nx, self.ny, self.xs, self.ys, self.area = g.x0, g.y0, g.nx, g.ny, g.xs, g.ys, g.area
         x1, y1 = g.x1, g.y1
-        ex = site.get("existing") or {}
-        if "file" not in ex:
-            raise ValueError("the simulator needs an existing-ground surface file as ground truth")
-        self.design = g.surface(site["design"])
-        self.z = g.surface(ex)
+        self.design, self.z = g.design_and_existing()
         self.z_start = self.z.copy()
         zeros = lambda: np.zeros_like(self.z)  # noqa: E731
         self.loose = zeros()
@@ -206,32 +201,7 @@ class Sim(Context):
         return self.wire_seq
 
     def mask(self, zone: str) -> Mask:
-        mk = self.masks.get(zone)
-        if mk is not None:
-            return mk
-        if zone in self.m.stockpiles:
-            return np.zeros((self.ny, self.nx), bool)
-        return np.asarray(self._cell_eval(self.m.zones[zone]["area"]["where"]), bool)
-
-    def _cell_eval(self, node: Any) -> Any:
-        """Evaluate an `area where` condition per cell (names: residual, design, actual), SI units."""
-        if isinstance(node, ast_.Ident):
-            surf = self.checked_surface()
-            return {"residual": surf - self.design, "design": self.design, "actual": surf}[node.name] * self.u
-        if isinstance(node, ast_.Num):
-            return node.value
-        if isinstance(node, ast_.Qty):
-            return node.q.si
-        if isinstance(node, ast_.Not):
-            return ~self._cell_eval(node.expr)
-        if isinstance(node, ast_.BinOp):
-            a, b = self._cell_eval(node.left), self._cell_eval(node.right)
-            ops: dict[str, Callable[[], Any]] = {
-                "and": lambda: a & b, "or": lambda: a | b, "<": lambda: a < b, "<=": lambda: a <= b,
-                ">": lambda: a > b, ">=": lambda: a >= b, "+": lambda: a + b, "-": lambda: a - b,
-                "*": lambda: a * b, "/": lambda: a / b}
-            return ops[node.op]()
-        raise ValueError("unsupported 'area where' expression in the simulator")
+        return self.grid.zone_mask(zone, self.checked_surface(), self.design)
 
     # -- surfaces --------------------------------------------------------
     def plan_view(self) -> Grid:
@@ -297,16 +267,21 @@ class Sim(Context):
                                 or self.t - self.last_probe < p["rate"].to("min") - 1e-9):
             return
         sigma = p["accuracy"].to(self.unit) / 2   # accuracy is read as a 2-sigma (95 %) bound
-        self.prev_meas = self.meas if self.has_survey else None
-        self.meas = self.z + self.rng.normal(0, sigma, self.z.shape)
-        self.last_probe, self.probe_count = self.t, self.probe_count + 1
+        meas = self.z + self.rng.normal(0, sigma, self.z.shape)
         self.emit(wire.topic(self.site_name, None, "terrain"),
                   wire.terrain(self.site_name, p["name"], self.seq(), (self.x0, self.y0), self.cell,
                                (self.ny, self.nx), sigma=sigma, ts=self.ts()))
+        self.ingest_survey(meas, p["name"])
+
+    def ingest_survey(self, meas: Grid, probe: str) -> None:
+        """A new measured surface: compare it with the prediction and replan if the program says so."""
+        self.prev_meas = self.meas if self.has_survey else None
+        self.meas = meas
+        self.last_probe, self.probe_count = self.t, self.probe_count + 1
         if not self.has_survey:
             self.has_survey = True
             self.pred[:] = self.meas
-            self.log(f"{p['name']}: first survey, {self.nx}x{self.ny} cells at {self.cell:g} {self.unit}")
+            self.log(f"{probe}: first survey, {self.nx}x{self.ny} cells at {self.cell:g} {self.unit}")
             return
         touched = self.touched_dep | self.touched_comp | self.touched_other
         self.last_dev = float(np.percentile(np.abs(self.meas - self.pred)[touched], 95)) if touched.any() else 0.0
@@ -482,6 +457,8 @@ class Sim(Context):
             loose_pred, scale = bank_pred * self.est_swell, (bank_true * self.soil.swell) / max(
                 bank_pred * self.est_swell, 1e-12)
             centre: tuple[float, float] | None = None
+            planned_loose = loose_pred
+            placed: list[tuple[NDArray[np.intp], Grid]] = []
             for dest in t.get("spoil") or []:
                 if loose_pred <= 1e-12:
                     break
@@ -491,16 +468,24 @@ class Sim(Context):
                         parts.append((idx, amt * scale, amt, amt * scale, amt))
                         loose_pred -= amt.sum() * self.area
                         centre = centre or self._centre(idx)
-                        deposit_msg = {"zone": dest, "lift": round(self._zone_lift(dest) * self.u, 4)}
+                        placed.append((idx, amt))
+                        deposit_msg = deposit_msg or {"zone": dest, "lift": round(self._zone_lift(dest) * self.u, 4)}
                 elif dest in self.stock:
                     back = loose_pred * scale / self.soil.swell
                     self.stock[dest] += back
                     self.export_bank += back
                     centre = centre or self.stock_xy[dest]
-                    deposit_msg = deposit_msg or {"stockpile": dest}
+                    if deposit_msg is None:
+                        deposit_msg = {"stockpile": dest}
+                    else:
+                        deposit_msg["overflow"] = dest
                     loose_pred = 0.0
             if loose_pred > 1e-12:   # nowhere left to put it: leave it on the cut as a windrow
                 self.windrow += loose_pred * scale / self.soil.swell
+            if placed and deposit_msg is not None:
+                deposit_msg.update(self._pattern(np.concatenate([p[0] for p in placed]),
+                                                 np.concatenate([p[1] for p in placed])))
+                deposit_msg["planned"] = round(planned_loose * self.u ** 3, 4)
             if centre is not None:
                 dist = 2 * float(np.hypot(centre[0] - self.xs[w[1]].mean(), centre[1] - self.ys[w[0]].mean()))
             limits["maxCut"] = round(max_cut * self.u, 4)
@@ -524,7 +509,8 @@ class Sim(Context):
             cx, cy = self._centre(idx)
             dist = 2 * float(np.hypot(cx - sx, cy - sy))
             limits["lift"] = round(lift * self.u, 4)
-            deposit_msg = {"zone": zone, "lift": round(lift * self.u, 4), "source": src}
+            deposit_msg = {"zone": zone, "lift": round(lift * self.u, 4), "source": src,
+                           "bank": round(used_bank * self.u ** 3, 4), **self._pattern(idx, amt)}
         elif op == "compact":
             # Roll only lifts that have landed: cells with fill still in flight wait for the next pass.
             ready = (self.p_loose > 1e-9) & ~(self.plan_dloose > 1e-9)
@@ -532,12 +518,13 @@ class Sim(Context):
             if w is None:
                 return False
             passes = t.get("passes") or 4
-            sel = (mk[w] & ready[w]).ravel()
-            lp = self.p_loose[w].ravel()[sel]
-            n = int(sel.sum())
-            # Expected effect, held in plan_dz/plan_dloose until landing; `land` recomputes it from the
-            # loose material actually present then.
-            parts.append((self._window_idx(w)[sel], np.zeros(n), -lp * (1 - self.est_keep), np.zeros(n), -lp))
+            # The roller compacts everything it drives over. Expected effect (held in plan_dz/plan_dloose
+            # until landing) counts the lifts ready now; `land` recomputes it from the loose material
+            # actually under the whole window then.
+            widx = self._window_idx(w)
+            lp = np.where(ready[w].ravel(), self.p_loose[w].ravel(), 0.0)
+            n = widx.size
+            parts.append((widx, np.zeros(n), -lp * (1 - self.est_keep), np.zeros(n), -lp))
             dist = (passes - 1) * (w[1].stop - w[1].start) * self.cell
             limits["passes"] = passes
         elif op == "finish":
@@ -562,9 +549,16 @@ class Sim(Context):
                 draw += take
             fill_t *= draw / need if need > 1e-12 else 0.0
             parts.append((widx, fill_t - cut_t, -step, np.zeros(widx.size), np.zeros(widx.size)))
+            limits["step"] = round(self.cfg.finish_step_m, 4)
+            if t.get("source"):
+                deposit_msg = {"source": t["source"][0]}
         else:
             return False
-        self._issue(m, name, op, w, parts, speed, dist, limits, deposit_msg)
+        target: dict[str, Any] = {"surface": "design", "tolerance": round(thr * self.u, 4)}
+        if op in ("cut", "finish") and w is not None:
+            tile = parts[0][2].reshape(w[0].stop - w[0].start, w[1].stop - w[1].start) * self.u
+            target.update(pattern=wire.encode_heights(tile), shape=list(tile.shape))
+        self._issue(m, name, op, w, parts, speed, dist, limits, deposit_msg, target)
         return True
 
     def _window_idx(self, w: Window) -> NDArray[np.intp]:
@@ -577,7 +571,7 @@ class Sim(Context):
         return float(self.xs[i].mean()), float(self.ys[j].mean())
 
     def _issue(self, m: Machine, name: str, op: str, w: Window | None, parts: list, speed: float,
-               dist: float, limits: dict, deposit_msg: dict | None) -> None:
+               dist: float, limits: dict, deposit_msg: dict | None, target: dict | None = None) -> None:
         idx = np.concatenate([p[0] for p in parts]).astype(np.intp)
         cat = [np.concatenate([p[k] for p in parts]).astype(float) for k in range(1, 5)]
         ps = Pass(m.name, name, op, w, idx, *cat)
@@ -596,8 +590,20 @@ class Sim(Context):
         limits["maxSpeed"] = round(speed * self.u / 60, 3)
         self.emit(wire.topic(self.site_name, m.name, "order"),
                   wire.order(self.site_name, m.name, self.seq(), f"{name}-{self.order_seq}", 0, name, op,
-                             self._window_poly(w) if w is not None else None, {"surface": "design"},
+                             self._window_poly(w) if w is not None else None,
+                             target or {"surface": "design"},
                              limits, deposit_msg, ts=self.ts()))
+
+    def _pattern(self, idx: NDArray[np.intp], amt: Grid) -> dict[str, Any]:
+        """Where loose material goes: the bounding window of the cells, the planned loose thickness per
+        cell over that window (metres, float32 base64, row-major from the window's low corner), and its
+        total volume (m3). A machine with 3D grade control spreads to this pattern."""
+        j, i = np.divmod(idx, self.nx)
+        w = (slice(int(j.min()), int(j.max()) + 1), slice(int(i.min()), int(i.max()) + 1))
+        tile = np.zeros((w[0].stop - w[0].start, w[1].stop - w[1].start))
+        np.add.at(tile, (j - w[0].start, i - w[1].start), amt * self.u)
+        return {"window": self._window_poly(w), "pattern": wire.encode_heights(tile), "shape": list(tile.shape),
+                "volume": round(float(amt.sum() * self.area) * self.u ** 3, 4)}
 
     def _window_poly(self, w: Window) -> list[list[float]]:
         x0, x1 = self.x0 + w[1].start * self.cell, self.x0 + w[1].stop * self.cell
@@ -646,34 +652,50 @@ class Sim(Context):
         self.probe()
         self.check_done()
         while self.t < self.max_minutes:
-            for name, ps in list(self.inflight.items()):
-                if self.machines[name].busy_until <= self.t:
-                    self.land(ps)
-                    del self.inflight[name]
-            self.probe()
-            eff = self.apply_rules()
-            if eff["stop"]:
-                for name in self.inflight:
-                    self.machines[name].busy_until += self.dt
-            elif not eff["hold"]:
-                for m in self.machines.values():
-                    if m.name in self.inflight:
-                        continue
-                    for name in self.m.order:
-                        if self.eligible(name, eff["paused"]) and self.fits(m, name) \
-                                and self.plan_pass(m, name, eff["slow"]):
-                            break
-            self.check_done()
-            if all(v is not None for v in self.done_at.values()):
+            if self.step():
                 break
-            # Built-in stall rule (spec): an eligible, unfinished task with no work in the plan forces
-            # a rebase on the latest survey.
-            if not (self.inflight or eff["stop"] or eff["hold"] or self.open_loop) \
-                    and self.last_probe > self.last_rebase:
-                pending = [n for n in self.m.tasks if self.done_at[n] is None and self.eligible(n, eff["paused"])]
-                if pending:
-                    self.replan(reason=f"stalled: {', '.join(pending)} not done but nothing left in the plan")
             self.t += self.dt
+
+    def machine_ready(self, name: str) -> bool:
+        """Whether a machine can take a new order (a runtime overrides this with live machine state)."""
+        return True
+
+    def step(self) -> bool:
+        """One planning cycle at time `self.t`. Returns True when every task is done."""
+        for name, ps in list(self.inflight.items()):
+            if self.machines[name].busy_until <= self.t:
+                self.land(ps)
+                del self.inflight[name]
+        self.probe()
+        eff = self.apply_rules()
+        if eff["stop"]:
+            for name in self.inflight:
+                self.machines[name].busy_until += self.dt
+        elif not eff["hold"]:
+            # A task whose `until` already holds on measured ground gets no new passes, so the passes
+            # still landing can finish and the task can close.
+            met: dict[str, bool] = {}
+            for m in self.machines.values():
+                if m.name in self.inflight or not self.machine_ready(m.name):
+                    continue
+                for name in self.m.order:
+                    if not (self.eligible(name, eff["paused"]) and self.fits(m, name)):
+                        continue
+                    if name not in met:
+                        met[name] = self.has_survey and bool(evaluate(self.m.tasks[name]["until"], self))
+                    if not met[name] and self.plan_pass(m, name, eff["slow"]):
+                        break
+        self.check_done()
+        if all(v is not None for v in self.done_at.values()):
+            return True
+        # Built-in stall rule (spec): an eligible, unfinished task with no work in the plan forces
+        # a rebase on the latest survey.
+        if not (self.inflight or eff["stop"] or eff["hold"] or self.open_loop) \
+                and self.last_probe > self.last_rebase:
+            pending = [n for n in self.m.tasks if self.done_at[n] is None and self.eligible(n, eff["paused"])]
+            if pending:
+                self.replan(reason=f"stalled: {', '.join(pending)} not done but nothing left in the plan")
+        return False
 
     # -- results ---------------------------------------------------------
     def ledger_error(self) -> float:

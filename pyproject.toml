@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "loam-lang"
-version = "0.0.1"
+version = "0.0.2"
 description = "Loam: an open language for programmable, closed-loop earthmoving"
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -19,14 +19,19 @@ classifiers = [
 
 [project.optional-dependencies]
 plot = ["matplotlib>=3.7"]
-test = ["pytest>=7", "pytest-cov>=4", "hypothesis>=6", "jsonschema>=4"]
+run = ["paho-mqtt>=2.0"]
+physics = ["pybullet>=3.2"]
+test = ["pytest>=7", "pytest-cov>=4", "coverage>=7.10", "hypothesis>=6", "jsonschema>=4", "paho-mqtt>=2.0"]
 dev = ["loam-lang[test,plot]", "ruff>=0.6", "mypy>=1.10"]
 
 [project.scripts]
 loam = "loam.cli:main"
 
 [tool.setuptools]
-packages = ["loam"]
+packages = ["loam", "loam.runtime"]
+
+[tool.setuptools.package-data]
+loam = ["monitor.html"]
 
 [tool.pytest.ini_options]
 markers = ["slow: runs the simulator"]
@@ -47,3 +52,4 @@ ignore_missing_imports = true
 [tool.coverage.run]
 source = ["loam"]
 branch = true
+patch = ["subprocess"]          # measure the site processes the end-to-end test starts

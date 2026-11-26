@@ -10,6 +10,10 @@ Topics (all JSON, UTF-8):
     loam/v0/<site>/<machine>/connection     machine -> controller (retained, with last will)
     loam/v0/<site>/terrain                  probe -> controller (surface tile updates)
     loam/v0/<site>/safety                   controller -> all (site-wide stop/hold)
+    loam/v0/<site>/estop                    e-stop radio -> all (pressed / released)
+    loam/v0/<site>/detection                site sensors -> controller (people, vehicles)
+    loam/v0/<site>/weather                  site sensors -> controller
+    loam/v0/<site>/status                   controller -> monitors (task progress, holds)
 """
 from __future__ import annotations
 
@@ -26,8 +30,19 @@ def topic(site: str, machine: str | None, kind: str) -> str:
 
 
 def header(seq: int, ts: float | None = None) -> dict:
+    ts = ts if ts is not None else 0.0
+    ms = round((ts - int(ts)) * 1000)
+    sec = int(ts) + ms // 1000
+    stamp = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(sec))
     return {"version": WIRE_VERSION, "headerId": seq,
-            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(ts if ts is not None else 0)) + "Z"}
+            "timestamp": stamp + (f".{ms % 1000:03d}Z" if ms % 1000 else "Z")}
+
+
+def parse_ts(stamp: str) -> float:
+    """Header timestamp (ISO 8601 UTC, optional milliseconds) to epoch seconds."""
+    import calendar
+    base, _, frac = stamp.rstrip("Z").partition(".")
+    return calendar.timegm(time.strptime(base, "%Y-%m-%dT%H:%M:%S")) + (float("0." + frac) if frac else 0.0)
 
 
 def order(site: str, machine: str, seq: int, order_id: str, update_id: int, task: str, op: str,
@@ -93,4 +108,24 @@ def terrain(site: str, probe: str, seq: int, origin: tuple, cell: float, shape: 
     msg = header(seq, ts)
     msg.update({"site": site, "probe": probe, "origin": list(origin), "cell": cell,
                 "shape": list(shape), "encoding": encoding, "sigma": sigma, "data": data})
+    return msg
+
+
+def detection(site: str, sensor: str, seq: int, kind: str, x: float, y: float, ts: float = 0) -> dict:
+    """Something a site sensor saw at (x, y) in site coordinates; kind "clear" ends earlier detections."""
+    msg = header(seq, ts)
+    msg.update({"site": site, "sensor": sensor, "kind": kind, "x": x, "y": y})
+    return msg
+
+
+def weather(site: str, sensor: str, seq: int, rain_m_per_s: float = 0.0, ts: float = 0) -> dict:
+    msg = header(seq, ts)
+    msg.update({"site": site, "sensor": sensor, "rain": rain_m_per_s})
+    return msg
+
+
+def status(site: str, seq: int, body: dict, ts: float = 0) -> dict:
+    """Controller summary for monitors: tasks, machines, holds, replans."""
+    msg = header(seq, ts)
+    msg.update({"site": site, **body})
     return msg

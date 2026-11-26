@@ -48,6 +48,9 @@ def main(argv=None) -> None:
             p.add_argument("--quiet", action="store_true", help="no event log")
     add_field_commands(sub)
     a = ap.parse_args(argv)
+    if a.cmd == "plan":
+        cmd_plan(a)
+        return
     model = load(a.file)
     if a.cmd in FIELD_COMMANDS:
         try:
@@ -153,6 +156,17 @@ def _ground_args(p: argparse.ArgumentParser) -> None:
 
 
 def add_field_commands(sub) -> None:
+    p = sub.add_parser("plan", help="write a Loam program from a grading model (LandXML existing + design)")
+    p.add_argument("file", help="LandXML file with the design (and usually the existing) surface")
+    p.add_argument("-o", "--out", required=True, help="the .loam program to write")
+    p.add_argument("--design", help="design surface name (default: guessed, e.g. FG, Proposed)")
+    p.add_argument("--existing", help="existing surface name (default: guessed, e.g. EG, Existing)")
+    p.add_argument("--existing-file", help="existing ground in a separate LandXML file")
+    p.add_argument("--fleet", help="Loam machine and probe declarations (default: 2 dozers, roller, mast lidar)")
+    p.add_argument("--tolerance", help="finish tolerance, e.g. '0.1 ft' or '3 cm'")
+    p.add_argument("--max-cells", type=int, default=40_000, help="grid size limit (default 40000 cells)")
+    p.add_argument("--name", help="site name (default: from the file name)")
+    p.add_argument("--json", action="store_true")
     p = sub.add_parser("export", help="write a surface or field files for grade-control and guidance tools")
     p.add_argument("file")
     p.add_argument("--to", required=True, choices=["landxml", "agd", "agopengps"],
@@ -182,12 +196,55 @@ def add_field_commands(sub) -> None:
     p.add_argument("--layout", default="PNEZD", choices=["PNEZD", "PENZD"])
     p.add_argument("--json", action="store_true")
     _frame_args(p)
+    p = sub.add_parser("run", help="run the site controller over MQTT (real machines or a simulated site)")
+    p.add_argument("file")
+    p.add_argument("--broker", default="localhost:1883")
+    p.add_argument("--record", help="write every message the controller sends as JSON lines")
+    p.add_argument("--real-time", action="store_true", help="no simulated clock: run at wall-clock speed")
+    p.add_argument("--max-minutes", type=float, default=48 * 60)
+    p.add_argument("--json", action="store_true")
+    p = sub.add_parser("simulate-site", help="start a simulated world, probe and machines as separate processes")
+    p.add_argument("file")
+    p.add_argument("--broker", default="localhost:1883")
+    p.add_argument("--speed", type=float, default=600.0, help="site minutes per wall minute (default 600)")
+    p.add_argument("--faults", help="JSON fault script (default: person, outage, rain, GNSS, link loss, e-stop)")
+    p.add_argument("--quiet", action="store_true")
+    p.add_argument("--physics", action="store_true", help="drive machines as PyBullet bodies (try --speed 60)")
+    p = sub.add_parser("monitor", help="live web dashboard for a site, or a replay page from a recording")
+    p.add_argument("file")
+    p.add_argument("--broker", default="localhost:1883")
+    p.add_argument("--port", type=int, default=8080)
+    p.add_argument("--record", help="record dashboard frames as JSON lines")
+    p.add_argument("--replay", help="a recording to turn into a self-contained page (with --html)")
+    p.add_argument("--html", help="where to write the replay page")
+    p.add_argument("--split", action="store_true", help="write a folder: index.html + run.json")
+    p = sub.add_parser("_role", help=argparse.SUPPRESS)
+    p.add_argument("file")
+    p.add_argument("--role", required=True, choices=["world", "probe", "machine"])
+    p.add_argument("--broker", default="localhost:1883")
+    p.add_argument("--speed", type=float, default=600.0)
+    p.add_argument("--faults")
+    p.add_argument("--name")
+    p.add_argument("--index", type=int, default=0)
+    p.add_argument("--physics", action="store_true")
     p = sub.add_parser("nmea", help="turn a GGA stream (file or stdin) into Wire state messages")
     p.add_argument("file")
     p.add_argument("input", nargs="?", default="-", help="NMEA file, or - for stdin (e.g. piped from nc)")
     p.add_argument("--machine", required=True)
     p.add_argument("-o", "--out", help="write JSON lines here (default stdout)")
     _frame_args(p)
+
+
+def cmd_plan(a) -> None:
+    from .plan import plan
+    try:
+        r = plan(a.file, a.out, a.design, a.existing, a.existing_file, a.fleet, a.tolerance, a.max_cells, a.name)
+    except (ValueError, OSError) as e:
+        print(f"loam plan: {e}", file=sys.stderr)
+        sys.exit(1)
+    load(r["out"])          # parses and checks; exits with the diagnostics if the program is wrong
+    r["check"] = "ok"
+    _show(r, a.json)
 
 
 def cmd_export(model, a) -> None:
@@ -287,7 +344,38 @@ def _show(d: dict, as_json: bool) -> None:
             print(f"{k}: {v}")
 
 
-FIELD_COMMANDS = {"export": cmd_export, "terrain": cmd_terrain, "score": cmd_score, "nmea": cmd_nmea}
+def cmd_run(model, a) -> None:
+    from .runtime.controller import run_controller
+    r = run_controller(model, os.path.dirname(os.path.abspath(a.file)), a.broker, a.record, a.max_minutes,
+                       wait_for_clock=not a.real_time)
+    r.pop("log", None)
+    if a.json:
+        print(json.dumps(r, indent=2))
+
+
+def cmd_simulate_site(model, a) -> None:
+    from .runtime.site import launch
+    r = launch(a.file, a.broker, a.speed, a.faults, model, quiet=a.quiet, physics=a.physics)
+    print(json.dumps(r, indent=2))
+
+
+def cmd_monitor(model, a) -> None:
+    from . import monitor
+    if a.replay:
+        if not a.html:
+            raise ValueError("--replay needs --html OUT")
+        _show(monitor.replay_html(a.replay, a.html, split=a.split), False)
+        return
+    monitor.serve(model, os.path.dirname(os.path.abspath(a.file)), a.broker, a.port, a.record)
+
+
+def cmd_role(model, a) -> None:
+    from .runtime.site import role
+    role(a.file, model, a)
+
+
+FIELD_COMMANDS = {"run": cmd_run, "simulate-site": cmd_simulate_site, "_role": cmd_role, "monitor": cmd_monitor,
+                  "export": cmd_export, "terrain": cmd_terrain, "score": cmd_score, "nmea": cmd_nmea}
 
 
 def print_report(r: dict) -> None:
