@@ -54,19 +54,27 @@ def parse_ts(stamp: str) -> float:
 
 
 def order(site: str, machine: str, seq: int, order_id: str, update_id: int, task: str, op: str,
-          window: list | None, target: dict, limits: dict, deposit: dict | None = None, ts: float = 0) -> dict:
+          window: list | None, target: dict, limits: dict, deposit: dict | None = None, ts: float = 0,
+          path: list | None = None, swath: float | None = None) -> dict:
     """A unit of work for one machine.
 
     window : polygon [[x, y], ...] in site coordinates where the machine works
     target : {"surface": "design"} or {"elevation": z} or {"offset": dz} — what the ground should become
     limits : {"maxCut": m, "lift": m, "passes": n, "maxSpeed": m/s} (SI units)
     deposit: optional {"window": [[x, y], ...], "lift": m} where spoil goes
+    path   : optional line [[x, y], ...] in site coordinates for the middle of the tool to follow, in the order
+             given, for the working part of the pass. Without it the machine runs down the middle of the window.
+    swath  : with a path, the width of ground the pass works, m, centred on the path
     """
     msg = header(seq, ts)
     msg.update({"site": site, "machine": machine, "orderId": order_id, "orderUpdateId": update_id,
                 "task": task, "op": op, "window": window, "target": target, "limits": limits})
     if deposit:
         msg["deposit"] = deposit
+    if path:
+        msg["path"] = path
+        if swath:
+            msg["swath"] = swath
     return msg
 
 

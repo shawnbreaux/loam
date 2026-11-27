@@ -3,6 +3,38 @@
 All notable changes are recorded here. The project follows [Semantic Versioning](https://semver.org/);
 before 1.0 any minor release may change the language.
 
+## [Unreleased]
+
+Added
+- **Work along a line.** `along [(x, y), ...]` on a cut or finish task is now planned: each pass is a lane (the
+  line, or the line moved a whole number of tool widths to one side), a machine works its way along the line
+  and comes back along it, and a lane stops short of an exclusion. The line says where to drive; the measured
+  ground still says how deep each pass cuts and when the task is done. Until now `along` was read and ignored.
+- **Loam Wire: `path` and `swath` on an order.** The line the middle of the tool follows, and the width the
+  pass works. Every machine and bridge follows a path it is given; an order without one is driven as before.
+- **`loam swale`.** A drainage swale from the ground and a line drawn where the water should go: the bottom is
+  the highest line that drains (a least depth, a least fall), with a flat bottom, sloped sides and rounded
+  ends. The line may be a path from Google Earth, a GeoJSON LineString, a shapefile polyline or typed points.
+  The program's passes follow the centreline.
+- **AgOpenGPS curve tracks.** `loam export --to agopengps` writes a task's line as a curve track, laid out as
+  AgOpenGPS (source of 2026-11-14) writes a curve drawn on its own map.
+- The blade controller takes the blade's width from the program and holds a level edge at the highest point
+  wanted under it. On a pass along a line the blade is down only within half a tool width of the path.
+
+Fixed
+- **A pass ordered twice after a stale survey.** When a task finished and the next could start, the planner
+  rebased its prediction on the latest survey even if that survey was taken before the last pass landed. The
+  survey still showed the ground that pass had cut, so its work was planned again: in the simulated site a
+  finishing pass then went a third of a foot below design. The planner now rebases only on a survey taken
+  since the last pass landed, and a task that has not begun waits for one. Found while testing swales; it
+  affected every program.
+- The simulated site's finishing passes stop at design, as the specification says grade control does.
+
+Not built
+- Blade tilt. The sides of a swale need a blade that tilts or a machine with its own grade control. Loam's
+  blade controller moves one actuator. Neither OpenGrade3D nor ArduPilot's u-blox driver offers what a tilt
+  loop needs (a tilt output; the blade's roll from two antennas), so there is nothing sound to build on yet.
+
 ## [0.0.9] - 2026-11-27
 
 Added

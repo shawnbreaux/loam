@@ -91,6 +91,7 @@ These are results of a simplified model with assumed soil factors, not field mea
 | `loam sim` | The reference simulator, in one process (closed or open loop) |
 | `loam plan` | Write a site program from a grading LandXML (existing and design surfaces) |
 | `loam level` | Design a levelled field from its ground alone (a free elevation model and a boundary traced in Google Earth), and write its program |
+| `loam swale` | Design a drainage swale along a line drawn on the ground (bottom width, side slope, depth, fall), and write a program whose passes follow the line |
 | `loam run` | The site controller: orders, replans and safety rules over MQTT |
 | `loam simulate-site` | A simulated site to run the controller against: world, lidar probe, one process per machine, scripted faults |
 | `loam monitor` | Live web dashboard, Prometheus metrics, replay pages, MCAP recording |
@@ -243,6 +244,7 @@ Every integration is an optional, FOSS extra (`pip install "loam-lang[all]"`); t
 | `loam/survey.py` | Emlid/RTK survey CSV, NMEA GGA to Wire state, scoring against design |
 | `loam/plan.py` | `loam plan`: grading LandXML to a site program |
 | `loam/level.py` | `loam level`: a levelling design (best-fit plane, slope limits, cut/fill balance) from the ground alone |
+| `loam/swale.py`, `loam/line.py` | `loam swale`: a channel that drains, designed along a line; stations and offsets along a line, for tasks that run `along` one |
 | `loam/runtime/` | Controller over MQTT, simulated world, machines (optionally PyBullet physics) and probe |
 | `loam/runtime/bridge.py`, `mavlink.py`, `vda5050.py`, `opera.py` | Real vehicles as Loam machines: one safety loop, three protocols |
 | `loam/runtime/blade.py` | A blade held to the next-pass surface by the bridge, for a machine with nobody aboard |
@@ -257,13 +259,13 @@ Every integration is an optional, FOSS extra (`pip install "loam-lang[all]"`); t
 | `loam/monitor.py`, `loam/monitor.html` | Live dashboard and replay pages |
 | `loam/target.py`, `loam/export.py` | Next-pass surface; LandXML (Cat Grade 3D), OpenGrade3D `.agd`, AgOpenGPS field folder |
 | `examples/` | Example program and surfaces, comparison plot, Monte Carlo study |
-| `tests/` | 258 tests: language, I/O, simulator invariants, field adapters, planner, field levelling from rasters and boundary files, controller loopback, a full multi-process MQTT run with faults in which every message is validated against the schema, reconnects and restarts, vehicle bridges (ArduPilot SITL and a fake ArduPilot, VDA 5050, RTKLIB, OPERA on Nav2 and ros2_control, ArduPilot fences and failsafe, Nav2's Collision Monitor), e-stop and SIGTERM safety, a TLS broker with access rules (also on a system-installed Mosquitto), site sensors (a stand-in Frigate, rtl_433 on recorded gauges), people located by phone and matched with cameras and scans (3,000 random sites), a blade held by the bridge and the conformance check (both against a fake ArduPilot), Chrono soil, integrations (PDAL cross-check included), parser fuzzing; every test also fails on a leaked thread, process or file |
+| `tests/` | 279 tests: language, I/O, simulator invariants, field adapters, planner, field levelling from rasters and boundary files, passes along a line and the swale designer, controller loopback, a full multi-process MQTT run with faults in which every message is validated against the schema, reconnects and restarts, vehicle bridges (ArduPilot SITL and a fake ArduPilot, VDA 5050, RTKLIB, OPERA on Nav2 and ros2_control, ArduPilot fences and failsafe, Nav2's Collision Monitor), e-stop and SIGTERM safety, a TLS broker with access rules (also on a system-installed Mosquitto), site sensors (a stand-in Frigate, rtl_433 on recorded gauges), people located by phone and matched with cameras and scans (3,000 random sites), a blade held by the bridge and the conformance check (both against a fake ArduPilot), Chrono soil, integrations (PDAL cross-check included), parser fuzzing; every test also fails on a leaked thread, process or file |
 
 ## Development
 
 ```bash
 pip install -e ".[dev]"
-pytest -q --cov=loam          # 258 tests, about 8 min; the MQTT tests need mosquitto
+pytest -q --cov=loam          # 279 tests, about 8 min; the MQTT tests need mosquitto
 python tools/site_soak.py out/ --speed 60     # a whole simulated site, watched; about 4 min
 ruff check loam tests examples
 mypy loam

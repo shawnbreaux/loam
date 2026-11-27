@@ -5,7 +5,7 @@
 * OpenGrade3D `.agd` design grid (the OptiSurface layout OpenGrade3D reads).
 * AgOpenGPS field folder: Field.txt (origin), Boundary.txt (site boundary,
   exclusion zones as inner boundaries) and TrackLines.txt (one AB line per
-  work zone).
+  work zone, and one curve per task that runs `along` a line).
 
 Formats were taken from the tools' own source: AgOpenGPS
 (github.com/agopengps-official/AgOpenGPS, AgOpenGPS.Core streamers and
@@ -20,6 +20,7 @@ import time
 
 import numpy as np
 
+from . import line
 from .geo import Frame
 from .grid import Grid, SiteGrid
 from .landxml import grid_tin, write_tin
@@ -108,8 +109,38 @@ def _ring(frame: Frame, poly: list) -> list[str]:
     return out
 
 
+# AgOpenGPS keeps the points of a curve no more than 1.6 m apart, and gives a curve a straight tail of points
+# a metre apart at each end, so that guidance carries on past the ends (FormABDraw and CABCurve in its source).
+CURVE_STEP_M = 1.0
+CURVE_TAIL = 99
+
+
+def _curve(frame: Frame, name: str, pts: list) -> list[str]:
+    """A line in site coordinates as an AgOpenGPS curve track: the lines of its TrackLines.txt entry.
+
+    The entry is written as AgOpenGPS writes a curve drawn on its own map: points at most a metre apart, a
+    straight tail at each end, each point's heading taken from its two neighbours (clockwise from north, in
+    radians), the track's heading the mean of the curve's own, and A and B the curve's two ends.
+    """
+    e, n = frame.local_to_en(*line.densify(pts, CURVE_STEP_M / frame.unit_m).T)
+    en = np.column_stack([e, n])
+    head = np.arctan2(*np.gradient(en, axis=0).T)        # at an end: toward or from its one neighbour
+    mean = math.atan2(float(np.sin(head).mean()), float(np.cos(head).mean())) % (2 * math.pi)
+    tail = np.arange(1, CURVE_TAIL + 1)[:, None]
+    lead = en[0] - tail[::-1] * [math.sin(head[0]), math.cos(head[0])]
+    trail = en[-1] + tail * [math.sin(head[-1]), math.cos(head[-1])]
+    full = np.concatenate([lead, en, trail])
+    head = np.arctan2(*np.gradient(full, axis=0).T) % (2 * math.pi)
+    return [name, f"{mean:.5f}", f"{en[0, 0]:.3f},{en[0, 1]:.3f}", f"{en[-1, 0]:.3f},{en[-1, 1]:.3f}", "0", "4", "True",
+            str(len(full)), *(f"{p[0]:.3f},{p[1]:.3f},{h:.5f}" for p, h in zip(full, head, strict=True))]
+
+
 def agopengps(folder: str, grid: SiteGrid, frame: Frame, name: str | None = None) -> dict:
-    """Write an AgOpenGPS field folder. Returns what was written."""
+    """Write an AgOpenGPS field folder. Returns what was written.
+
+    A task that runs `along` a line gets that line as a curve track. AgOpenGPS lays its parallel passes one
+    implement width apart on both sides of a curve, which are the lanes Loam plans for a tool of that width.
+    """
     lat0, lon0 = frame.wgs84_origin()
     if grid.boundary is None:
         raise ValueError("AgOpenGPS needs a site boundary polygon")
@@ -144,8 +175,14 @@ def agopengps(folder: str, grid: SiteGrid, frame: Frame, name: str | None = None
         heading = math.atan2(eb - ea, nb - na) % (2 * math.pi)
         trk += [f"loam {zn}", f"{heading:.5f}", f"{ea:.3f},{na:.3f}", f"{eb:.3f},{nb:.3f}", "0", "2", "True", "0"]
         tracks.append(zn)
+    # One curve per line: tasks that share a line (a swale's cut and its finishing) share the track, named for
+    # the first of them.
+    lines = {tuple(t["along"]): tn for tn, t in reversed(grid.m.tasks.items()) if t.get("along")}
+    curves = sorted(lines.values(), key=list(grid.m.tasks).index)
+    for tn in curves:
+        trk += _curve(frame, f"loam {tn}", grid.m.tasks[tn]["along"])
     _write(folder, "TrackLines.txt", trk)
-    return {"folder": folder, "inner_boundaries": inner, "tracks": tracks}
+    return {"folder": folder, "inner_boundaries": inner, "tracks": tracks, "curves": curves}
 
 
 def _write(folder: str, fname: str, lines: list[str]) -> None:

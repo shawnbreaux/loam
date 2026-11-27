@@ -111,15 +111,15 @@ class MachineSim:
     def take(self, order: dict) -> None:
         """Accept an order and work out the path to drive, as a list of site points in `self.path`.
 
-        The work pass runs down the middle of the order's window along its longer side (back and forth for a
-        roller). A cut then hauls to where the spoil goes and returns; a fill runs from the source stockpile to the
-        placement and back.
+        The work pass follows the order's `path` if it has one. Otherwise it runs down the middle of the order's
+        window along its longer side (back and forth for a roller). A cut then hauls to where the spoil goes and
+        returns; a fill runs from the source stockpile to the placement and back.
         """
         self.taken.append(order["orderId"])
         win, dep = order.get("window"), order.get("deposit") or {}
         op = order["op"]
-        pts: list[tuple[float, float]] = []
-        if win:
+        pts: list[tuple[float, float]] = [(float(p[0]), float(p[1])) for p in order.get("path") or []]
+        if win and not pts:
             p = np.asarray(win, float)
             (x0, y0), (x1, y1) = p.min(0), p.max(0)
             if x1 - x0 >= y1 - y0:

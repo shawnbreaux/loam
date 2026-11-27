@@ -25,12 +25,13 @@ import json
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from itertools import pairwise
 from typing import IO, Any
 
 import numpy as np
 from numpy.typing import NDArray
 
-from . import wire
+from . import line, wire
 from .checker import OP_CAP, Model
 from .evaluate import Context, evaluate
 from .grid import SiteGrid, polygon_mask  # noqa: F401  (polygon_mask re-exported)
@@ -180,11 +181,18 @@ class Sim(Context):
             sp = md.get("max_speed") or Quantity(3, "mph")
             self.machines[name] = Machine(name, md["class"], md["caps"], w.to(self.unit), sp.si * 60 / self.u)
         self.inflight: dict[str, Pass] = {}
+        # Lanes of the tasks that run `along` a line, by (task, tool width), and where each machine's last lane
+        # ended, so that its next one starts from the nearer end.
+        self.lanes: dict[tuple[str, float], tuple[NDArray[np.intp], Grid, NDArray[np.intp]]] = {}
+        self.lane_end: dict[str, tuple[float, float]] = {}
         # planner state
         self.meas: Grid = self.z.copy()
         self.prev_meas: Grid | None = None
         self.has_survey = False
         self.last_probe, self.last_rebase, self.last_dev = -1e9, -1e9, 0.0
+        # When the latest survey was taken and when the latest pass landed. A survey taken before a pass landed
+        # does not show that pass, so the prediction is never rebased on it.
+        self.last_scan, self.last_land = -1e9, -1e9
         self.pred, self.p_loose = zeros(), zeros()
         self.plan_dz, self.plan_dloose = zeros(), zeros()   # in-flight changes the planner has committed to
         self.est_swell, self.est_keep = self.bel.swell, self.bel.keep
@@ -332,11 +340,13 @@ class Sim(Context):
                                (self.ny, self.nx), sigma=sigma, ts=self.ts()))
         self.ingest_survey(meas, p["name"])
 
-    def ingest_survey(self, meas: Grid, probe: str) -> None:
-        """A new measured surface: compare it with the prediction and replan if the program says so."""
+    def ingest_survey(self, meas: Grid, probe: str, taken: float | None = None) -> None:
+        """A new measured surface: compare it with the prediction and replan if the program says so. `taken` is
+        the site time the survey was made, if that was earlier than now."""
         self.prev_meas = self.meas if self.has_survey else None
         self.meas = meas
         self.last_probe, self.probe_count = self.t, self.probe_count + 1
+        self.last_scan = self.t if taken is None else taken
         if not self.has_survey:
             self.has_survey = True
             self.pred[:] = self.meas
@@ -489,6 +499,85 @@ class Sim(Context):
                 best, best_s = w, s
         return best
 
+    def _lane_cells(self, name: str, width: float) -> tuple[NDArray[np.intp], Grid, NDArray[np.intp]]:
+        """The grid in the coordinates of a task's `along` line, for a tool `width` wide: every cell, sorted by
+        lane and then by station, with each cell's station and lane number.
+
+        Lane 0 is centred on the line and lane k is centred k tool-widths to its left, so the lanes tile the
+        ground on both sides without overlap. All cells are kept, not only those of the task's zone: a zone given
+        by `area where ...` moves with the ground, and a lane must be clear of exclusions over all of it. Worked
+        out once per task and width, because the line does not move.
+        """
+        key = (name, round(width, 6))
+        if key not in self.lanes:
+            gx, gy = np.meshgrid(self.xs, self.ys)
+            s, off = line.project(self.m.tasks[name]["along"], gx.ravel(), gy.ravel())
+            lane = np.floor(off / width + 0.5).astype(np.intp)
+            order = np.lexsort((s, lane))
+            self.lanes[key] = (order, s[order], lane[order])
+        return self.lanes[key]
+
+    def _best_lane(self, score: Grid, mk: Mask, name: str, m: Machine,
+                   seg: float) -> tuple[NDArray[np.intp], Window, list[tuple[float, float]]] | None:
+        """For a task that runs `along` a line: the best free piece of a lane, one push long. Returns its cells, the
+        block of the grid that bounds them, and the line to drive, or None if no piece has work in it.
+
+        Candidates start at the first station of each lane that has work and step half a push at a time, as the
+        rectangular windows do. The best is the one with the most work for the distance driven: its score over its
+        length plus the distance to it from where this machine's last lane ended. So a machine works its way along
+        the line and comes back along it, in place of crossing the site for a slightly better piece. The path is
+        the task's line moved sideways to the middle of the lane. A piece stops short of an exclusion that lies
+        across its lane, or starts beyond it.
+        """
+        cells, s, lane = self._lane_cells(name, m.width)
+        along = self.m.tasks[name]["along"]
+        sc = (score * mk).ravel()[cells]
+        total = np.concatenate(([0.0], np.cumsum(sc)))
+        shut = self.excl.ravel()[cells]
+        edges = [0, *(np.flatnonzero(np.diff(lane)) + 1).tolist(), len(cells)]
+        last = self.lane_end.get(m.name)
+        at = [float(v[0]) for v in line.project(along, np.array([last[0]]), np.array([last[1]]))] if last else None
+        cands: list[tuple[float, float, int, int]] = []          # work per distance, start, the lane's cells
+        for a, b in pairwise(edges):
+            live = np.flatnonzero(sc[a:b] > 0)
+            if not live.size:
+                continue
+            starts = np.arange(s[a + live[0]], s[a + live[-1]] + 1e-9, max(seg / 2, self.cell))
+            lo = a + np.searchsorted(s[a:b], starts, "left")
+            hi = a + np.searchsorted(s[a:b], starts + seg, "left")
+            # The distance to the nearer end of the piece, measured along the line and across it.
+            away = 0.0 if at is None else np.minimum(np.abs(starts - at[0]), np.abs(starts + seg - at[0])) + abs(
+                float(lane[a]) * m.width - at[1])
+            cands += zip(((total[hi] - total[lo]) / (seg + away)).tolist(), starts.tolist(), [a] * len(starts),
+                         [b] * len(starts), strict=True)
+        busy = [p.window for p in self.inflight.values() if p.window is not None]
+        for got, s0, a, b in sorted(cands, key=lambda c: -c[0]):
+            if got <= 0:
+                break
+            clear = _clear(s0, s0 + seg, s[a:b][shut[a:b]], self.cell)
+            if clear is None:
+                continue
+            c0, c1 = (a + int(np.searchsorted(s[a:b], v, "left")) for v in clear)
+            idx = cells[c0:c1]
+            if total[c1] - total[c0] <= 0:
+                continue                                         # what was worth doing lay behind the exclusion
+            j, i = np.divmod(idx, self.nx)
+            w = (slice(int(j.min()), int(j.max()) + 1), slice(int(i.min()), int(i.max()) + 1))
+            if any(_overlap(w, bw) for bw in busy):
+                continue
+            return idx, w, line.piece(along, clear[0], clear[1], float(lane[a]) * m.width)
+        return None
+
+    def _work_cells(self, score: Grid, mk: Mask, name: str, m: Machine,
+                    seg: float) -> tuple[NDArray[np.intp], Window, list[tuple[float, float]] | None] | None:
+        """Where the next cut or finishing pass of a task goes: the best lane along the task's line if it has
+        one, otherwise the best rectangular window. Returns the cells, the block of the grid that bounds them, and
+        the line to drive (None for a window: the machine runs down its middle)."""
+        if self.m.tasks[name].get("along"):
+            return self._best_lane(score, mk, name, m, seg)
+        w = self._best_window(score, mk, m.width, seg)
+        return None if w is None else (self._window_idx(w), w, None)
+
     def _place(self, zone: str, lift: float, loose_pred: float) -> tuple[NDArray[np.intp], Grid]:
         """Choose cells for `loose_pred` of loose material: lowest planned cells first, at most one lift."""
         mk = self.mask(zone) & ~self.excl
@@ -536,17 +625,19 @@ class Sim(Context):
         deposit_msg: dict[str, Any] | None = None
         dist = 0.0
         w: Window | None = None
+        path: list[tuple[float, float]] | None = None
         parts: list[tuple[NDArray[np.intp], Grid, Grid, Grid, Grid]] = []   # idx, dz_t, dz_p, dl_t, dl_p
         if op == "cut":
-            w = self._best_window(np.where(res > thr, res, 0), mk, m.width, seg)
-            if w is None:
+            found = self._work_cells(np.where(res > thr, res, 0), mk, name, m, seg)
+            if found is None:
                 return False
+            widx, w, path = found
             max_cut = t["max_cut"].to(self.unit) if t.get("max_cut") else 0.5 * FT / self.u
-            sub = np.where(mk[w] & (res[w] > thr), np.clip(res[w], 0, max_cut), 0)
+            r = res.ravel()[widx]
+            sub = np.where(mk.ravel()[widx] & (r > thr), np.clip(r, 0, max_cut), 0)
             # What the blade really takes: the planned depth with a random relative error per cell.
             d_true = sub * np.clip(1 + self.rng.normal(0, self.soil.cut_error, sub.shape), 0, None)
-            widx = self._window_idx(w)
-            parts.append((widx, -d_true.ravel(), -sub.ravel(), np.zeros(widx.size), np.zeros(widx.size)))
+            parts.append((widx, -d_true, -sub, np.zeros(widx.size), np.zeros(widx.size)))
             bank_pred, bank_true = sub.sum() * self.area, d_true.sum() * self.area
             self.cut_bank += bank_true
             # Dug soil takes more room than it did in the ground. The planner expects `est_swell` times the bank
@@ -627,12 +718,12 @@ class Sim(Context):
             dist = (passes - 1) * (w[1].stop - w[1].start) * self.cell
             limits["passes"] = passes
         elif op == "finish":
-            w = self._best_window(np.where(np.abs(res) > thr, np.abs(res), 0), mk, m.width, 1.5 * seg)
-            if w is None:
+            found = self._work_cells(np.where(np.abs(res) > thr, np.abs(res), 0), mk, name, m, 1.5 * seg)
+            if found is None:
                 return False
-            widx = self._window_idx(w)
-            r = res[w].ravel()
-            sel = mk[w].ravel() & (np.abs(r) > thr)
+            widx, w, path = found
+            r = res.ravel()[widx]
+            sel = mk.ravel()[widx] & (np.abs(r) > thr)
             step = np.where(sel, np.clip(r, -self.cfg.finish_step_m / self.u, self.cfg.finish_step_m / self.u), 0)
             err = np.where(sel, self.rng.normal(0, self.soil.finish_error_m / self.u, r.shape), 0)
             cut_t, fill_t = np.clip(step + err, 0, None), np.clip(-(step + err), 0, None)
@@ -655,9 +746,13 @@ class Sim(Context):
             return False
         target: dict[str, Any] = {"surface": "design", "tolerance": round(thr * self.u, 4)}
         if op in ("cut", "finish") and w is not None:
-            tile = parts[0][2].reshape(w[0].stop - w[0].start, w[1].stop - w[1].start) * self.u
+            # The planned change over the block that bounds the pass. A lane does not fill its block: the cells of
+            # the block outside the lane are zero, which is "leave this ground alone".
+            tile = np.zeros((w[0].stop - w[0].start, w[1].stop - w[1].start))
+            j, i = np.divmod(parts[0][0], self.nx)
+            tile[j - w[0].start, i - w[1].start] = parts[0][2] * self.u
             target.update(pattern=wire.encode_heights(tile), shape=list(tile.shape))
-        self._issue(m, name, op, w, parts, speed, dist, limits, deposit_msg, target)
+        self._issue(m, name, op, w, parts, speed, dist, limits, deposit_msg, target, path)
         return True
 
     def _window_idx(self, w: Window) -> NDArray[np.intp]:
@@ -672,12 +767,14 @@ class Sim(Context):
         return float(self.xs[i].mean()), float(self.ys[j].mean())
 
     def _issue(self, m: Machine, name: str, op: str, w: Window | None, parts: list, speed: float,
-               dist: float, limits: dict, deposit_msg: dict | None, target: dict | None = None) -> None:
+               dist: float, limits: dict, deposit_msg: dict | None, target: dict | None = None,
+               path: list[tuple[float, float]] | None = None) -> None:
         """Commit a planned pass: reserve its effect in the plan, mark the machine busy for the time the pass takes,
         and send the order.
 
         `parts` are (cells, true height change, predicted height change, true loose change, predicted loose change)
-        pieces; `dist` is extra travel (hauling) in site units.
+        pieces; `dist` is extra travel (hauling) in site units. `path` is the line to drive for a pass along a
+        task's line; it is turned round if this machine's last lane ended nearer to its far end.
         """
         idx = np.concatenate([p[0] for p in parts]).astype(np.intp)
         cat = [np.concatenate([p[k] for p in parts]).astype(float) for k in range(1, 5)]
@@ -686,6 +783,17 @@ class Sim(Context):
         np.add.at(self.plan_dloose.ravel(), idx, ps.dloose_pred)
         self.inflight[m.name] = ps
         length = (w[1].stop - w[1].start) * self.cell if w is not None else self.cfg.segment_m / self.u
+        swath, drive = None, None
+        if path:
+            last = self.lane_end.get(m.name)
+            if last and np.hypot(*np.subtract(path[-1], last)) < np.hypot(*np.subtract(path[0], last)):
+                path = path[::-1]
+            self.lane_end[m.name] = path[-1]
+            length = float(np.hypot(*np.diff(np.asarray(path), axis=0).T).sum())
+            swath = round(m.width * self.u, 4)
+            drive = [[round(x, 2), round(y, 2)] for x, y in path]
+        else:
+            self.lane_end.pop(m.name, None)        # after any other pass the machine is somewhere else
         dur = (length + dist) / max(speed, 1e-9) + self.cfg.turnaround_min
         m.busy_until, m.busy_min = self.t + dur, m.busy_min + dur
         m.passes[name] = m.passes.get(name, 0) + 1
@@ -699,7 +807,7 @@ class Sim(Context):
                   wire.order(self.site_name, m.name, self.seq(), self.order_id(name), 0, name, op,
                              self._window_poly(w) if w is not None else None,
                              target or {"surface": "design"},
-                             limits, deposit_msg, ts=self.ts()))
+                             limits, deposit_msg, ts=self.ts(), path=drive, swath=swath))
 
     def _pattern(self, idx: NDArray[np.intp], amt: Grid) -> dict[str, Any]:
         """Where loose material goes: the bounding window of the cells, the planned loose thickness per
@@ -720,6 +828,7 @@ class Sim(Context):
 
     def land(self, ps: Pass) -> None:
         """A pass completes: its effect reaches the true ground and the planner's prediction."""
+        self.last_land = max(self.last_land, self.t)
         z, loose = self.z.ravel(), self.loose.ravel()
         np.add.at(self.plan_dz.ravel(), ps.idx, -ps.dz_pred)        # release the commitment
         np.add.at(self.plan_dloose.ravel(), ps.idx, -ps.dloose_pred)
@@ -784,11 +893,16 @@ class Sim(Context):
             # A task whose `until` already holds on measured ground gets no new passes, so the passes
             # still landing can finish and the task can close.
             met: dict[str, bool] = {}
+            # A new phase of the job (nothing in flight, a task not yet begun) is planned from measured ground. A
+            # survey taken before the last pass landed does not show that pass, so the phase waits for the next.
+            wait = not (self.inflight or self.open_loop) and self.last_scan < self.last_land
             for m in self.machines.values():
                 if m.name in self.inflight or not self.machine_ready(m.name):
                     continue
                 for name in self.m.order:
                     if not (self.eligible(name, eff["paused"]) and self.fits(m, name)):
+                        continue
+                    if wait and self.started[name] is None:
                         continue
                     if name not in met:
                         met[name] = self.has_survey and bool(evaluate(self.m.tasks[name]["until"], self))
@@ -798,8 +912,11 @@ class Sim(Context):
         if all(v is not None for v in self.done_at.values()):
             return True
         # Built-in stall rule (spec): an eligible, unfinished task with no work in the plan forces
-        # a rebase on the latest survey. That covers three situations, and the log says which.
-        if not (self.inflight or eff["stop"] or eff["hold"] or self.open_loop) and self.last_probe > self.last_rebase:
+        # a rebase on the latest survey. That covers three situations, and the log says which. The survey must
+        # have been taken since the last pass landed: an older one does not show that pass, and a prediction
+        # rebased on it would have the planner do the pass again.
+        if not (self.inflight or eff["stop"] or eff["hold"] or self.open_loop) and (
+                self.last_probe > self.last_rebase and self.last_scan >= self.last_land):
             pending = [n for n in self.m.tasks if self.done_at[n] is None and self.eligible(n, eff["paused"])]
             held_up = sorted(n for n in eff["paused"] if self.done_at[n] is None)
             if not held_up:
@@ -883,6 +1000,25 @@ class Sim(Context):
             fig.savefig(path, dpi=120)
         finally:
             plt.close(fig)
+
+
+def _clear(s0: float, s1: float, shut: Grid, pad: float) -> tuple[float, float] | None:
+    """The part of a lane between stations `s0` and `s1` that keeps `pad` clear of every station in `shut` (the
+    stations, in rising order, of the lane's cells that lie in an exclusion), or None if there is none.
+
+    A piece that runs into shut ground is ended before it. A piece that starts in shut ground is moved to start
+    beyond that stretch of it, and ended before the next.
+    """
+    k = int(np.searchsorted(shut, s0 - pad, "right"))
+    if k == len(shut) or shut[k] >= s1 + pad:
+        return s0, s1                                            # nothing shut within reach
+    if shut[k] - pad - s0 < pad:                                 # no room before it: go to the far side
+        while k + 1 < len(shut) and shut[k + 1] - shut[k] <= 2 * pad:
+            k += 1
+        s0, s1, k = shut[k] + pad, shut[k] + pad + (s1 - s0), k + 1
+    if k < len(shut):
+        s1 = min(s1, shut[k] - pad)
+    return (float(s0), float(s1)) if s1 - s0 >= pad else None
 
 
 def _overlap(a: Window, b: Window) -> bool:

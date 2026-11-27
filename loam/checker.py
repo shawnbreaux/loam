@@ -626,6 +626,9 @@ class Checker:
             out["until"] = self.condition(s)
         if out.get("op") == "trench" and "along" not in out:
             self.error("a trench task needs 'along [(x, y), ...]'", d.pos)
+        if "along" in out and out.get("op") not in ("cut", "finish", "trench"):
+            self.warn(f"task '{d.name}': only cut, finish and trench tasks follow a line; 'along' is ignored here",
+                      d.pos)
         if out.get("op") == "cut" and "spoil" not in out:
             self.warn(f"cut task '{d.name}' has no spoil destination; the planner will choose one", d.pos)
         self.model.tasks[d.name] = out

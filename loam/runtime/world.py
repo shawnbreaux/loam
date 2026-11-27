@@ -224,8 +224,11 @@ class World:
             # the stockpile.
             step = lim.get("step", 0.0914) / u
             if planned is not None:
+                # Grade control aims the blade at the planned change but never past design: a cut stops there,
+                # and so does a fill. The random error is the blade's, about that aim.
                 sel = planned != 0
-                dz = planned[sel] + self.rng.normal(0, self.soil.finish_error_m / u, int(sel.sum()))
+                aim = np.clip(planned[sel], np.minimum(-r[sel], 0.0), np.maximum(-r[sel], 0.0))
+                dz = aim + self.rng.normal(0, self.soil.finish_error_m / u, int(sel.sum()))
             else:
                 sel = win & (np.abs(r) > thr)
                 dz = np.clip(-r[sel], -step, step) + self.rng.normal(0, self.soil.finish_error_m / u, int(sel.sum()))

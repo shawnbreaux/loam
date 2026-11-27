@@ -101,11 +101,11 @@ class Controller(Sim):
             self.record.write(json.dumps({"topic": topic, "payload": msg}) + "\n")
         self.bus.pub(topic, msg, qos=1)
 
-    def _issue(self, m, name, op, w, parts, speed, dist, limits, deposit_msg, target=None) -> None:
+    def _issue(self, m, name, op, w, parts, speed, dist, limits, deposit_msg, target=None, path=None) -> None:
         """Send an order as the simulator would, but leave its finish time open: the pass is done when the machine
         says so.
         """
-        super()._issue(m, name, op, w, parts, speed, dist, limits, deposit_msg, target)
+        super()._issue(m, name, op, w, parts, speed, dist, limits, deposit_msg, target, path)
         m.busy_until = math.inf                     # lands when the machine says so
         self.order_of[m.name] = self.order_id(name)
 
@@ -219,11 +219,14 @@ class Controller(Sim):
         was = [f[u].copy() for f in flags]
         for f in flags:                                   # cleared for a moment, to see which ones this pass sets
             f[u] = False
+        landed = self.last_land
         super().land(ps)
         own = [f[u].copy() for f in flags]
         for f, w in zip(flags, was, strict=True):
             f[u] |= w
         fin = self.mstate[ps.machine]["finished"]
+        if fin is not None:
+            self.last_land = max(landed, fin)             # when the machine says it finished, not when we heard
         self.recent.append((self.t if fin is None else fin, u, [b[u] - b0 for b, b0 in zip(books, before, strict=True)],
                             own))
         # Bounded memory: an hour of passes, and never more than 256.
@@ -266,7 +269,8 @@ class Controller(Sim):
                 b[u] -= d
             for f in flags:                               # their cells are left out of this comparison
                 f[u] = False
-        self.ingest_survey(wire.decode_heights(msg["data"], (self.ny, self.nx)).astype(float), msg["probe"])
+        self.ingest_survey(wire.decode_heights(msg["data"], (self.ny, self.nx)).astype(float), msg["probe"],
+                           taken=scan_t)
         # The survey closed the books on everything it saw. The late passes are still to be seen: put back what
         # each predicted, the expected fill and rolling included, or the next survey would find their effect on
         # the ground with nothing expected there and blame the soil factors.

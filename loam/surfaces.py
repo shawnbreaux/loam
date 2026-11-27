@@ -185,8 +185,18 @@ def surface_grid(spec: dict, base_dir: str, x0: float, y0: float, cell: float, n
     raise ValueError(f"unsupported surface format {fmt!r}")
 
 
-def polygon_from_geojson(path: str) -> list[tuple[float, float]]:
-    """Outer ring of the first Polygon (or MultiPolygon part) in a GeoJSON file, closing point dropped."""
+def _ring(pts: list[tuple[float, float]], path: str) -> list[tuple[float, float]]:
+    """A polygon's outer ring with its closing point dropped; fewer than three points is not a polygon."""
+    if len(pts) > 1 and pts[0] == pts[-1]:
+        pts = pts[:-1]
+    if len(pts) < 3:
+        raise ValueError(f"{path}: polygon has fewer than 3 points")
+    return pts
+
+
+def _geojson_first(path: str, kinds: tuple[str, str], what: str) -> list[tuple[float, float]]:
+    """The points of the first geometry of one of two kinds (the single and the Multi form) in a GeoJSON file:
+    the outer ring of a polygon, or the first line of a line."""
     with open(path, encoding="utf-8") as f:
         g = json.load(f)
     stack = [g]
@@ -197,20 +207,20 @@ def polygon_from_geojson(path: str) -> list[tuple[float, float]]:
             stack.extend(o.get("features", []))
         elif t == "Feature":
             stack.append(o.get("geometry") or {})
-        elif t in ("Polygon", "MultiPolygon"):
-            ring = o["coordinates"][0] if t == "Polygon" else o["coordinates"][0][0]
-            pts = [(float(p[0]), float(p[1])) for p in ring]
-            if len(pts) > 1 and pts[0] == pts[-1]:
-                pts = pts[:-1]
-            if len(pts) < 3:
-                raise ValueError(f"{path}: polygon has fewer than 3 points")
-            return pts
-    raise ValueError(f"{path}: no Polygon in the GeoJSON")
+        elif t in kinds:
+            c = o["coordinates"] if t == kinds[0] else o["coordinates"][0]
+            return [(float(p[0]), float(p[1])) for p in (c[0] if kinds[0] == "Polygon" else c)]
+    raise ValueError(f"{path}: no {what} in the GeoJSON")
 
 
-def polygon_from_kml(path: str) -> list[tuple[float, float]]:
-    """Outer ring of the first Polygon in a KML or KMZ file (Google Earth, most farm apps), as (longitude,
-    latitude), closing point dropped. KML is always WGS 84."""
+def polygon_from_geojson(path: str) -> list[tuple[float, float]]:
+    """Outer ring of the first Polygon (or MultiPolygon part) in a GeoJSON file, closing point dropped."""
+    return _ring(_geojson_first(path, ("Polygon", "MultiPolygon"), "Polygon"), path)
+
+
+def _kml_first(path: str, tag: str) -> list[tuple[float, float]]:
+    """The coordinates of the first `tag` element (Polygon: its outer ring; LineString: a drawn path) in a KML or
+    KMZ file, as (longitude, latitude). KML is always WGS 84."""
     try:
         if zipfile.is_zipfile(path):                 # a KMZ is a zip holding one .kml, usually doc.kml
             with zipfile.ZipFile(path) as z:
@@ -224,48 +234,50 @@ def polygon_from_kml(path: str) -> list[tuple[float, float]]:
         raise ValueError(f"{path}: not a KML file ({e})") from e
     # Tags carry a namespace that differs between KML versions, so match on the local name.
     local = lambda el: el.tag.rsplit("}", 1)[-1]  # noqa: E731
-    for poly in (el for el in root.iter() if local(el) == "Polygon"):
-        outer = next((el for el in poly if local(el) == "outerBoundaryIs"), poly)
+    for found in (el for el in root.iter() if local(el) == tag):
+        outer = next((el for el in found if local(el) == "outerBoundaryIs"), found)
         text = next((el.text for el in outer.iter() if local(el) == "coordinates" and el.text), "")
         try:
-            pts = [(float(c.split(",")[0]), float(c.split(",")[1])) for c in text.split()]   # lon,lat[,height]
+            return [(float(c.split(",")[0]), float(c.split(",")[1])) for c in text.split()]   # lon,lat[,height]
         except (ValueError, IndexError) as e:
             raise ValueError(f"{path}: unreadable KML coordinates") from e
-        if len(pts) > 1 and pts[0] == pts[-1]:
-            pts = pts[:-1]
-        if len(pts) < 3:
-            raise ValueError(f"{path}: polygon has fewer than 3 points")
-        return pts
-    raise ValueError(f"{path}: no Polygon in the KML")
+    raise ValueError(f"{path}: no {tag} in the KML")
 
 
-def polygon_from_shapefile(path: str) -> tuple[list[tuple[float, float]], str | None]:
-    """Outer ring of the first polygon in a shapefile, closing point dropped, with the coordinate system its
-    `.prj` file states (as WKT) or None. Needs `pip install pyshp` (MIT)."""
+def polygon_from_kml(path: str) -> list[tuple[float, float]]:
+    """Outer ring of the first Polygon in a KML or KMZ file (Google Earth, most farm apps), as (longitude,
+    latitude), closing point dropped."""
+    return _ring(_kml_first(path, "Polygon"), path)
+
+
+def _shp_first(path: str, types: tuple[int, int, int], what: str) -> tuple[list[tuple[float, float]], str | None]:
+    """The first part of the first shape of the given types in a shapefile (a polygon's outer ring, a line's first
+    run), with the coordinate system its `.prj` file states (as WKT) or None. Needs `pip install pyshp` (MIT)."""
     try:
         import shapefile
     except ImportError as e:
         raise ValueError("shapefiles need pyshp: pip install pyshp") from e
     try:
         with shapefile.Reader(path) as r:
-            # Polygon shape types are 5, 15 (with heights) and 25 (with measures).
-            shape = next((s for s in r.iterShapes() if s.shapeType in (5, 15, 25) and len(s.points) >= 3), None)
+            shape = next((s for s in r.iterShapes() if s.shapeType in types and len(s.points) >= 2), None)
     except (shapefile.ShapefileException, struct.error) as e:      # struct.error: a file too short to be one
         raise ValueError(f"{path}: not a shapefile ({e})") from e
     if shape is None:
-        raise ValueError(f"{path}: no polygon in the shapefile")
-    end = shape.parts[1] if len(shape.parts) > 1 else len(shape.points)      # the first part is the outer ring
-    pts = [(float(p[0]), float(p[1])) for p in shape.points[:end]]
-    if len(pts) > 1 and pts[0] == pts[-1]:
-        pts = pts[:-1]
-    if len(pts) < 3:
-        raise ValueError(f"{path}: polygon has fewer than 3 points")
+        raise ValueError(f"{path}: no {what} in the shapefile")
+    end = shape.parts[1] if len(shape.parts) > 1 else len(shape.points)
     prj = os.path.splitext(path)[0] + ".prj"
     wkt = None
     if os.path.exists(prj):
         with open(prj, encoding="utf-8", errors="replace") as f:
             wkt = f.read().strip() or None
-    return pts, wkt
+    return [(float(p[0]), float(p[1])) for p in shape.points[:end]], wkt
+
+
+def polygon_from_shapefile(path: str) -> tuple[list[tuple[float, float]], str | None]:
+    """Outer ring of the first polygon in a shapefile, closing point dropped, with the coordinate system its
+    `.prj` file states (as WKT) or None."""
+    pts, wkt = _shp_first(path, (5, 15, 25), "polygon")      # polygons, with heights, with measures
+    return _ring(pts, path), wkt
 
 
 def polygon_from_file(path: str) -> tuple[list[tuple[float, float]], str | None]:
@@ -278,6 +290,22 @@ def polygon_from_file(path: str) -> tuple[list[tuple[float, float]], str | None]
     if ext == ".shp":
         return polygon_from_shapefile(path)
     return polygon_from_geojson(path), None
+
+
+def line_from_file(path: str) -> tuple[list[tuple[float, float]], str | None]:
+    """A line from a GeoJSON file (its first LineString), a KML or KMZ (the first path drawn) or a shapefile (its
+    first polyline), with the coordinate system the file states, as `polygon_from_file` gives it."""
+    ext = os.path.splitext(path)[1].lower()
+    crs: str | None = None
+    if ext in (".kml", ".kmz"):
+        pts, crs = _kml_first(path, "LineString"), "EPSG:4326"
+    elif ext == ".shp":
+        pts, crs = _shp_first(path, (3, 13, 23), "line")     # polylines, with heights, with measures
+    else:
+        pts = _geojson_first(path, ("LineString", "MultiLineString"), "LineString")
+    if len(pts) < 2:
+        raise ValueError(f"{path}: line has fewer than 2 points")
+    return pts, crs
 
 
 def resolve_area_files(model, base_dir: str) -> None:

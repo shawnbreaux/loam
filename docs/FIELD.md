@@ -9,7 +9,7 @@ Loam talks to field equipment through files and simple streams, so it works with
 | **Cat Grade with 3D** (dozers) | Holds the blade to a design surface | Loam writes the next-pass surface as LandXML; load it by USB or VisionLink | `loam export --to landxml` |
 | Trimble, Topcon, Leica machine control | Same | LandXML, as above | `loam export --to landxml` |
 | **OpenGrade3D** | Open-source blade control on a tractor | Loam writes the next-pass surface as an `.agd` design grid | `loam export --to agd` |
-| **AgOpenGPS** | Open-source autosteer | Loam writes a field folder: origin, boundary, exclusion zones, one AB line per work zone | `loam export --to agopengps` |
+| **AgOpenGPS** | Open-source autosteer | Loam writes a field folder: origin, boundary, exclusion zones, one AB line per work zone, one curve per task that runs `along` a line | `loam export --to agopengps` |
 | **Emlid Reach RS3** (rover) | Truth surveys | Loam reads Emlid Flow CSV exports (All columns, PNEZD, PENZD) | `loam score`, `--ground survey.csv` |
 | Emlid Reach (or any RTK receiver) on a machine | Live position | Loam reads NMEA GGA (TCP or serial) and emits Wire `state` messages | `loam nmea` |
 | **QField** (phone or tablet) or QGIS | Survey points | Loam reads GeoJSON points | `loam score`, `--ground points.geojson` |
@@ -19,7 +19,7 @@ Loam talks to field equipment through files and simple streams, so it works with
 | Wi-Fi access points (**OpenWrt**, others) | Which phones are on the site, and near which access point | Loam reads hostapd's client table, or single signal readings | `loam sense --tags`, `loam wifi-fit` |
 | **Meshtastic** trackers | A person's position where there is no phone signal | Loam reads the gateway's JSON over MQTT | `loam sense --tags` |
 | **USGS 3DEP**, OpenDroneMap, any DEM | The ground of a field | Loam reads the GeoTIFF | `loam level`, `--ground dem.tif` |
-| **Google Earth**, FSA field boundaries, **farmOS** | The field's boundary | Loam reads KML, KMZ, shapefile, GeoJSON | `loam level --boundary` |
+| **Google Earth**, FSA field boundaries, **farmOS** | The field's boundary, or the line of a swale | Loam reads KML, KMZ, shapefile, GeoJSON | `loam level --boundary`, `loam swale --line` |
 | Wireless rain gauge with **rtl_433** | Rain rate | Loam reads rtl_433's MQTT events | `loam sense --rain` |
 | **DJI Zenmuse L2** | Drone scans | Process in DJI Terra, export LAS; Loam grids it | `loam terrain`, `--ground scan.las` |
 | Any lidar or photogrammetry tool | Scans | LAS 1.0–1.4 (uncompressed), PCD, or x y z text | same |
@@ -88,7 +88,12 @@ loam mavlink site.loam --machine dz1 --vehicle /dev/ttyACM0 --origin LAT,LON --b
   stroke). The edge is then worked out from the actuator's position, which is only as good as that geometry.
 - `--blade-reach` says how far the edge is ahead of the position the vehicle reports (negative for a towed blade).
 - The blade is in the ground only inside the order's window, during an order that moves earth, while the machine
-  may move. Otherwise, and whenever the height is lost, it is carried fully raised.
+  may move. Otherwise, and whenever the height is lost, it is carried fully raised. On a pass along a line it is
+  down only within half a tool width of the path, so the drive to the start of a lane cuts nothing.
+- One actuator holds the whole edge level. The edge's length is the machine's `blade` in the program, and the
+  edge is held at the highest point wanted anywhere under it. So neither end cuts deeper than its own ground
+  allows, and an end that hangs over ground outside the job stays on top of that ground. **It cannot shape a
+  slope across its own width**: the sides of a swale need a blade that tilts, which Loam does not drive yet.
 - The servo output can drive a hobby or linear servo directly, or a hydraulic valve through a driver that takes
   a servo pulse.
 
@@ -295,6 +300,46 @@ goes through it, raise the slope limits or level the field in two benches.
   needs `--height-unit`.
 - The design reaches to within one grid cell of the boundary.
 
+## A swale along a line: `loam swale`
+
+A swale carries water off a field. `loam swale` designs one from the ground and a line drawn where the water
+should go, and writes a program whose passes follow that line.
+
+```
+loam swale dem.tif --line swale.kml -o swale.loam --bottom "4 ft" --depth "1 ft" --side-slope 4 --grade 0.5
+loam swale survey.xml --along "40,60 150,100 260,90" -o swale.loam --flow forward
+```
+
+The line is a path drawn in Google Earth (KML, KMZ), a GeoJSON LineString, a shapefile polyline, or points
+typed on the command line. What it does:
+
+1. finds the bottom: the highest line along the centreline that is at least `--depth` below the ground
+   everywhere and falls at least `--grade` percent the whole way. Water never stands in it, and no line that
+   drains moves less earth. Water runs the way that needs less digging, or the way `--flow` says;
+2. shapes the channel: a flat bottom `--bottom` wide, sides rising one unit for every `--side-slope` units
+   out, rounded ends. The design is the lower of that and the ground: a swale is cut, never filled;
+3. widens the strip it works on until the sides have met the ground, as they must on a hillside;
+4. writes the design (and, from a raster, the ground) as LandXML next to the program, and the program itself.
+
+The program's cut and finishing tasks carry `along [...]`, the centreline. Each pass is then a lane: the
+centreline, or the centreline moved a whole number of tool widths to one side, one push long. A machine works
+its way along the swale and comes back along it in the other direction. The line says where to drive. The
+measured ground still says how deep each pass cuts and when the swale is done.
+
+- **Check the outlet.** The summary gives how far below the ground the swale ends. Water leaves only if the
+  ground beyond is lower: a ditch, a pond, a slope.
+- **The sides need a blade that tilts**, or a machine whose own grade control takes the surface (`loam export
+  --to landxml`). A level blade on one actuator cuts the flat bottom.
+- The summary gives the grade of the bottom. Where it is steep the water will cut the channel deeper: ask your
+  NRCS office what your soil carries bare and under grass.
+- The site grid must show the channel: at least two cells across the bottom or one side. A long swale drawn
+  diagonally needs many cells; the message says how many (`--max-cells`), or design it in shorter pieces.
+- `along` works on any cut or finish task, not only on a swale: give it the line of a ditch, a road's edge, a
+  terrace.
+
+For AgOpenGPS, `loam export --to agopengps` writes the line as a curve track. AgOpenGPS lays its passes one
+implement width apart on both sides of a curve, which are the lanes Loam plans for a tool of that width.
+
 ## Commands
 
 ```
@@ -329,7 +374,7 @@ Reading and gridding stream in chunks of 250,000 points, so memory stays near 25
 
 Formats were taken from each tool's own source code, and the tests parse Loam's output with line-for-line restatements of those parsers:
 
-- **AgOpenGPS** (`github.com/agopengps-official/AgOpenGPS`): `Field.txt` (`StartFix` origin), `Boundary.txt` (outer ring, then exclusion zones as inner rings; easting, northing, heading in radians), `TrackLines.txt` (AB tracks, mode 2).
+- **AgOpenGPS** (`github.com/agopengps-official/AgOpenGPS`): `Field.txt` (`StartFix` origin), `Boundary.txt` (outer ring, then exclusion zones as inner rings; easting, northing, heading in radians), `TrackLines.txt` (AB tracks, mode 2; curve tracks, mode 4, written as AgOpenGPS writes a curve drawn on its own map: points at most a metre apart, a straight tail of 99 one-metre points at each end, each point's heading from its two neighbours).
 - **OpenGrade3D** (`github.com/Pat-I/OpenGrade3D`): `.agd` rows `lat,lon,existing,proposed,cutfill,code` with codes `MB` (master benchmark), `2PER` (perimeter) and `3GRD` (grid). Heights are metres. `cutfill` is proposed minus existing (positive = fill); OpenGrade3D steers on the proposed height. A blank proposed height means "no design here". The grid is thinned to about 1 m spacing, as OpenGrade3D recommends.
 - **LandXML 1.2** TIN surfaces, which Cat VisionLink lists among its accepted design files alongside Trimble formats.
 - **Emlid Flow** CSV: columns found by name (`Easting`, `Northing`, `Elevation`, `Latitude`, `Longitude`, and a solution-status column if present; only FIX rows are kept). Headerless PNEZD and PENZD also work.

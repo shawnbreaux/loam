@@ -129,13 +129,16 @@ def plan(project: str, out: str, design: str | None = None, existing: str | None
          existing_file: str | None = None, fleet: str | None = None, tolerance: str | None = None,
          max_cells: int = 40_000, name: str | None = None, compaction: bool = True,
          source: str | None = None, notes: tuple[str, ...] | list[str] = (),
-         limits: list[tuple[float, float]] | None = None) -> dict:
+         limits: list[tuple[float, float]] | None = None,
+         along: list[tuple[float, float]] | None = None, cell: float | None = None) -> dict:
     """Write a Loam program for the grading job in `project`. Returns a summary.
 
     With `compaction` off the fill is spread in lifts and not rolled, as on cropland: no roller in the default
     fleet, no compaction task, and rain holds all the work. `source` replaces the header's "from <file>" (for a
     design that Loam itself made) and `notes` are comment lines added under it. `limits` gives the job limits as a
-    polygon (a surveyed field boundary) in place of the design surface's own edge.
+    polygon (a surveyed field boundary) in place of the design surface's own edge. `along` is a line for the
+    cutting and finishing passes to follow (a swale's centreline), in place of working in straight strips, and
+    `cell` the site grid to use when the design was made on one, in place of choosing it from `max_cells`.
 
     Tasks are given to `class dozer` when the fleet has one. A fleet without dozers (a tractor-drawn scraper and a
     land plane, say) gets each task by capability instead, so any machines that can cut, spread and finish will do.
@@ -160,7 +163,7 @@ def plan(project: str, out: str, design: str | None = None, existing: str | None
     area = _area(rp)
     # The finest round cell size that keeps the grid within `max_cells`, so large jobs stay fast and small ones stay
     # sharp.
-    cell = next((c for c in NICE[unit] if (x1 - x0) * (y1 - y0) / c ** 2 <= max_cells), NICE[unit][-1])
+    cell = cell or next((c for c in NICE[unit] if (x1 - x0) * (y1 - y0) / c ** 2 <= max_cells), NICE[unit][-1])
     edge = "the given boundary" if limits else "outer edge of the design surface"
     limits = simplify(ring, cell / 2)
     nx, ny = math.ceil((x1 - x0) / cell), math.ceil((y1 - y0) / cell)
@@ -209,6 +212,8 @@ def plan(project: str, out: str, design: str | None = None, existing: str | None
             fleet_txt = "\n".join(ln for ln in fleet_txt.splitlines() if "class roller" not in ln) + "\n"
     dozers = re.search(r"\bclass\s+dozer\b", fleet_txt) is not None
     by = lambda cap: "class dozer" if dozers else f"cap {cap}"  # noqa: E731
+    # A task's `along` line, for a task whose keys are padded to `pad` characters; nothing without a line.
+    follow = lambda pad: [f"  {'along':<{pad}}{_poly(along, ' ' * (pad + 3))}"] if along else []  # noqa: E731
     probe = re.search(r"^probe\s+(\w+)", fleet_txt, re.M)
     if not probe:
         raise ValueError("the fleet needs a probe (the site's measurement source)")
@@ -262,6 +267,7 @@ def plan(project: str, out: str, design: str | None = None, existing: str | None
         "  zone    cut_area",
         f"  by      {by('cut')}",
         f"  max_cut {max_cut} per pass",
+        *follow(8),
         "  spoil   -> [fill_area, sp1]       # fill low ground first; surplus to the stockpile",
         f"  until   residual(limits).high < {finish_tol}",
         "}",
@@ -291,6 +297,7 @@ def plan(project: str, out: str, design: str | None = None, existing: str | None
         f"  by     {by('finish')}",
         "  after  cut_to_fill done",
         "  after  top_up done",
+        *follow(7),
         "  source [sp1]",
         "  until  in_tolerance(limits)",
         "}",

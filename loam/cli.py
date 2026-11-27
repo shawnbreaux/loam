@@ -146,6 +146,14 @@ def _four(text: str) -> tuple[float, float, float, float]:
     return a, b, c, d
 
 
+def _points(text: str) -> list[tuple[float, float]]:
+    """A line as points: "x,y x,y ...", at least two of them."""
+    pts = [_pair(p) for p in text.split()]
+    if len(pts) < 2:
+        raise ValueError("a line needs at least two points")
+    return pts
+
+
 def _frame_args(p: argparse.ArgumentParser) -> None:
     """The options, shared by every command that reads or writes real-world coordinates, that say where the site is on
     the earth.
@@ -279,6 +287,34 @@ def add_field_commands(sub) -> None:
     p.add_argument("--fleet", help="Loam machine and probe declarations (default: 2 dozers, mast lidar)")
     p.add_argument("--tolerance", help="finish tolerance, e.g. '0.1 ft' or '3 cm'")
     p.add_argument("--max-cells", type=int, default=40_000, help="grid size limit (default 40000 cells)")
+    p.add_argument("--name", help="site name (default: from the output file name)")
+    p.add_argument("--json", action="store_true")
+    p = sub.add_parser("swale", help="design a drainage swale along a line on its ground (LandXML or GeoTIFF) and "
+                                     "write the Loam program")
+    p.add_argument("ground", help="the ground: a LandXML surface, or a GeoTIFF elevation model (USGS 3DEP, drone)")
+    p.add_argument("-o", "--out", required=True, help="the .loam program to write (design files go beside it)")
+    p.add_argument("--line", help="the centreline: a path drawn in Google Earth (KML, KMZ), a GeoJSON LineString "
+                                  "or a shapefile polyline")
+    p.add_argument("--along", type=_points, metavar="'X,Y X,Y ...'",
+                   help="the centreline as points, in the ground file's coordinates or as longitude,latitude")
+    p.add_argument("--bottom", default=None, metavar="WIDTH", help="width of the flat bottom (default '4 ft' or "
+                                                                   "'1.2 m')")
+    p.add_argument("--depth", default=None, metavar="DEPTH", help="least depth below the ground on the centreline "
+                                                                  "(default '1 ft' or '0.3 m')")
+    p.add_argument("--side-slope", type=float, default=4.0, metavar="RUN",
+                   help="side slope as run over rise: 4 is 4:1 (default 4; 0 for upright sides)")
+    p.add_argument("--grade", type=float, default=0.5, metavar="PCT",
+                   help="least fall along the bottom, percent (default 0.5)")
+    p.add_argument("--flow", choices=["forward", "reverse"],
+                   help="water runs the way the line is drawn (forward) or against it (default: whichever moves "
+                        "less earth)")
+    p.add_argument("--surface", help="surface name, for a LandXML file with several")
+    p.add_argument("--units", choices=["ft", "usft", "m"], help="length unit, if the ground file does not say")
+    p.add_argument("--height-unit", choices=["ft", "usft", "m"],
+                   help="unit of a raster's heights, if it differs from its map unit")
+    p.add_argument("--fleet", help="Loam machine and probe declarations (default: 2 dozers, mast lidar)")
+    p.add_argument("--tolerance", help="finish tolerance, e.g. '0.1 ft' or '3 cm'")
+    p.add_argument("--max-cells", type=int, default=100_000, help="grid size limit (default 100000 cells)")
     p.add_argument("--name", help="site name (default: from the output file name)")
     p.add_argument("--json", action="store_true")
     p = sub.add_parser("export", help="write a surface or field files for grade-control and guidance tools")
@@ -508,6 +544,20 @@ def cmd_level(a) -> None:
                   a.compaction)
     except (ValueError, OSError) as e:
         print(f"loam level: {e}", file=sys.stderr)
+        sys.exit(1)
+    load(r["out"])          # parses and checks; exits with the diagnostics if the program is wrong
+    r["check"] = "ok"
+    _show(r, a.json)
+
+
+def cmd_swale(a) -> None:
+    """`loam swale`: design a swale along a line, write the program, then check what was written."""
+    from .swale import swale
+    try:
+        r = swale(a.ground, a.out, a.along, a.line, a.surface, a.units, a.height_unit, a.bottom, a.depth,
+                  a.side_slope, a.grade, a.flow, a.fleet, a.tolerance, a.max_cells, a.name)
+    except (ValueError, OSError) as e:
+        print(f"loam swale: {e}", file=sys.stderr)
         sys.exit(1)
     load(r["out"])          # parses and checks; exits with the diagnostics if the program is wrong
     r["check"] = "ok"
@@ -773,7 +823,10 @@ def cmd_mavlink(model, a) -> None:
         from .runtime.blade import Blade
         if a.blade_height is None:
             raise ValueError("--blade-servo needs --blade-height (measure it with --blade-zero)")
-        blade = Blade(grid, a.blade_height, pwm, a.blade_travel, a.blade_reach)
+        # The length of the cutting edge is the machine's `blade` in the program, where it gives one.
+        edge = model.machines[a.machine].get("blade")
+        blade = Blade(grid, a.blade_height, pwm, a.blade_travel, a.blade_reach,
+                      width=edge.to(grid.unit) if edge else 0.0)
     run_mavlink(model, a.machine, a.broker, a.vehicle, frame, a.min_fix, a.sim_world,
                 setup=not a.no_vehicle_setup, blade=blade, blade_servo=a.blade_servo, blade_gps2=a.blade_gps2)
 
@@ -995,7 +1048,7 @@ FIELD_COMMANDS = {"run": cmd_run, "simulate-site": cmd_simulate_site, "mavlink":
 
 
 # Sub-commands that take something other than a program.
-STANDALONE = {"plan": cmd_plan, "level": cmd_level, "wifi-fit": cmd_wifi_fit}
+STANDALONE = {"plan": cmd_plan, "level": cmd_level, "swale": cmd_swale, "wifi-fit": cmd_wifi_fit}
 
 
 def print_report(r: dict) -> None:

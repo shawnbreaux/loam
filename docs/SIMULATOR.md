@@ -49,6 +49,12 @@ applied when it lands (`busy_until`). Consequences:
   so concurrent machines do not plan the same fill twice.
 * Work windows of in-flight passes are reserved; two passes never overlap (tested).
 
+A cut or finish task with `along [...]` is planned in lanes in place of windows: the line, or the line moved a
+whole number of tool widths to one side, one push long, stepped half a push. The lane chosen is the one with the
+most work for the distance driven, counting the drive from where the machine's last lane ended, so a machine
+works along the line and comes back along it. A lane stops short of an exclusion or starts beyond it. Its order
+carries the path and the tool width, and a pattern that is zero outside the lane.
+
 | Op | Planning | Landing |
 | --- | --- | --- |
 | cut | Best 30 ft × blade window by positive residual; depth ≤ `max_cut` | Lower `z`; place spoil in the lowest cells of each `spoil` destination in order, one lift at most; any surplus goes to a stockpile or a windrow |
@@ -65,7 +71,9 @@ applied when it lands (`busy_until`). Consequences:
   * swell: `est_swell ← est_swell · Σ(meas − prev_meas) / Σ(expected rise)` over deposit-only cells
   * keep: `est_keep ← 1 − Σ(prev_meas − meas) / Σ(rolled loose)` over roll-only cells
 * **Stall replan** (built in): when every machine is idle and an eligible task is unfinished,
-  rebase on the latest survey once per survey.
+  rebase on the latest survey once per survey. Only a survey taken since the last pass landed counts: an
+  older one does not show that pass, and a prediction rebased on it would have the pass done again. For the
+  same reason a task that has not begun, on a site with nothing in flight, waits for such a survey.
 * **Built-in stale hold**: no new orders while any probe is older than its `stale_after`.
 * **Task completion**: `until` is evaluated on `meas`, never on `pred` (open loop: on `pred`).
   A task with work still in flight is never closed.

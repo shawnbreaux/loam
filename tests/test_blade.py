@@ -79,6 +79,47 @@ def test_where_the_edge_should_be(tmp_path):
         Blade(g, 3.0, pwm=(1500, 1500))
 
 
+
+def test_a_wide_edge_is_held_at_the_highest_point_under_it(tmp_path):
+    """One actuator holds the whole edge level. Given the blade's width, the edge goes no lower than the highest
+    point wanted anywhere under it, so neither end cuts deeper than its own ground allows, and where one end
+    hangs over ground outside the job the edge stays on top of that ground. An edge taken as one point at its
+    middle would cut both."""
+    _, g = yard(tmp_path)
+    wide, point = Blade(g, height=3.0, width=10.0), Blade(g, height=3.0)
+    assert wide.wanted((40.0, 50.0, 0.0), order()) == pytest.approx(100.5)       # level ground: as before
+    z = np.full(g.shape, np.nan, "<f4")
+    z[:25, :], z[25:, :] = 101.0, 100.2              # south of y = 50 still a foot high, north of it nearly done
+    for b in (wide, point):
+        b.survey(wire.terrain("yard", "p", 1, (g.x0, g.y0), g.cell, g.shape, data=wire.encode_heights(z)))
+    # Heading east at y = 52 the edge spans y 47 to 57: design to the north, half a foot off the high ground to
+    # the south, and the south decides.
+    assert point.wanted((40.0, 52.0, 0.0), order()) == pytest.approx(100.0)
+    assert wide.wanted((40.0, 52.0, 0.0), order()) == pytest.approx(100.5)
+    assert wide.wanted((40.0, 52.0, math.pi / 2), order()) == pytest.approx(100.0)   # heading north: all one side
+    # At the pad's south edge (y = 20) half the blade is over ground that is not to be graded, and stays on it.
+    edge = [[20, 18], [60, 18], [60, 28], [20, 28]]
+    assert point.wanted((40.0, 22.0, 0.0), order(window=edge)) == pytest.approx(100.5)
+    assert wide.wanted((40.0, 22.0, 0.0), order(window=edge)) == pytest.approx(101.0)
+    assert wide.wanted((40.0, 26.0, 0.0), order(window=edge)) == pytest.approx(100.5)    # all of it on the pad
+    with pytest.raises(ValueError, match="width cannot be negative"):
+        Blade(g, 3.0, width=-1.0)
+
+
+def test_on_a_path_the_blade_is_down_only_within_its_swath(tmp_path):
+    """An order with a path to follow puts the blade in the ground within half the swath of that path, and
+    carries it over the rest of the window: the drive to the start of a lane cuts nothing."""
+    _, g = yard(tmp_path)
+    b = Blade(g, height=3.0)
+    lane = {**order(window=[[20, 30], [60, 30], [60, 70], [20, 70]]), "path": [[25, 35], [55, 65]], "swath": 6 * FT}
+    assert b.wanted((40.0, 50.0, 0.0), lane) == pytest.approx(100.5)             # on the path
+    assert b.wanted((42.0, 48.0, 0.0), lane) == pytest.approx(100.5)             # 2.8 ft to its side
+    assert b.wanted((43.0, 47.0, 0.0), lane) is None                             # 4.2 ft: outside the 6 ft swath
+    assert b.wanted((22.0, 68.0, 0.0), lane) is None                             # in the window, far from the path
+    assert b.wanted((43.0, 47.0, 0.0), {**lane, "path": None}) == pytest.approx(100.5)   # no path: the window
+    assert b.wanted((43.0, 47.0, 0.0), {**lane, "path": [[25, 35]]}) == pytest.approx(100.5)
+
+
 @pytest.mark.parametrize("pwm", [(1100, 1900), (1900, 1100)])
 def test_a_sensor_on_the_blade_is_stepped_onto_the_surface(tmp_path, pwm):
     """With the antenna riding on the blade, the edge is measured, and the actuator is stepped until the edge is

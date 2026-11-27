@@ -143,7 +143,7 @@ function legend() {
                  [b.n, `within ±${fmt(t)} ${u}`], [b.lo[0], `${fmt(t)}–${fmt(2*t)} low`], [b.lo[1], `${fmt(2*t)}–${fmt(4*t)} low`],
                  [b.lo[2], `> ${fmt(4*t)} ${u} low`]];
   $("legend").innerHTML = items.map(([c, l]) => `<span><b style="background:rgb(${c})"></b>${l}</span>`).join("") +
-    `<span>▲ machine</span><span>▭ work window</span><span>┅ deposit</span>`;
+    `<span>▲ machine</span><span>▭ work window</span><span>━ pass along a line</span><span>┅ deposit</span>`;
   $("mapnote").textContent = "High ground (red) still needs cutting; low ground (blue) needs fill. From the latest probe survey.";
 }
 // A number to at most three decimals, without trailing zeros.
@@ -185,11 +185,12 @@ function buildMap() {
   }
   ctx.putImageData(img, 0, 0);
 }
-// Outline a polygon given in site coordinates.
-function poly(p, dash, color, width) {
+// Outline a polygon given in site coordinates, or with `open` draw a line that is not closed (the path of a pass).
+function poly(p, dash, color, width, open) {
   if (!p || !p.length) return;
   cx.beginPath(); p.forEach(([x, y], i) => i ? cx.lineTo(geo.px(x), geo.py(y)) : cx.moveTo(geo.px(x), geo.py(y)));
-  cx.closePath(); cx.setLineDash(dash || []); cx.strokeStyle = color; cx.lineWidth = width || 1; cx.stroke(); cx.setLineDash([]);
+  if (!open) cx.closePath();
+  cx.setLineDash(dash || []); cx.strokeStyle = color; cx.lineWidth = width || 1; cx.stroke(); cx.setLineDash([]);
 }
 // Redraw the whole map: survey colours, zones, stockpiles, the work windows and deposits of orders being run,
 // detected people, then machines on top.
@@ -208,7 +209,9 @@ function draw() {
   Object.entries(view.orders).forEach(([m, o]) => {
     const live = view.machines[m] && view.machines[m].order === o.id;
     if (!live) return;
-    poly(o.window, [], ink, 2); poly(o.deposit, [5, 4], ink, 1.5);
+    // A pass along a line is shown by its path: the block that bounds a slanting lane says little.
+    if (o.path) poly(o.path, [], ink, 3, true); else poly(o.window, [], ink, 2);
+    poly(o.deposit, [5, 4], ink, 1.5);
   });
   Object.values(view.people).forEach(([x, y]) => {
     cx.beginPath(); cx.arc(geo.px(x), geo.py(y), 7, 0, 7); cx.fillStyle = css("--critical"); cx.fill();

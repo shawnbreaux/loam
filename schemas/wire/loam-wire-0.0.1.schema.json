@@ -68,6 +68,24 @@
           ],
           "description": "Work area polygon; null when the work is defined by deposit/source only"
         },
+        "path": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "description": "The line the middle of the tool follows for the working part of the pass, in this order, site coordinates. Sent for a task that runs along a line. Without it the machine runs down the middle of the window along its longer side."
+        },
+        "swath": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "With a path: the width of ground the pass works, centred on the path, m. A blade is in the ground only within half of it of the path."
+        },
         "target": {
           "type": "object",
           "description": "What the ground in the window should become",

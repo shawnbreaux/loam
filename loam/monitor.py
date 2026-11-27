@@ -107,7 +107,7 @@ class Frames:
                                              "stopLatencyS": msg.get("stopLatencyS")}
             return "machines"
         if kind == "order":
-            o = {"task": msg["task"], "op": msg["op"], "window": msg.get("window"),
+            o = {"task": msg["task"], "op": msg["op"], "window": msg.get("window"), "path": msg.get("path"),
                  "deposit": (msg.get("deposit") or {}).get("window"), "id": msg["orderId"]}
             s["orders"][msg["machine"]] = o
             return "machines"

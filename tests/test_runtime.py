@@ -240,12 +240,13 @@ def test_late_surveys_do_not_confuse_the_soil_estimates():
 def test_idle_while_a_task_is_paused_is_not_a_stall():
     """When the only work left belongs to a task a rule has paused (rolling, in the rain), the controller says once
     what it is waiting for and does not count a replan at every survey. A task that can start because the one
-    before it finished is planned from the latest survey, and that is not called a stall either.
+    before it finished is not called a stall either: it starts with the first survey that shows the work before it.
     """
     c, _, logs, done = loopback(EXAMPLE, EXAMPLES)
     assert done
-    assert [line for line in logs if "finish_pad can start: planning from the latest survey" in line]
     assert not [line for line in logs if "stalled" in line and "finish_pad" in line]
+    began = next(line for line in logs if "task finish_pad started" in line)
+    assert float(began[4:8]) % 5 == 0                             # on a survey (every 5 min), not between two
     m = load(EXAMPLE)
     c = Controller(m, EXAMPLES, _FakeBus(), Clock(0, 60, 1796108400.0), log=logs.append)
     c.t, c.has_survey, c.last_probe, c.last_rebase = 10.0, True, 10.0, 5.0
@@ -267,6 +268,69 @@ def test_idle_while_a_task_is_paused_is_not_a_stall():
     waiting = [line for line in logs if "waiting:" in line]
     assert len(waiting) == 1 and "compact_C is paused" in waiting[0], logs
     assert not c.replans and np.array_equal(c.pred, c.meas)       # kept on the survey, without counting replans
+
+
+def test_a_new_phase_is_planned_from_a_survey_that_shows_the_last_pass():
+    """When a task finishes and the next can start, the latest survey may have been taken before the last pass
+    landed. It still shows the ground that pass has since cut, and planning from it would order that work again.
+    So a phase that has not begun waits for the next survey: nothing is planned from the stale one, on its word or
+    on the prediction's, and the prediction is not rebased on it.
+    """
+    c, _, _, _ = loopback(EXAMPLE, EXAMPLES, max_min=1.0)
+    for name in ("strip_A", "top_up_C", "compact_C"):             # only the finishing is left
+        c.done_at[name] = c.started[name] = 1.0
+    for n in list(c.inflight):
+        c.abandon(n, "test")
+    pad = c.masks["pad"]
+    west, east = pad & (c.xs[None, :] < 20), pad & (c.xs[None, :] > 60)
+    c.plan_dz[:], c.plan_dloose[:], c.p_loose[:] = 0.0, 0.0, 0.0
+    c.meas, c.pred = c.design.copy(), c.design.copy()
+    c.meas[west | east] += 0.3                                    # the survey: two strips of the pad stand high
+    c.pred[east] += 0.3                                           # the plan: a pass has since cut the western one
+    c.has_survey, c.t = True, 20.0
+    c.last_probe, c.last_scan, c.last_rebase, c.last_land = 18.0, 18.0, 10.0, 19.0
+
+    def tick():
+        """One planning step with every machine reporting in, idle."""
+        for n in c.machines:
+            c.machines[n].busy_until = 0.0
+            c.handle(f"loam/v0/s/{n}/state", wire.state("s", n, 9, None, 0, 0, 0, False, 0, ts=c.clock.ts(c.t)))
+            c.mstate[n]["seen"] = time.time()
+        c.step()
+
+    before = c.pred.copy()
+    tick()
+    tick()
+    assert c.started["finish_pad"] is None and not c.inflight and not c.replans and np.array_equal(c.pred, before)
+    c.meas = c.design.copy()
+    c.meas[east] += 0.3                                           # the next survey shows the western strip cut
+    c.t = c.last_probe = c.last_scan = 25.0
+    c.bus.out.clear()
+    tick()
+    assert c.started["finish_pad"] == 25.0 and c.inflight
+    windows = [np.asarray(msg["window"]) for topic, msg in c.bus.out if topic.endswith("/order")]
+    assert windows and all(w[:, 0].min() >= 60 for w in windows)  # work on the eastern strip only
+
+
+def test_finishing_never_takes_the_simulated_blade_past_design():
+    """A finishing order planned on ground that has since been cut to design moves nothing there: the simulated
+    site's blade aims at the planned change but stops at design, cutting or filling, within its own error."""
+    m = load(EXAMPLE)
+    w = World(m, EXAMPLES)
+    w.z = w.design.copy()
+    j, i = np.argwhere(w.g.masks["pad"])[40]
+    w.z[j, i + 1] += 0.1                                          # one cell a little high, one a little low
+    w.z[j, i + 2] -= 0.1
+    w.stock["sp1"] = 50.0
+    tile = np.array([[-0.3, -0.3, 0.3, 0.3]]) * 0.3048            # asks for far more than is there
+    order = wire.order("s", "dz1", 1, "f-1", 0, "finish_pad", "finish",
+                       [[w.g.x0 + (i + a) * w.g.cell, w.g.y0 + (j + b) * w.g.cell] for a, b in
+                        ((0, 0), (4, 0), (4, 1), (0, 1))],
+                       {"surface": "design", "pattern": wire.encode_heights(tile), "shape": [1, 4]},
+                       {"step": 0.0914}, {"source": "sp1"})
+    w.apply(order)
+    off = (w.z - w.design)[j, i:i + 4]
+    assert np.abs(off).max() < 4 * w.soil.finish_error_m / 0.3048 + 1e-9 and np.abs(off).max() < 0.1
 
 
 def test_controller_withdraws_a_pass_the_machine_cannot_run():

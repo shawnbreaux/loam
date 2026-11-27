@@ -22,8 +22,14 @@ Two ways to mount the height sensor, and one number tells them apart:
   position, which is only as good as that geometry and the ground under the machine.
 
 The blade works only inside the order's window, during an order that moves earth, while the machine is allowed to
-move. Everywhere else it is carried fully raised. A machine that loses its height carries the blade too: the
-ground is never cut on a guess.
+move. An order that gives a `path` to follow narrows that to its `swath`: the blade is down only within half the
+swath of the path, so the drive to the path's start cuts nothing. Everywhere else it is carried fully raised. A
+machine that loses its height carries the blade too: the ground is never cut on a guess.
+
+One actuator sets one height, so the edge is level across its width. Given the blade's `width`, the edge is
+held at the highest point wanted anywhere under it, and where part of it is over ground that is not to be
+graded, no lower than that ground. It therefore never cuts below the surface at either end, and it cannot
+shape a slope across its own width: the side of a swale needs a blade that tilts, which this does not drive.
 
 This is not a safety function. It moves one actuator; the stops are the bridge's and the vehicle's own.
 """
@@ -34,7 +40,7 @@ from typing import Protocol
 
 import numpy as np
 
-from .. import wire
+from .. import line, wire
 from ..grid import SiteGrid, points_in_polygon
 from ..target import next_target
 from ..units import FT
@@ -60,16 +66,19 @@ class Blade:
     """The blade of one machine: where its edge should be, and the actuator command that takes it there."""
 
     def __init__(self, grid: SiteGrid, height: float, pwm: tuple[int, int] = (1100, 1900), travel: float = 0.0,
-                 reach: float = 0.0, rate: float = RATE):
+                 reach: float = 0.0, rate: float = RATE, width: float = 0.0):
         """`height`: how far the reported altitude is above the cutting edge with the blade fully down (measure
         it with `loam mavlink --blade-zero`). `pwm`: the pulse widths for fully down and fully up. `travel`: how
         far the edge rises over the stroke when the height sensor is on the machine's body; 0 when it rides on
         the blade. `reach`: how far the edge is ahead of the position the vehicle reports (negative for a towed
-        blade). Lengths are in site units. `rate` is the most of the stroke moved per second.
+        blade). `width`: the length of the cutting edge, across the direction of travel; 0 treats the edge as
+        the one point at its middle. Lengths are in site units. `rate` is the most of the stroke moved per second.
         """
-        if pwm[0] == pwm[1] or travel < 0 or rate <= 0:
-            raise ValueError("blade: the two pulse widths must differ, travel cannot be negative, rate must be > 0")
+        if pwm[0] == pwm[1] or travel < 0 or rate <= 0 or width < 0:
+            raise ValueError("blade: the two pulse widths must differ, travel and width cannot be negative, "
+                             "rate must be > 0")
         self.grid, self.height, self.pwm, self.travel, self.reach, self.rate = grid, height, pwm, travel, reach, rate
+        self.width = width
         self.gain = GAIN_PER_FT * grid.u / FT            # per site unit
         self.deadband = DEADBAND_FT * FT / grid.u
         self.design, self.ground = grid.design_and_existing()
@@ -97,16 +106,30 @@ class Blade:
 
     def wanted(self, pose: tuple[float, float, float] | None, order: dict | None) -> float | None:
         """The elevation the cutting edge should be at now, or None if the blade is to be carried: no order, an
-        order that moves no earth, an edge outside the order's window or off the grid, or a place with nothing
-        to grade."""
+        order that moves no earth, an edge outside the order's window (or off the order's path by more than half
+        its swath) or off the grid, or a place with nothing to grade.
+
+        The edge is sampled at its middle and, given a width, at points no more than a cell apart out to both
+        ends. The middle decides whether there is anything to grade. The height is the highest of the samples:
+        the surface the next pass should leave, or the ground as it is where nothing is to be graded.
+        """
         if pose is None or order is None or order.get("op") not in BLADE_OPS or not order.get("window"):
             return None
         bx, by = self.edge_point(pose)
         if not bool(points_in_polygon(order["window"], np.array([bx]), np.array([by]))[0]):
             return None
-        i, j, ok = self.grid.cell_of(np.array([bx]), np.array([by]))
-        z = float(self.target[j[0], i[0]]) if ok[0] else math.nan
-        return z if math.isfinite(z) else None
+        if order.get("path") and order.get("swath") and len(order["path"]) > 1:
+            off = line.project(order["path"], np.array([bx]), np.array([by]))[1]
+            if abs(float(off[0])) > float(order["swath"]) / self.grid.u / 2:
+                return None
+        half = math.ceil(self.width / (2 * self.grid.cell)) if self.width > 0 else 0
+        across = np.arange(-half, half + 1, dtype=np.float64) * (self.width / (2 * half) if half else 0.0)
+        i, j, ok = self.grid.cell_of(np.asarray(bx - across * math.sin(pose[2]), np.float64),
+                                     np.asarray(by + across * math.cos(pose[2]), np.float64))
+        if not ok[half] or not math.isfinite(self.target[j[half], i[half]]):
+            return None
+        want, ground = self.target[j[ok], i[ok]], self.ground[j[ok], i[ok]]
+        return float(np.nanmax(np.where(np.isfinite(want), want, ground)))
 
     def command(self, pose: tuple[float, float, float] | None, altitude: float | None, order: dict | None,
                 now: float) -> int | None:

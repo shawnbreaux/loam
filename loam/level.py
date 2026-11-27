@@ -132,22 +132,108 @@ def _utm(lon: float, lat: float) -> str:
     return f"EPSG:{(32600 if lat >= 0 else 32700) + int((lon + 180) // 6) % 60 + 1}"
 
 
-def _boundary(path: str, work_crs: str | None) -> list[tuple[float, float]]:
-    """A field boundary file as a polygon in the working coordinates. A file that states its coordinate system
-    (KML, a shapefile with a .prj) is reprojected; one that does not is taken as longitude and latitude if its
-    numbers can be nothing else, and as working coordinates otherwise."""
-    from .surfaces import polygon_from_file
-    pts, crs = polygon_from_file(path)
+Shape = tuple[list[tuple[float, float]], str | None, str]
+
+
+def _placed(shape: Shape, work_crs: str | None) -> list[tuple[float, float]]:
+    """A boundary or a line, as (points, the coordinate system its file states, what to call it in a message),
+    in the working coordinates. One that states its coordinate system (KML, a shapefile with a .prj) is
+    reprojected; one that does not is taken as longitude and latitude if its numbers can be nothing else, and as
+    working coordinates otherwise."""
+    pts, crs, label = shape
     if crs is None and work_crs and all(abs(x) <= 180 and abs(y) <= 90 for x, y in pts):
         crs = "EPSG:4326"
     if crs is None:
         return pts
     if work_crs is None:
-        raise ValueError(f"{path} is in map coordinates but the ground file states no coordinate system, "
-                         "so the boundary cannot be placed on it")
+        raise ValueError(f"{label} is in map coordinates but the ground file states no coordinate system, "
+                         "so it cannot be placed on the ground")
     from .geo import _transformer
     xs, ys = _transformer(crs, work_crs).transform([p[0] for p in pts], [p[1] for p in pts])
     return [(float(a), float(b)) for a, b in zip(xs, ys, strict=True)]
+
+
+class Ground:
+    """A ground file opened for design work: its length unit and coordinate system, and its heights on a lattice.
+
+    The file is a LandXML surface or a GeoTIFF elevation model. A raster in longitude and latitude is worked in
+    the metric UTM zone the job lies in, since degrees are no unit to grade in.
+    """
+
+    def __init__(self, path: str, surface: str | None, units: str | None, height_unit: str | None,
+                 shape: Shape | None, ask: str):
+        """`shape` is the boundary or line the design is for, if there is one: it says which UTM zone a raster
+        in degrees is worked in, and `ask` is the option to name when such a raster comes without it."""
+        self.path, self.height_unit = path, height_unit
+        self.raster = os.path.splitext(path)[1].lower() in (".tif", ".tiff")
+        self.epsg: str | None = None
+        self.info: dict = {}
+        if self.raster:
+            from .surfaces import raster_info
+            self.info = info = raster_info(path)
+            self.crs = info["crs"]
+            if info["geographic"]:
+                if shape is None:
+                    raise ValueError(f"the ground file is in longitude and latitude: say which field ({ask})")
+                lonlat = _placed(shape, info["crs"])            # in the raster's own degrees, to find the zone
+                self.crs = _utm(float(np.mean([p[0] for p in lonlat])), float(np.mean([p[1] for p in lonlat])))
+                self.unit = "m"
+            else:
+                self.unit = info["unit"] or units or ""
+            if self.crs and self.crs.startswith("EPSG:"):
+                self.epsg = self.crs.split(":")[1]
+            elif info["epsg"] and not info["geographic"]:
+                self.epsg = str(info["epsg"])
+            self.name = "ground"
+        else:
+            if height_unit:
+                raise ValueError("--height-unit is for raster ground; a LandXML file states its own unit")
+            proj = read_project(path)
+            self.unit = proj["unit"] or units or ""
+            self.epsg = proj["epsg"]
+            self.crs = f"EPSG:{self.epsg}" if self.epsg else None
+            self.pts, self.faces, self.name = read_tin(path, surface)
+        if self.unit not in NICE:
+            raise ValueError("the ground file does not say its length unit: give --units ft, usft or m"
+                             if not self.unit else f"unsupported length unit {self.unit}")
+
+    def cell(self, ring: list[tuple[float, float]], max_cells: int, what: str, cure: str) -> float:
+        """The finest round grid size that keeps the bounding box of `ring` within `max_cells`, so that large jobs
+        stay fast and small ones stay sharp. `what` is the thing being designed and `cure` what to do about one
+        too large, for the message."""
+        (x0, y0), (x1, y1) = np.array(ring, float).min(0), np.array(ring, float).max(0)
+        cell = next((c for c in NICE[self.unit] if (x1 - x0) * (y1 - y0) / c ** 2 <= max_cells), None)
+        if cell is None:
+            raise ValueError(f"the {what}'s bounding box is {(x1 - x0) * (y1 - y0) / NICE[self.unit][-1] ** 2:,.0f} "
+                             f"cells at the coarsest grid ({NICE[self.unit][-1]} {self.unit}): {cure}")
+        return cell
+
+    def heights(self, xs: np.ndarray, ys: np.ndarray) -> np.ndarray:
+        """Ground height at every point of the lattice `xs` by `ys` (working coordinates), in the working unit;
+        NaN where the file has none."""
+        gx, gy = np.meshgrid(xs, ys)
+        if not self.raster:
+            cell = float(xs[1] - xs[0])
+            return rasterize(self.pts, self.faces, xs[0] - cell / 2, ys[0] - cell / 2, cell, len(xs), len(ys))
+        from .surfaces import raster_at
+        if self.crs and self.info["crs"] and self.crs != self.info["crs"]:
+            from .geo import _transformer
+            rx, ry = _transformer(self.crs, self.info["crs"]).transform(gx, gy)
+            z = raster_at(self.path, np.asarray(rx), np.asarray(ry))[0]
+        else:
+            z = raster_at(self.path, gx, gy)[0]
+        return z * Quantity(1.0, self.height_unit or self.unit).to(self.unit)
+
+    def written(self, stem: str, xs: np.ndarray, ys: np.ndarray, z: np.ndarray, what: str) -> str:
+        """The LandXML file the program reads its existing ground from: the ground file itself, or for a raster
+        the lattice heights `z` written beside the program."""
+        if not self.raster:
+            return self.path
+        if np.isnan(z).any():
+            raise ValueError(f"the ground file leaves {100 * float(np.isnan(z).mean()):.1f} % of the {what}'s "
+                             "bounding box uncovered; the site grid needs ground under all of it")
+        write_tin(stem + "-ground.xml", self.name, *grid_tin(xs, ys, z), self.unit, epsg=self.epsg)
+        return stem + "-ground.xml"
 
 
 def level(ground: str, out: str, surface: str | None = None, boundary: str | None = None,
@@ -162,50 +248,23 @@ def level(ground: str, out: str, surface: str | None = None, boundary: str | Non
     are written as LandXML next to `out`.
     """
     stem = os.path.splitext(os.path.abspath(out))[0]
-    raster = os.path.splitext(ground)[1].lower() in (".tif", ".tiff")
-    epsg: str | None = None
-    info: dict = {}
-    if raster:
-        from .surfaces import raster_at, raster_info
-        info = raster_info(ground)
-        work_crs = info["crs"]
-        if info["geographic"]:
-            # Degrees are no unit to grade in. Work in the metric UTM zone the field lies in.
-            if not boundary:
-                raise ValueError("the ground file is in longitude and latitude: say which field (--boundary)")
-            lonlat = _boundary(boundary, info["crs"])          # in the raster's own degrees, to find the zone
-            work_crs = _utm(float(np.mean([p[0] for p in lonlat])), float(np.mean([p[1] for p in lonlat])))
-            unit = "m"
-        else:
-            unit = info["unit"] or units or ""
-        if work_crs and work_crs.startswith("EPSG:"):
-            epsg = work_crs.split(":")[1]
-        elif info["epsg"] and not info["geographic"]:
-            epsg = str(info["epsg"])
-    else:
-        proj = read_project(ground)
-        unit = proj["unit"] or units or ""
-        epsg = proj["epsg"]
-        work_crs = f"EPSG:{epsg}" if epsg else None
-        gp, gf, gname = read_tin(ground, surface)
-    if unit not in NICE:
-        raise ValueError("the ground file does not say its length unit: give --units ft, usft or m"
-                         if not unit else f"unsupported length unit {unit}")
+    shape: Shape | None = None
     if boundary:
-        ring = _boundary(boundary, work_crs)
+        from .surfaces import polygon_from_file
+        shape = (*polygon_from_file(boundary), boundary)
+    g = Ground(ground, surface, units, height_unit, shape, "--boundary")
+    raster, unit, epsg = g.raster, g.unit, g.epsg
+    if shape:
+        ring = _placed(shape, g.crs)
     elif raster:
         # The whole raster, less the half pixel at its rim where there is nothing to interpolate between.
-        (w, s, e, n), h = info["bounds"], info["res"] * 0.501
+        (w, s, e, n), h = g.info["bounds"], g.info["res"] * 0.501
         ring = [(w + h, s + h), (e - h, s + h), (e - h, n - h), (w + h, n - h)]
     else:
-        ring = tin_boundary(gp, gf)
+        ring = tin_boundary(g.pts, g.faces)
     rp = np.array(ring, float)
     (x0, y0), (x1, y1) = rp.min(0), rp.max(0)
-    cell = next((c for c in NICE[unit] if (x1 - x0) * (y1 - y0) / c ** 2 <= max_cells), None)
-    if cell is None:
-        raise ValueError(f"the field's bounding box is {(x1 - x0) * (y1 - y0) / NICE[unit][-1] ** 2:,.0f} cells at "
-                         f"the coarsest grid ({NICE[unit][-1]} {unit}): give the field's --boundary, or raise "
-                         "--max-cells")
+    cell = g.cell(ring, max_cells, "field", "give the field's --boundary, or raise --max-cells")
     # Sample points: a lattice over the field's bounding box. The design is defined at the lattice points inside
     # the field, so it reaches to within a cell of the field's edge; the last strip keeps its ground. With a
     # boundary the lattice runs just past the far sides, because the site grid needs ground under the whole
@@ -215,18 +274,7 @@ def level(ground: str, out: str, surface: str | None = None, boundary: str | Non
     nx, ny = over((x1 - x0) / cell) + 1, over((y1 - y0) / cell) + 1
     xs, ys = x0 + np.arange(nx) * cell, y0 + np.arange(ny) * cell
     gx, gy = np.meshgrid(xs, ys)
-    if raster:
-        if work_crs and info["crs"] and work_crs != info["crs"]:
-            from .geo import _transformer
-            rx, ry = _transformer(work_crs, info["crs"]).transform(gx, gy)
-            z = raster_at(ground, np.asarray(rx), np.asarray(ry))[0]
-        else:
-            z = raster_at(ground, gx, gy)[0]
-        z = z * Quantity(1.0, height_unit or unit).to(unit)
-    else:
-        if height_unit:
-            raise ValueError("--height-unit is for raster ground; a LandXML file states its own unit")
-        z = rasterize(gp, gf, xs[0] - cell / 2, ys[0] - cell / 2, cell, nx, ny)      # centres land on the lattice
+    z = g.heights(xs, ys)
     # Without a boundary the field is everything the file covers.
     field = polygon_mask(ring, xs, ys) if boundary else np.isfinite(z)
     if field.sum() < 9:
@@ -255,14 +303,7 @@ def level(ground: str, out: str, surface: str | None = None, boundary: str | Non
     design_xml = stem + "-design.xml"
     os.makedirs(os.path.dirname(stem) or ".", exist_ok=True)
     write_tin(design_xml, "level", pts, faces, unit, epsg=epsg)
-    if raster:
-        if np.isnan(z).any():
-            raise ValueError(f"the ground file leaves {100 * float(np.isnan(z).mean()):.1f} % of the field's "
-                             "bounding box uncovered; the site grid needs ground under all of it")
-        ground_xml, gname = stem + "-ground.xml", "ground"
-        write_tin(ground_xml, gname, *grid_tin(xs, ys, z), unit, epsg=epsg)
-    else:
-        ground_xml = ground
+    ground_xml, gname = g.written(stem, xs, ys, z, "field"), g.name
     slope = math.hypot(a, b)
     toward = math.degrees(math.atan2(-a, -b)) % 360 if slope >= NO_SLOPE else None
     deepest_cut, deepest_fill = float(max(-change.min(), 0.0)), float(max(change.max(), 0.0))
