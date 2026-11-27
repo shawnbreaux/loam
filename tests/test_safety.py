@@ -144,6 +144,9 @@ class FakeRover(threading.Thread):
                        "FS_GCS_ENABLE": 0.0, "FS_ACTION": 2.0, "FS_GCS_TIMEOUT": 5.0, "MAV_GCS_SYSID": 255.0}
         self.fence, self.incoming, self.sets = [], {}, []
         self.gcs_beats, self.breach = [], False   # times of heartbeats from the bridge; "outside the fence"
+        self.alt_mm = 0                           # the altitude it reports, millimetres
+        self.gps2 = None                          # its second GPS, if it has one: (altitude mm, fix type)
+        self.dwell, self.arrived = 0.0, 0.0       # seconds it stays at each waypoint; when it reached the last one
 
     def send_state(self):
         """Send what a vehicle streams: heartbeat, position and GPS status (RTK fixed)."""
@@ -151,9 +154,12 @@ class FakeRover(threading.Thread):
         if self.beating:
             mav.heartbeat_send(10, 3, (128 if self.armed else 0) | 1, self.mode, 4)
         lat, lon = (self.lat, self.lon) if self.origin else (0.0, 0.0)
-        mav.global_position_int_send(0, round(lat * 1e7), round(lon * 1e7), 0, 0, 0, 0, 0, 9000)
+        mav.global_position_int_send(0, round(lat * 1e7), round(lon * 1e7), self.alt_mm, 0, 0, 0, 0, 9000)
         mav.gps_raw_int_send(0, 6, round(self.lat * 1e7), round(self.lon * 1e7), 0, 50, 50, 0, 0, 20)
         mav.fence_status_send(int(self.breach), int(self.breach), 0, 0)
+        if self.gps2 is not None:
+            mav.gps2_raw_send(0, self.gps2[1], round(self.lat * 1e7), round(self.lon * 1e7), self.gps2[0], 50, 50,
+                              0, 0, 20, 0, 0)
 
     def run(self):
         """The vehicle's loop: stream state ten times a second, answer messages, and in AUTO (mode 10) and armed, jump
@@ -169,10 +175,12 @@ class FakeRover(threading.Thread):
                 self.handle(msg)
             if self.mode == 10 and self.armed and self.items:
                 wps = [i for i in self.items if i.command == 16 and i.seq > 0]
-                if self.reached < len(wps) and time.time() - last > 0.05:
+                if (self.reached < len(wps) and time.time() - last > 0.05
+                        and time.time() - self.arrived >= self.dwell):
                     w = wps[self.reached]
                     self.lat, self.lon = w.x / 1e7, w.y / 1e7
                     self.reached += 1
+                    self.arrived = time.time()
                     self.send_state()                       # a vehicle is at the waypoint before it says so
                     self.m.mav.mission_item_reached_send(w.seq)
         self.m.close()

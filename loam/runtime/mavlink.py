@@ -18,8 +18,14 @@ Safety mapping:
 * GNSS fix below `min_fix` (6 = RTK fixed) → HOLD, `safetyState` degraded;
 * no vehicle heartbeat for 3 s → `safetyState` stopped (vehicleLinkLost).
 
-The bridge steers only. Blade height stays with the machine's own grade
-control, which takes the surfaces from `loam export`.
+By default the bridge steers only, and blade height stays with the machine's
+own grade control, which takes the surfaces from `loam export`. A vehicle with
+nobody aboard can instead have its blade held by the bridge (`--blade-servo`,
+see `blade.py`): the edge follows the next-pass surface, moved through one of
+the autopilot's servo outputs (MAV_CMD_DO_SET_SERVO), with the height taken
+from the autopilot's own position, or from its second GPS when that one's
+antenna rides on the blade (`--blade-gps2`). A height older than a second, or
+from a second GPS without an RTK fix, is no height: the blade is carried.
 """
 from __future__ import annotations
 
@@ -35,16 +41,18 @@ os.environ.setdefault("MAVLINK20", "1")
 from ..checker import Model
 from ..geo import Frame, convex_hull, offset_polygon
 from ..units import length_unit_si
+from .blade import Blade
 from .bridge import run_bridge
 from .machine import HEARTBEAT_TIMEOUT_S
 
 # Numbers from the MAVLink common message set and ArduPilot Rover: GPS_FIX_TYPE names, command ids, the coordinate
 # frame for waypoints, Rover's mode numbers, and the magic value that forces a disarm.
 FIX_NAMES = {0: "no-gps", 1: "no-fix", 2: "2d", 3: "3d", 4: "dgps", 5: "rtk-float", 6: "rtk-fixed"}
-CMD_WAYPOINT, CMD_CHANGE_SPEED, CMD_ARM = 16, 178, 400
+CMD_WAYPOINT, CMD_CHANGE_SPEED, CMD_SET_SERVO, CMD_ARM = 16, 178, 183, 400
 FRAME_REL_ALT = 3                     # MAV_FRAME_GLOBAL_RELATIVE_ALT (the INT variant takes the same id)
 MODE_HOLD, MODE_AUTO = 4, 10          # ArduPilot Rover custom modes
 FORCE_DISARM = 21196
+HEIGHT_FRESH_S = 1.0                  # a height older than this is not graded by
 
 
 # Fences travel by the same upload protocol as missions, told apart by the mission type.
@@ -122,13 +130,16 @@ class Vehicle:
     """A MAVLink ground vehicle as a bridge adapter: telemetry, missions, HOLD/AUTO, arming."""
 
     def __init__(self, url: str, frame: Frame, min_fix: int = 6, timeout: float = 30.0,
-                 fences: list[tuple] | None = None):
+                 fences: list[tuple] | None = None, blade_servo: int | None = None, blade_gps2: bool = False):
         """Connect and wait up to `timeout` seconds for the vehicle's heartbeat.
 
         `url` is a pymavlink connection string (for example `udpin:0.0.0.0:14550` or `/dev/ttyUSB0`). `frame`
         places the site grid on the Earth. `min_fix` is the lowest GNSS fix type good enough to work by (6 is RTK
         fixed, centimetre level). With `fences` (from `fence_items`; may be empty) the vehicle is set up to
-        protect itself: see `setup`. With None its parameters and fences are left alone.
+        protect itself: see `setup`. With None its parameters and fences are left alone. `blade_servo` is the
+        number of the autopilot's servo output that moves the blade, if the bridge is to hold it; with
+        `blade_gps2` the blade's height is read from the autopilot's second GPS (its antenna on the blade)
+        and not from the vehicle's own position.
         """
         try:
             from pymavlink import mavutil
@@ -145,6 +156,9 @@ class Vehicle:
             self.m.close()
             raise ValueError(f"no MAVLink heartbeat on {url}")
         self.pose: tuple[float, float, float] | None = None
+        self.height: float | None = None        # the height to grade by, in site units, and when it was reported
+        self.height_at = 0.0
+        self.blade_servo, self.blade_gps2 = blade_servo, blade_gps2
         self.fix, self.armed, self.mode, self.reached = 0, False, -1, -1
         self.n_wp, self.paused, self.stopped_hard = 0, True, False
         self.sent_at = 0.0
@@ -152,7 +166,8 @@ class Vehicle:
         self.last_hb = time.time()
         self.beat_at = 0.0                      # when this bridge last sent its own heartbeat
         self.breached = False                   # the vehicle reports it is outside its fences
-        for msg_id, hz in ((33, 10), (24, 5), (162, 2)):       # GLOBAL_POSITION_INT, GPS_RAW_INT, FENCE_STATUS
+        # GLOBAL_POSITION_INT, GPS_RAW_INT, FENCE_STATUS, and GPS2_RAW when the blade's antenna is the second GPS
+        for msg_id, hz in ((33, 10), (24, 5), (162, 2), *(((124, 10),) if blade_gps2 else ())):
             self.command(511, msg_id, 1e6 / hz)                # MAV_CMD_SET_MESSAGE_INTERVAL
         if fences is not None:
             try:
@@ -162,6 +177,16 @@ class Vehicle:
                 raise
 
     # -- adapter -------------------------------------------------------------------------
+    @property
+    def altitude(self) -> float | None:
+        """The height to grade by, in site units, or None if none has been reported within the last second."""
+        return self.height if time.time() - self.height_at <= HEIGHT_FRESH_S else None
+
+    def _height(self, alt_mm: float) -> None:
+        """Take in a height reported in millimetres above mean sea level."""
+        self.height = float(self.frame.height_to_local(alt_mm / 1000.0 / self.frame.world_m))
+        self.height_at = time.time()
+
     @property
     def fix_ok(self) -> bool:
         """Is the GNSS fix good enough to grade by?"""
@@ -211,6 +236,10 @@ class Vehicle:
                 h = bearing_to_heading(msg.hdg / 100.0, self.frame) if msg.hdg != 65535 else \
                     (self.pose[2] if self.pose else 0.0)
                 self.pose = (float(x), float(y), h)
+                if not self.blade_gps2:
+                    self._height(msg.alt)              # as the autopilot's position estimate has it
+            elif t == "GPS2_RAW" and self.blade_gps2 and msg.fix_type >= self.min_fix:
+                self._height(msg.alt)                  # the antenna on the blade, and only on a fix good enough
             elif t == "GPS_RAW_INT":
                 self.fix = msg.fix_type
             elif t == "MISSION_ITEM_REACHED":
@@ -270,6 +299,11 @@ class Vehicle:
     def close(self) -> None:
         """Close the MAVLink connection."""
         self.m.close()
+
+    def implement(self, pwm: int) -> None:
+        """Move the blade's actuator: set the blade servo output to a pulse width in microseconds."""
+        if self.blade_servo is not None:
+            self.command(CMD_SET_SERVO, self.blade_servo, pwm)
 
     # -- MAVLink -------------------------------------------------------------------------
     def command(self, cmd: int, *p: float) -> None:
@@ -370,11 +404,44 @@ class Vehicle:
 
 
 def run_mavlink(model: Model, name: str, broker: str, url: str, frame: Frame, min_fix: int = 6,
-                sim_world: bool = False, max_wall_s: float | None = None, setup: bool = True):
+                sim_world: bool = False, max_wall_s: float | None = None, setup: bool = True,
+                blade: Blade | None = None, blade_servo: int | None = None, blade_gps2: bool = False):
     """Bridge one MAVLink vehicle as Loam machine `name` (see `bridge.run_bridge`).
 
     With `setup` (the default) the vehicle is first given the site's fences and its failsafe is switched on; see
-    `Vehicle.setup`. Without, its own configuration is trusted as it is.
+    `Vehicle.setup`. Without, its own configuration is trusted as it is. With `blade` and `blade_servo` the
+    bridge also holds the vehicle's blade to the next-pass surface through that servo output, by the height of
+    the vehicle or, with `blade_gps2`, of the second GPS antenna on the blade.
     """
     fences = fence_items(model, frame) if setup else None
-    return run_bridge(model, name, broker, Vehicle(url, frame, min_fix, fences=fences), sim_world, max_wall_s)
+    vehicle = Vehicle(url, frame, min_fix, fences=fences, blade_servo=blade_servo if blade else None,
+                      blade_gps2=bool(blade) and blade_gps2)
+    return run_bridge(model, name, broker, vehicle, sim_world, max_wall_s, blade=(blade, vehicle) if blade else None)
+
+
+def blade_zero(url: str, frame: Frame, servo: int, down_pwm: int, elevation: float, seconds: float = 3.0,
+               gps2: bool = False, min_fix: int = 0) -> dict:
+    """Measure a blade's `height` for `--blade-height`: lower the blade onto a mark of known `elevation` (site
+    units), read the vehicle's altitude for a few seconds, and return how far it is above the cutting edge.
+
+    Returns {"blade_height", "altitude", "spread", "samples"}; `spread` is the highest reading minus the lowest,
+    which says how steady the height is. `gps2` reads the second GPS, as `--blade-gps2` does.
+    """
+    v = Vehicle(url, frame, min_fix=min_fix, blade_servo=servo, blade_gps2=gps2)
+    try:
+        v.implement(down_pwm)
+        got: list[float] = []
+        end, seen = time.time() + seconds, 0.0
+        while time.time() < end:
+            v.poll()
+            if v.height is not None and v.height_at != seen:        # a new reading
+                seen = v.height_at
+                got.append(v.height)
+            time.sleep(0.05)
+    finally:
+        v.close()
+    if not got:
+        raise ValueError("the vehicle reported no position: wait for its position estimate and try again")
+    mean = sum(got) / len(got)
+    return {"blade_height": round(mean - elevation, 4), "altitude": round(mean, 4),
+            "spread": round(max(got) - min(got), 4), "samples": len(got)}

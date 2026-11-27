@@ -19,6 +19,9 @@ protocol and the same as the simulated machines:
 An adapter supplies the protocol: `poll()`, `pose` (site x, y, heading),
 `fix_ok`, `fix_name`, `fault`, `order_error`, `start(path, order, max_speed_ms)`,
 `pause(on)`, `estop()`, `fraction()`, `done()`, `close()`.
+
+A vehicle with a blade and nobody aboard can also be given the blade to hold (`blade`, see `blade.py`): the
+bridge then listens to the site's surveys and moves the blade's actuator every cycle.
 """
 from __future__ import annotations
 
@@ -28,6 +31,7 @@ from typing import Protocol
 
 from .. import wire
 from ..checker import Model
+from .blade import Blade, Grader
 from .bus import Bus, Clock, tolerant, wait_clock
 from .machine import STATE_EVERY_S, MachineSim
 
@@ -74,15 +78,19 @@ class Adapter(Protocol):
 
 
 def run_bridge(model: Model, name: str, broker: str, adapter: Adapter, sim_world: bool = False,
-               max_wall_s: float | None = None) -> MachineSim:
-    """Run until the simulated site ends, `max_wall_s` passes, or the process is stopped."""
+               max_wall_s: float | None = None, blade: tuple[Blade, Grader] | None = None) -> MachineSim:
+    """Run until the simulated site ends, `max_wall_s` passes, or the process is stopped.
+
+    `blade` is a blade to hold to the next-pass surface and the vehicle interface that moves it (normally the
+    adapter itself).
+    """
     if name not in model.machines:
         adapter.close()
         raise ValueError(f"no machine named {name!r}")
     ms = MachineSim(model, name, broker, (0.0, 0.0))
     bus: Bus | None = None
     try:                                     # the vehicle is held and closed on every way out
-        bus = ms.connect()
+        bus = ms.connect((wire.topic(ms.site, None, "terrain"),) if blade else ())
         clock = wait_clock(bus, ms.site) if sim_world else Clock(time.time())
         started, last_state = time.time(), 0.0
         while max_wall_s is None or time.time() - started < max_wall_s:
@@ -94,11 +102,13 @@ def run_bridge(model: Model, name: str, broker: str, adapter: Adapter, sim_world
                     kind = topic.rsplit("/", 1)[-1]
                     if topic == f"sim/{ms.site}/end":
                         return ms
-                    if kind == "order" and (ms.order is None or msg["orderId"] != ms.order["orderId"]):
+                    if kind == "order" and ms.is_new(msg):
                         ms.take(msg)
                         adapter.start(ms.path, msg, (msg.get("limits") or {}).get("maxSpeed"))
                     elif kind in ("instantAction", "safety", "estop"):
                         ms.control(kind, msg, adapter.estop)
+                    elif kind == "terrain" and blade is not None:
+                        blade[0].survey(msg)
                     elif topic.startswith(f"sim/{ms.site}/world/applied/") and ms.waiting and ms.order \
                             and msg["orderId"] == ms.order["orderId"]:
                         _finish(ms, adapter, bus, clock, t)
@@ -114,6 +124,7 @@ def run_bridge(model: Model, name: str, broker: str, adapter: Adapter, sim_world
                 bus.pub(ms.topic("state"), st, qos=1)
                 print(f"loam: {name}: order {ms.order['orderId']} failed: {failed}", file=sys.stderr, flush=True)
                 ms.order = None
+            go = False
             if ms.order is not None and not ms.waiting:
                 # The vehicle may move only while everything is in order: no stop, hold or e-stop, a fresh safety
                 # heartbeat, a good position, and no fault of its own.
@@ -129,6 +140,11 @@ def run_bridge(model: Model, name: str, broker: str, adapter: Adapter, sim_world
                         bus.pub(f"sim/{ms.site}/world/apply", {"machine": name, "order": ms.order}, qos=1)
                     else:
                         _finish(ms, adapter, bus, clock, t)
+            if blade is not None:
+                # The blade is in the ground only while the machine may move on an order; otherwise it is carried.
+                pulse = blade[0].command(adapter.pose, blade[1].altitude, ms.order if go else None, time.time())
+                if pulse is not None:
+                    blade[1].implement(pulse)
             if time.time() - last_state >= STATE_EVERY_S:
                 last_state = time.time()
                 ms.seq += 1

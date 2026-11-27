@@ -18,6 +18,7 @@ from __future__ import annotations
 import math
 import os
 import time
+from collections import deque
 
 import numpy as np
 
@@ -67,6 +68,10 @@ class MachineSim:
         self.gnss_bad = False
         self.seq = 0
         self.stop_latency_s: list[float] = []
+        # The ids of the orders this machine has taken. An order is never run twice: a message delivered again
+        # (MQTT delivers "at least once") or a controller repeating itself must not send the machine over the
+        # same ground a second time.
+        self.taken: deque[str] = deque(maxlen=512)
         self.max_tilt: float | None = None
         self.rolled = False
         self.stuck = 0
@@ -76,8 +81,9 @@ class MachineSim:
         """This machine's topic for one kind of message."""
         return wire.topic(self.site, self.name, kind)
 
-    def connect(self) -> Bus:
-        """Connect to the broker, subscribe to everything a machine listens to, and announce the machine online. Its
+    def connect(self, also: tuple[str, ...] = ()) -> Bus:
+        """Connect to the broker, subscribe to everything a machine listens to (and the topics in `also`), and
+        announce the machine online. Its
         last will says `connectionBroken`, so the controller learns of a dropped link from the broker. `online` is
         announced again after every reconnect: otherwise a machine whose radio dropped for a few seconds would
         stay written off for the rest of the job.
@@ -93,11 +99,15 @@ class MachineSim:
                   birth=online)
         bus.start([self.topic("order"), self.topic("instantAction"), wire.topic(self.site, None, "safety"),
                    wire.topic(self.site, None, "estop"), f"sim/{self.site}/clock", f"sim/{self.site}/faults",
-                   f"sim/{self.site}/world/applied/{self.name}", f"sim/{self.site}/end"])
+                   f"sim/{self.site}/world/applied/{self.name}", f"sim/{self.site}/end", *also])
         self.last_hb = time.time()
         return bus
 
     # -- orders ----------------------------------------------------------------
+    def is_new(self, order: dict) -> bool:
+        """Whether this order is one to take: not the one being worked, and not one taken before."""
+        return order.get("orderId") not in self.taken
+
     def take(self, order: dict) -> None:
         """Accept an order and work out the path to drive, as a list of site points in `self.path`.
 
@@ -105,6 +115,7 @@ class MachineSim:
         roller). A cut then hauls to where the spoil goes and returns; a fill runs from the source stockpile to the
         placement and back.
         """
+        self.taken.append(order["orderId"])
         win, dep = order.get("window"), order.get("deposit") or {}
         op = order["op"]
         pts: list[tuple[float, float]] = []
@@ -256,7 +267,7 @@ def run_machine(model: Model, name: str, broker: str, park: tuple[float, float],
                     return
                 if topic == f"sim/{site}/faults":
                     faults = msg
-                elif kind == "order" and (ms.order is None or msg["orderId"] != ms.order["orderId"]):
+                elif kind == "order" and ms.is_new(msg):
                     ms.take(msg)
                     travelled, stall_xy, stall_t = 0.0, (ms.x, ms.y), clock.minutes()
                 elif kind in ("instantAction", "safety", "estop"):

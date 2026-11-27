@@ -94,7 +94,8 @@ These are results of a simplified model with assumed soil factors, not field mea
 | `loam run` | The site controller: orders, replans and safety rules over MQTT |
 | `loam simulate-site` | A simulated site to run the controller against: world, lidar probe, one process per machine, scripted faults |
 | `loam monitor` | Live web dashboard, Prometheus metrics, replay pages, MCAP recording |
-| `loam mavlink`, `vda5050`, `opera` | Drive a real vehicle as a Loam machine: ArduPilot Rover, VDA 5050 robots, OPERA machines on ROS 2 |
+| `loam mavlink`, `vda5050`, `nav2`, `opera` | Drive a real vehicle as a Loam machine: ArduPilot Rover (with its blade, if nobody is aboard), VDA 5050 robots, any ROS 2 vehicle on Nav2, OPERA machines |
+| `loam conform` | Check that a machine keeps its side of Loam Wire, whoever built it |
 | `loam nmea` | Publish an RTK receiver's position as a machine's state |
 | `loam terrain` | Grid a lidar scan onto the site; publish scans as they are written (`--watch`), with the person-sized things in them (`--objects`) |
 | `loam sense` | People from Frigate cameras, from their phones and trackers, and the two matched; rain from an rtl_433 gauge |
@@ -146,6 +147,10 @@ loam monitor job.loam --mcap run.mcap            --broker mqtts://supervisor@sit
 loam estop   job.loam                            --broker mqtts://supervisor@site-server
 ```
 
+- **Any machine that is open can be driven.** ArduPilot, ROS 2 with Nav2, VDA 5050, or Loam Wire spoken
+  directly. `loam conform` checks a machine before it is trusted. For a machine with nobody aboard,
+  `loam mavlink --blade-servo` also holds the blade to the next-pass surface. See "Connecting a machine" in
+  [docs/FIELD.md](docs/FIELD.md), which also lists which machines on the market are open and which are not.
 - **Machines protect themselves.** `loam mavlink` uploads the site boundary and exclusion zones to the vehicle
   as fences and switches on its failsafe, so it holds if Loam or the radio dies. `loam opera` reports stops by
   Nav2's Collision Monitor and carries on when the way is clear.
@@ -240,6 +245,8 @@ Every integration is an optional, FOSS extra (`pip install "loam-lang[all]"`); t
 | `loam/level.py` | `loam level`: a levelling design (best-fit plane, slope limits, cut/fill balance) from the ground alone |
 | `loam/runtime/` | Controller over MQTT, simulated world, machines (optionally PyBullet physics) and probe |
 | `loam/runtime/bridge.py`, `mavlink.py`, `vda5050.py`, `opera.py` | Real vehicles as Loam machines: one safety loop, three protocols |
+| `loam/runtime/blade.py` | A blade held to the next-pass surface by the bridge, for a machine with nobody aboard |
+| `loam/conform.py` | `loam conform`: the eight checks a machine must pass to be driven by Loam |
 | `loam/sensors.py` | `loam sense`: people from Frigate (placed on the ground by calibrated cameras), rain from rtl_433, as Wire messages |
 | `loam/tags.py` | People located by phone, Wi-Fi and tracker; matching them with what lidar and cameras see; the Wi-Fi model learnt on site |
 | `loam/wirelog.py` | MCAP recorder for Wire messages |
@@ -250,13 +257,13 @@ Every integration is an optional, FOSS extra (`pip install "loam-lang[all]"`); t
 | `loam/monitor.py`, `loam/monitor.html` | Live dashboard and replay pages |
 | `loam/target.py`, `loam/export.py` | Next-pass surface; LandXML (Cat Grade 3D), OpenGrade3D `.agd`, AgOpenGPS field folder |
 | `examples/` | Example program and surfaces, comparison plot, Monte Carlo study |
-| `tests/` | 247 tests: language, I/O, simulator invariants, field adapters, planner, field levelling from rasters and boundary files, controller loopback, a full multi-process MQTT run with faults in which every message is validated against the schema, reconnects and restarts, vehicle bridges (ArduPilot SITL and a fake ArduPilot, VDA 5050, RTKLIB, OPERA on Nav2 and ros2_control, ArduPilot fences and failsafe, Nav2's Collision Monitor), e-stop and SIGTERM safety, a TLS broker with access rules (also on a system-installed Mosquitto), site sensors (a stand-in Frigate, rtl_433 on recorded gauges), people located by phone and matched with cameras and scans (3,000 random sites), Chrono soil, integrations (PDAL cross-check included), parser fuzzing; every test also fails on a leaked thread, process or file |
+| `tests/` | 258 tests: language, I/O, simulator invariants, field adapters, planner, field levelling from rasters and boundary files, controller loopback, a full multi-process MQTT run with faults in which every message is validated against the schema, reconnects and restarts, vehicle bridges (ArduPilot SITL and a fake ArduPilot, VDA 5050, RTKLIB, OPERA on Nav2 and ros2_control, ArduPilot fences and failsafe, Nav2's Collision Monitor), e-stop and SIGTERM safety, a TLS broker with access rules (also on a system-installed Mosquitto), site sensors (a stand-in Frigate, rtl_433 on recorded gauges), people located by phone and matched with cameras and scans (3,000 random sites), a blade held by the bridge and the conformance check (both against a fake ArduPilot), Chrono soil, integrations (PDAL cross-check included), parser fuzzing; every test also fails on a leaked thread, process or file |
 
 ## Development
 
 ```bash
 pip install -e ".[dev]"
-pytest -q --cov=loam          # 247 tests, about 6 min; the MQTT tests need mosquitto
+pytest -q --cov=loam          # 258 tests, about 8 min; the MQTT tests need mosquitto
 python tools/site_soak.py out/ --speed 60     # a whole simulated site, watched; about 4 min
 ruff check loam tests examples
 mypy loam
@@ -268,7 +275,7 @@ tests against it, and runs lint, type checks and a reproducibility check of the 
 
 ## Status and safety
 
-v0.0.8 is an early draft; the language and wire format will change. Releases are pre-releases on
+v0.0.9 is an early draft; the language and wire format will change. Releases are pre-releases on
 [GitHub](https://github.com/shawnbreaux/loam/releases); [CHANGELOG.md](CHANGELOG.md) says what each one changed. **Loam does not make a
 machine safe.** Machines directed by Loam need their own certified safety systems and a site risk
 assessment (ISO 17757). The reference simulator is a test tool, not a planner for real equipment.

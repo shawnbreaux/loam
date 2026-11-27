@@ -3,9 +3,19 @@
 All notable changes are recorded here. The project follows [Semantic Versioning](https://semver.org/);
 before 1.0 any minor release may change the language.
 
-## [Unreleased]
+## [0.0.9] - 2026-11-27
 
 Added
+- **A blade held with nobody aboard.** `loam mavlink --blade-servo N` has the bridge hold a vehicle's blade to
+  the next-pass surface through one servo output, with the height from the autopilot's own position
+  (`--blade-zero` measures the geometry), or from its second GPS when that antenna rides on the blade
+  (`--blade-gps2`). Until now a person had to load each surface into a grade-control system.
+- **`loam conform`.** Plays the controller for one machine and checks eight promises of Loam Wire: announces,
+  reports, ready, works an order, never repeats one, stops, stops when the controller falls silent, and stays
+  stopped when the e-stop is released. For any machine, whoever built it.
+- **`loam nav2`.** Any ROS 2 vehicle that runs Nav2 as a Loam machine (the carrier of `loam opera`, under its
+  own name).
+- docs/FIELD.md: "Connecting a machine", with the four ways in and which machines on the market are open.
 - **People located by what they carry.** `loam sense --tags people.json` reports each listed person as a circle
   from the phone's GPS (OwnTracks), the Wi-Fi signal the site's access points hear (OpenWrt's hostapd table, or
   single readings), or a Meshtastic tracker. The circle grows at walking pace while the device is silent. An
@@ -28,6 +38,12 @@ Changed
 - Reading a GeoTIFF reads only the block of pixels needed, not the whole tile (a 3DEP tile is 100 million
   pixels).
 - The stale-data rule `loam plan` writes follows the probe's own `stale_after`.
+
+Fixed
+- **A machine ran an order twice if it was sent twice.** The spec says a machine never executes an order id
+  twice, and MQTT delivers "at least once". The simulated machines and the bridges forgot an order once it was
+  done, so a repeated message sent them over the same ground again. They now remember the ids they have taken.
+  Found by `loam conform`.
 
 Found while testing
 - Wi-Fi signal strength cannot place a person across a site: three access points 120 m apart leave a circle

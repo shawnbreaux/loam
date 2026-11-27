@@ -29,10 +29,90 @@ Loam talks to field equipment through files and simple streams, so it works with
 These have no public interface that third-party software can use to command the machine, so Loam can only feed them design files:
 
 - **Cat Command** (remote control). It is a closed radio link between Cat's console or station and the machine. Loam cannot send it steering commands.
-- **Teleo** and **Bluelight** retrofit kits. Both are closed. Ask each vendor whether they will accept orders over an API; Loam Wire is designed for exactly that.
+- **Teleo** retrofit kits are closed. **Bluelight** kits (rollers and haul trucks) are closed too, but its maker says it will write an integration and an API for a customer. Loam Wire and `loam conform` are what to hand them.
+- **Bobcat** remote control (the radio kit and the MaxControl iPhone app) and the handsets of remote trench rollers. Built to run with nobody aboard, and closed.
 - **DJI flight control.** Fly with DJI's own apps; Loam only reads the scans.
 - **Livox SDK2 live stream.** Loam reads recordings (PCD/LAS), not the live UDP stream. `loam terrain --watch` publishes each recording as soon as it is written.
 - **Cat VisionLink API.** It carries machine hours, location and fuel (ISO 15143-3), not control. A reader is possible later; it isn't needed for grading.
+
+## Connecting a machine
+
+Loam drives any machine that is open to being driven. There are four ways in, and a test that tells you whether
+a machine is through.
+
+| The machine has | Use | What Loam needs from it |
+|---|---|---|
+| An **ArduPilot** (or other MAVLink) autopilot | `loam mavlink` | Position, missions, HOLD and AUTO. With `--blade-servo`, one servo output for the blade |
+| **ROS 2 with Nav2** | `loam nav2` | A `navigate_through_poses` action, odometry, a `map` frame |
+| A **VDA 5050** interface (factory and yard robots) | `loam vda5050` | VDA 5050 3.0 over MQTT |
+| Its **own controller**, by you or its maker | Speak Loam Wire directly | JSON over MQTT, as [SPEC.md](../SPEC.md) and the JSON Schema define it |
+
+The fourth is the general one. A machine subscribes to its orders, reports its state four times a second, and
+obeys the stops. The reference is `loam/runtime/machine.py`, a few hundred lines.
+
+**Check it before you trust it:**
+
+```
+loam conform site.loam --machine dz1 --window 20,-5,60,5 --broker mqtts://controller@site-server
+```
+
+`loam conform` plays the controller for that one machine and checks eight promises: it announces itself, reports
+well-formed state at least once a second, reports itself ready, works an order and reports it done once, never
+runs an order twice, stops within 2 s of a stop and goes on after a resume, stops by itself within 5 s when the
+controller falls silent, and stops on the e-stop without restarting when it is released. **The machine drives
+short passes across the window, so clear the area**, and run it with no other controller on the broker. Any
+maker can run it against their own machine; passing it is what "works with Loam" means.
+
+### A blade with nobody aboard
+
+A machine that drives itself has nobody to load a design into its grade control. `loam mavlink --blade-servo N`
+has the bridge hold the blade itself: every cycle it works out where the cutting edge should be (the latest
+survey, cut by at most the task's limit, never below design), reads the vehicle's height, and moves one servo
+output.
+
+```
+# once: blade resting on a mark of known elevation, to measure how far the antenna is above the edge
+loam mavlink site.loam --machine dz1 --vehicle /dev/ttyACM0 --origin LAT,LON --blade-servo 9 --blade-zero 101.25
+
+loam mavlink site.loam --machine dz1 --vehicle /dev/ttyACM0 --origin LAT,LON --broker mqtts://dz1@site-server \
+     --blade-servo 9 --blade-height 3.02
+```
+
+- **Put an RTK antenna on the blade**, above the cutting edge. The edge is then measured, not worked out, and
+  the actuator is stepped until it is within a quarter of an inch. Make it the autopilot's second GPS and pass
+  `--blade-gps2`: the first GPS stays on the body and steers, the second gives the blade's height.
+- A height older than a second, or from a second GPS without an RTK fix, is treated as no height.
+- The actuator must go to a position on command: a servo, or a linear actuator with position feedback and a
+  controller that takes a servo pulse. A plain up-down actuator will not do.
+- With the antenna on the machine's body, give `--blade-travel` (how far the edge rises over the actuator's
+  stroke). The edge is then worked out from the actuator's position, which is only as good as that geometry.
+- `--blade-reach` says how far the edge is ahead of the position the vehicle reports (negative for a towed blade).
+- The blade is in the ground only inside the order's window, during an order that moves earth, while the machine
+  may move. Otherwise, and whenever the height is lost, it is carried fully raised.
+- The servo output can drive a hobby or linear servo directly, or a hydraulic valve through a driver that takes
+  a servo pulse.
+
+Tested against a fake ArduPilot over a real broker. It has not moved a real blade yet.
+
+### Machines, by how open they are
+
+Checked in November 2026. "Open" means outside software can command it without the maker's private agreement.
+
+| Machine | Nobody aboard? | Open to Loam? | Way in |
+|---|---|---|---|
+| A hydrostatic two-lever machine with an ArduPilot and servos on its levers (the zero-turn mower conversions of the ArduPilot community) | Yes | Yes | `loam mavlink` |
+| **Amiga** robots (farm-ng, now Bonsai Robotics) | Yes | Yes: a published SDK and API | Its SDK or ROS bridge; `loam nav2` once Nav2 runs on it |
+| **AgileX Bunker Pro** tracked chassis | Yes | Yes: CAN protocol, open-source ROS 2 driver | `loam nav2` |
+| OPERA machines (PWRI, Japan) | Yes | Yes | `loam opera` |
+| Cat soil compactor with a **Bluelight** kit | Yes | On request: its maker says it will write an integration and an API | Their API to Loam Wire |
+| Dozers with the **Polymath Robotics** and Hard-Line kit | Yes | A commercial SDK and API | Their API to Loam Wire |
+| **Bobcat** loaders with the Radio Remote Control kit or MaxControl | Yes | No: a closed radio link and an iPhone app | None |
+| **Cat Command**, **Teleo** | Yes | No | None |
+| Remote trench rollers (Wacker Neuson RTLx-SC3, Bomag BMP 8500) | Yes | No: an infrared or radio handset | None |
+| Any machine with **Cat Grade with 3D** | No: a person steers | Files only | `loam export --to landxml` |
+
+No rental yard offers a machine in the first four rows. The machines that can be rented and run with nobody
+aboard are closed, except where a kit maker opens an API.
 
 ## Placing the site on the earth
 

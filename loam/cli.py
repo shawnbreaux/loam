@@ -7,7 +7,7 @@
     Run a site               run (controller), monitor (dashboard), estop, resume (after a stop)
     Connect site sensors     sense (people from cameras, rain from a gauge), terrain --watch (scans as they arrive)
     Simulate a site          simulate-site, soil-calibrate
-    Connect real machines    mavlink, vda5050, opera
+    Connect real machines    mavlink, vda5050, nav2, opera; conform (check a machine keeps its side of the wire)
 
 Run `loam <command> --help` for a command's options. Heavy or optional modules are imported inside the
 commands that need them, so `loam check` starts fast and works with nothing but numpy installed.
@@ -50,7 +50,8 @@ def load(path: str):
 
 # commands that run until stopped: a service manager's SIGTERM must still run their cleanup (hold the
 # vehicle, cancel its goal, report it offline), which Python's default SIGTERM action skips
-LONG_RUNNING = {"run", "simulate-site", "monitor", "_role", "mavlink", "vda5050", "opera", "nmea", "sense", "terrain"}
+LONG_RUNNING = {"run", "simulate-site", "monitor", "_role", "mavlink", "vda5050", "opera", "nav2", "nmea", "sense",
+                "terrain"}
 
 
 def _stop_cleanly_on_sigterm() -> None:
@@ -137,6 +138,12 @@ def _pair(text: str) -> tuple[float, float]:
     """Two comma-separated numbers, e.g. "34.4459,-85.7197"."""
     a, b = (float(v) for v in text.split(","))
     return a, b
+
+
+def _four(text: str) -> tuple[float, float, float, float]:
+    """Four comma-separated numbers: a rectangle as x0,y0,x1,y1."""
+    a, b, c, d = (float(v) for v in text.split(","))
+    return a, b, c, d
 
 
 def _frame_args(p: argparse.ArgumentParser) -> None:
@@ -343,6 +350,31 @@ def add_field_commands(sub) -> None:
     p.add_argument("--no-vehicle-setup", action="store_true",
                    help="leave the vehicle's own parameters and fences alone (default: upload the site boundary and "
                         "exclusion zones as fences and switch on its ground-station failsafe)")
+    g = p.add_argument_group("a blade held by the bridge (for a machine with nobody aboard)")
+    g.add_argument("--blade-servo", type=int, metavar="N", help="the autopilot servo output that moves the blade; "
+                   "switches blade control on")
+    g.add_argument("--blade-height", type=float, metavar="H", help="reported altitude above the cutting edge with "
+                   "the blade fully down, site units (measure it with --blade-zero)")
+    g.add_argument("--blade-pwm", type=_pair, default=(1100.0, 1900.0), metavar="DOWN,UP",
+                   help="pulse widths for fully down and fully up, microseconds (default 1100,1900)")
+    g.add_argument("--blade-travel", type=float, default=0.0, metavar="T", help="rise of the edge over the full "
+                   "stroke, site units, when the height sensor is on the machine's body (default 0: it rides on "
+                   "the blade)")
+    g.add_argument("--blade-reach", type=float, default=0.0, metavar="R", help="how far the edge is ahead of the "
+                   "reported position, site units (negative for a towed blade)")
+    g.add_argument("--blade-gps2", action="store_true", help="take the blade's height from the autopilot's second "
+                   "GPS, whose antenna rides on the blade or its frame (default: the vehicle's own position)")
+    g.add_argument("--blade-zero", type=float, metavar="Z", help="measure --blade-height: lower the blade onto a "
+                   "mark of site elevation Z, print the height, and exit")
+    p = sub.add_parser("conform", help="check that a machine keeps its side of Loam Wire (it will drive short "
+                                       "passes: clear the area)")
+    p.add_argument("file")
+    p.add_argument("--machine", required=True, help="the machine to check, as the program names it")
+    p.add_argument("--window", required=True, type=_four, metavar="X0,Y0,X1,Y1",
+                   help="a clear strip of the site the machine may drive along, site coordinates")
+    p.add_argument("--broker", default="localhost:1883")
+    p.add_argument("--timeout", type=float, default=120.0, metavar="S", help="how long one pass may take")
+    p.add_argument("--json", action="store_true")
     p = sub.add_parser("vda5050", help="drive a VDA 5050 3.0 mobile robot as a Loam machine")
     p.add_argument("file")
     p.add_argument("--machine", required=True, help="the Loam machine this robot is")
@@ -395,6 +427,14 @@ def add_field_commands(sub) -> None:
                                         "signal in dBm, one pair per line")
     p.add_argument("walk", help="CSV file: distance_m,rssi_dbm")
     p.add_argument("--json", action="store_true")
+    p = sub.add_parser("nav2", help="drive any ROS 2 vehicle that runs Nav2 as a Loam machine")
+    p.add_argument("file")
+    p.add_argument("--machine", required=True, help="the Loam machine this is")
+    p.add_argument("--namespace", required=True, help="the vehicle's ROS namespace")
+    p.add_argument("--broker", default="localhost:1883")
+    p.add_argument("--map-offset", default="0,0,0", metavar="X,Y,Z", help="site origin in the map frame (m)")
+    p.add_argument("--map-yaw", type=float, default=0.0, help="site +x axis in the map frame (deg)")
+    p.add_argument("--sim-world", action="store_true", help="part of `loam simulate-site`: its clock and world")
     p = sub.add_parser("opera", help="drive an OPERA (ROS 2) machine as a Loam machine: IC120 carrier, ZX200")
     p.add_argument("file")
     p.add_argument("--machine", required=True, help="the Loam machine this is")
@@ -719,9 +759,38 @@ def cmd_simulate_site(model, a) -> None:
 
 def cmd_mavlink(model, a) -> None:
     """`loam mavlink`: make an ArduPilot Rover (or other MAVLink ground vehicle) one of the program's machines."""
-    from .runtime.mavlink import run_mavlink
-    run_mavlink(model, a.machine, a.broker, a.vehicle, _frame(_grid(model, a), a), a.min_fix, a.sim_world,
-                setup=not a.no_vehicle_setup)
+    from .runtime.mavlink import blade_zero, run_mavlink
+    grid = _grid(model, a)
+    frame = _frame(grid, a)
+    pwm = (round(a.blade_pwm[0]), round(a.blade_pwm[1]))
+    if a.blade_zero is not None:
+        if a.blade_servo is None:
+            raise ValueError("--blade-zero needs --blade-servo")
+        _show(blade_zero(a.vehicle, frame, a.blade_servo, pwm[0], a.blade_zero, gps2=a.blade_gps2), False)
+        return
+    blade = None
+    if a.blade_servo is not None:
+        from .runtime.blade import Blade
+        if a.blade_height is None:
+            raise ValueError("--blade-servo needs --blade-height (measure it with --blade-zero)")
+        blade = Blade(grid, a.blade_height, pwm, a.blade_travel, a.blade_reach)
+    run_mavlink(model, a.machine, a.broker, a.vehicle, frame, a.min_fix, a.sim_world,
+                setup=not a.no_vehicle_setup, blade=blade, blade_servo=a.blade_servo, blade_gps2=a.blade_gps2)
+
+
+def cmd_conform(model, a) -> None:
+    """`loam conform`: play the controller for one machine and check that it keeps its side of Loam Wire. Exits
+    with status 1 unless every check passed."""
+    from .conform import conform
+    quiet = (lambda line: None) if a.json else print
+    quiet(f"checking {a.machine} on {a.broker}: it will drive short passes across the window")
+    r = conform(model, a.machine, a.broker, a.window, a.timeout, quiet)
+    if a.json:
+        print(json.dumps(r, indent=2))
+    else:
+        print(f"{r['passed']} passed, {r['failed']} failed, {r['not_tested']} not tested")
+    if r["failed"] or r["not_tested"] or not r["passed"]:
+        sys.exit(1)
 
 
 def cmd_vda5050(model, a) -> None:
@@ -891,6 +960,13 @@ def cmd_opera(model, a) -> None:
               os.path.dirname(os.path.abspath(a.file)), a.dump, urdf, a.sim_world)
 
 
+def cmd_nav2(model, a) -> None:
+    """`loam nav2`: make any ROS 2 vehicle that runs Nav2 one of the program's machines. It is `loam opera`'s
+    carrier without the parts that are particular to OPERA's machines."""
+    a.kind, a.dump, a.urdf = "carrier", False, None
+    cmd_opera(model, a)
+
+
 def cmd_monitor(model, a) -> None:
     """`loam monitor`: serve the live dashboard, or build a replay page from a recording."""
     from . import monitor
@@ -913,6 +989,7 @@ def cmd_role(model, a) -> None:
 FIELD_COMMANDS = {"run": cmd_run, "simulate-site": cmd_simulate_site, "mavlink": cmd_mavlink, "vda5050": cmd_vda5050,
                   "soil-calibrate": cmd_soil_calibrate, "opera": cmd_opera,
                   "resume": cmd_resume, "estop": cmd_estop, "sense": cmd_sense, "broker": cmd_broker,
+                  "conform": cmd_conform, "nav2": cmd_nav2,
                   "_role": cmd_role, "monitor": cmd_monitor,
                   "export": cmd_export, "terrain": cmd_terrain, "score": cmd_score, "nmea": cmd_nmea}
 

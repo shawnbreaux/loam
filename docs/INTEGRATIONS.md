@@ -7,7 +7,9 @@ never links them.
 
 | Integration | What Loam does with it | Install | Licence | Tested against |
 | --- | --- | --- | --- | --- |
-| ArduPilot Rover (MAVLink 2) | `loam mavlink`: a vehicle is a Loam machine | `.[mavlink]` | pymavlink LGPL-3.0 | ArduPilot Rover SITL |
+| ArduPilot Rover (MAVLink 2) | `loam mavlink`: a vehicle is a Loam machine; `--blade-servo` holds its blade to the next-pass surface | `.[mavlink]` | pymavlink LGPL-3.0 | ArduPilot Rover SITL; a fake ArduPilot for the blade |
+| Nav2 (any ROS 2 vehicle) | `loam nav2`: the vehicle is a Loam machine | ROS 2 env | Apache-2.0 | Nav2 and ros2_control (as `loam opera`) |
+| Any machine speaking Loam Wire | `loam conform`: eight checks that it keeps its side of the wire | `.[run]` | Apache-2.0 | a conforming bridge, a careless machine, none |
 | OPERA (PWRI, ROS 2) | `loam opera`: IC120 carriers on Nav2, the ZX200 excavator's arm | ROS 2 env | Apache-2.0 | Nav2 and ros2_control |
 | Nav2 Collision Monitor | `loam opera` reports its stops; the order carries on afterwards | ROS 2 env | Apache-2.0 | Nav2 Jazzy, simulated scanner |
 | Project Chrono | `loam soil-calibrate`: roller compaction per pass from SCM soil | conda env | BSD-3 | Bekker–Wong closed form |
