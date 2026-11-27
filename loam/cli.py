@@ -15,6 +15,7 @@ commands that need them, so `loam check` starts fast and works with nothing but 
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import sys
@@ -88,8 +89,12 @@ def main(argv=None) -> None:
             p.add_argument("--quiet", action="store_true", help="no event log")
     add_field_commands(sub)
     a = ap.parse_args(argv)
-    if a.cmd == "plan":
-        cmd_plan(a)
+    if a.cmd in STANDALONE:                      # commands that do not start from a program
+        try:
+            STANDALONE[a.cmd](a)
+        except (ValueError, OSError) as e:
+            print(f"loam {a.cmd}: {e}", file=sys.stderr)
+            sys.exit(1)
         return
     model = load(a.file)
     if a.cmd in LONG_RUNNING:
@@ -212,7 +217,8 @@ def load_ground(path: str, grid, frame, a):
         z = fill_gaps(geotiff_ground(path, grid, frame, src), a.fill)
         return z, {"source": "geotiff", "file": os.path.basename(path),
                    "cells_covered_pct": round(100 * float(np.isfinite(z).mean()), 2)}
-    z, info = grid_cloud(path, grid, frame, a.stat, a.ground_only, pmf=pmf, src_crs=src)
+    z, info = grid_cloud(path, grid, frame, a.stat, a.ground_only, pmf=pmf, src_crs=src,
+                         objects=getattr(a, "objects", False))
     return fill_gaps(z, a.fill), {"source": "point cloud", **info}
 
 
@@ -243,6 +249,31 @@ def add_field_commands(sub) -> None:
     p.add_argument("--max-cells", type=int, default=40_000, help="grid size limit (default 40000 cells)")
     p.add_argument("--name", help="site name (default: from the file name)")
     p.add_argument("--json", action="store_true")
+    p = sub.add_parser("level", help="design a levelled field from its ground (LandXML or GeoTIFF) and write the "
+                                     "Loam program")
+    p.add_argument("ground", help="the ground: a LandXML surface, or a GeoTIFF elevation model (USGS 3DEP, drone)")
+    p.add_argument("-o", "--out", required=True, help="the .loam program to write (design files go beside it)")
+    p.add_argument("--boundary", help="the field: GeoJSON, KML, KMZ or shapefile (default: all the ground covers)")
+    p.add_argument("--surface", help="surface name, for a LandXML file with several")
+    p.add_argument("--min-slope", type=float, default=0.0, metavar="PCT", help="least grade, percent (default 0)")
+    p.add_argument("--max-slope", type=float, metavar="PCT", help="steepest grade, percent (default: no limit)")
+    p.add_argument("--fall", type=float, metavar="DEG",
+                   help="bearing the field should drain toward, degrees clockwise from north (default: the way "
+                        "the ground already falls)")
+    p.add_argument("--cross-slope", type=float, metavar="PCT", help="limit on the grade across --fall, percent")
+    p.add_argument("--cut-fill", type=float, default=1.3, metavar="RATIO",
+                   help="cut over fill, to allow for soil packing down in the fills (default 1.3)")
+    p.add_argument("--edge", metavar="WIDTH", help="blend into the ground over this width at the edge, e.g. '20 ft'")
+    p.add_argument("--units", choices=["ft", "usft", "m"], help="length unit, if the ground file does not say")
+    p.add_argument("--height-unit", choices=["ft", "usft", "m"],
+                   help="unit of a raster's heights, if it differs from its map unit")
+    p.add_argument("--compaction", action="store_true",
+                   help="roll the fills to 95 %% (a building pad or yard; cropland is left unrolled)")
+    p.add_argument("--fleet", help="Loam machine and probe declarations (default: 2 dozers, mast lidar)")
+    p.add_argument("--tolerance", help="finish tolerance, e.g. '0.1 ft' or '3 cm'")
+    p.add_argument("--max-cells", type=int, default=40_000, help="grid size limit (default 40000 cells)")
+    p.add_argument("--name", help="site name (default: from the output file name)")
+    p.add_argument("--json", action="store_true")
     p = sub.add_parser("export", help="write a surface or field files for grade-control and guidance tools")
     p.add_argument("file")
     p.add_argument("--to", required=True, choices=["landxml", "agd", "agopengps", "geotiff", "geojson"],
@@ -269,6 +300,9 @@ def add_field_commands(sub) -> None:
                    help="CLOUD is a folder: publish every scan that appears in it, until stopped (needs --broker)")
     p.add_argument("--settle", type=float, default=2.0, metavar="S",
                    help="with --watch: a file counts as complete once it has not changed for S seconds")
+    p.add_argument("--objects", action="store_true",
+                   help="clouds, with --ground-filter and --broker: also publish the person-sized things standing "
+                        "on the ground, as sightings for `loam sense --tags` to match with phones")
     p.add_argument("--max-seconds", type=float, help=argparse.SUPPRESS)       # for tests: stop --watch after this
     _frame_args(p)
     _ground_args(p)
@@ -340,9 +374,13 @@ def add_field_commands(sub) -> None:
     p.add_argument("--etc", default="/etc/mosquitto", help="where install.sh puts the files (default: /etc/mosquitto)")
     p.add_argument("--port", type=int, default=8883)
     p.add_argument("--json", action="store_true")
-    p = sub.add_parser("sense", help="site sensors as Wire messages: people from Frigate cameras, rain from rtl_433")
+    p = sub.add_parser("sense", help="site sensors as Wire messages: people from Frigate cameras and from their "
+                                     "phones or trackers, rain from rtl_433")
     p.add_argument("file")
     p.add_argument("--broker", default="localhost:1883")
+    p.add_argument("--tags", help='people by what they carry: JSON file, {"people": {"sam": {"owntracks": '
+                                  '"sam/phone", "wifi": "aa:bb:cc:dd:ee:ff", "meshtastic": "!a1b2c3d4"}}, "wifi": '
+                                  '{"aps": {"barn": {"x": 40, "y": 120}}}} (see docs/FIELD.md)')
     p.add_argument("--areas", help='people: JSON file placing Frigate\'s cameras and zones on the site, '
                                    '{"cameras": {"yard": {"x": 80, "y": 50, "radius": 60, "zones": {...}}}}')
     p.add_argument("--frigate-prefix", default="frigate", help="Frigate's MQTT topic prefix")
@@ -351,6 +389,11 @@ def add_field_commands(sub) -> None:
     p.add_argument("--gauge", metavar="MODEL[:ID]", help="the rain gauge to use (default: the first one heard)")
     p.add_argument("--name", default="sense", help="this sensor's name in the messages")
     p.add_argument("--max-seconds", type=float, help=argparse.SUPPRESS)       # for tests
+    p.add_argument("--json", action="store_true")
+    _frame_args(p)
+    p = sub.add_parser("wifi-fit", help="fit the Wi-Fi distance model to a walk: a CSV of distance in metres and "
+                                        "signal in dBm, one pair per line")
+    p.add_argument("walk", help="CSV file: distance_m,rssi_dbm")
     p.add_argument("--json", action="store_true")
     p = sub.add_parser("opera", help="drive an OPERA (ROS 2) machine as a Loam machine: IC120 carrier, ZX200")
     p.add_argument("file")
@@ -410,6 +453,21 @@ def cmd_plan(a) -> None:
         r = plan(a.file, a.out, a.design, a.existing, a.existing_file, a.fleet, a.tolerance, a.max_cells, a.name)
     except (ValueError, OSError) as e:
         print(f"loam plan: {e}", file=sys.stderr)
+        sys.exit(1)
+    load(r["out"])          # parses and checks; exits with the diagnostics if the program is wrong
+    r["check"] = "ok"
+    _show(r, a.json)
+
+
+def cmd_level(a) -> None:
+    """`loam level`: design a levelled field from its ground, write the program, then check what was written."""
+    from .level import level
+    try:
+        r = level(a.ground, a.out, a.surface, a.boundary, a.units, a.height_unit, a.min_slope, a.max_slope,
+                  a.fall, a.cross_slope, a.cut_fill, a.edge, a.fleet, a.tolerance, a.max_cells, a.name,
+                  a.compaction)
+    except (ValueError, OSError) as e:
+        print(f"loam level: {e}", file=sys.stderr)
         sys.exit(1)
     load(r["out"])          # parses and checks; exits with the diagnostics if the program is wrong
     r["check"] = "ok"
@@ -481,8 +539,16 @@ def cmd_terrain(model, a) -> None:
         processed. The controller needs that to know which passes the scan already shows.
         """
         z, info = load_ground(path, grid, frame, a)
+        if a.objects:
+            # The things standing on the ground in this scan, as a sightings picture (see loam.tags). It goes out
+            # with the terrain message, on its own topic, and is not part of Loam Wire.
+            info["sightings"] = (f"sightings/{probe}", {"t": os.path.getmtime(path), "objects": [
+                {k: o[k] for k in ("x", "y", "r")} for o in info.get("objects", [])]})
         return z, info, wire.terrain(site, probe, seq, (grid.x0, grid.y0), grid.cell, grid.shape,
                                      data=wire.encode_heights(z), ts=os.path.getmtime(path))
+
+    if a.objects and not (a.broker and a.ground_filter):
+        raise ValueError("--objects needs --ground-filter and --broker")
 
     if a.watch:
         if not a.broker or not os.path.isdir(a.cloud):
@@ -490,6 +556,7 @@ def cmd_terrain(model, a) -> None:
         _watch_scans(a, topic, message)
         return
     z, info, msg = message(a.cloud, 1)
+    seen = info.pop("sightings", None)
     if a.wire:
         with open(a.wire, "a", encoding="utf-8") as f:
             f.write(_json.dumps({"topic": topic, "payload": msg}) + "\n")
@@ -502,6 +569,8 @@ def cmd_terrain(model, a) -> None:
         bus = Bus(a.broker, f"loam-terrain-{os.getpid()}").start([])
         try:
             bus.pub(topic, msg, qos=1, wait=10.0)
+            if seen:
+                bus.pub(seen[0], seen[1], qos=1, wait=10.0)
         finally:
             bus.stop()
         info["published"] = topic
@@ -546,6 +615,8 @@ def _watch_scans(a, topic: str, message) -> None:
                     print(f"loam terrain: skipped {path}: {e}", file=sys.stderr, flush=True)
                     continue
                 bus.pub(topic, msg, qos=1, wait=10.0)
+                if "sightings" in info:
+                    bus.pub(info["sightings"][0], info["sightings"][1], qos=1, wait=10.0)
                 print(f"published {os.path.basename(path)} ({info.get('source', 'scan')})", flush=True)
             for path in set(done) - set(scans()):               # forget files that were removed
                 del done[path]
@@ -776,9 +847,34 @@ def cmd_sense(model, a) -> None:
     detection and weather messages, until stopped.
     """
     from .sensors import load_areas, run_sense
+    tags = None
+    if a.tags:
+        from .tags import Tags
+        g = _grid(model, a)
+        with open(a.tags, encoding="utf-8") as f:
+            tags = Tags(json.load(f), _frame(g, a), g.u, (g.x0, g.y0, g.x1, g.y1), model.site["name"])
     sent = run_sense(model, a.broker, load_areas(a.areas) if a.areas else None, a.frigate_prefix, a.rain, a.gauge,
-                     a.name, a.max_seconds)
+                     a.name, a.max_seconds, tags)
     _show({"sent": sent}, a.json)
+
+
+def cmd_wifi_fit(a) -> None:
+    """`loam wifi-fit`: fit the Wi-Fi distance model to a walk with a phone, and print the three numbers for the
+    tags file. Lines that are not two numbers (a header) are skipped.
+    """
+    from .tags import K_SIGMA, fit_path_loss, wifi_range
+    samples = []
+    with open(a.walk, encoding="utf-8-sig") as f:
+        for line in f:
+            parts = line.replace(";", ",").split(",")
+            with contextlib.suppress(ValueError, IndexError):
+                samples.append((float(parts[0]), float(parts[1])))
+    rssi_1m, exponent, sigma = fit_path_loss(samples)
+    out = {"samples": len(samples), "rssi_1m": round(rssi_1m, 1), "exponent": round(exponent, 2),
+           "sigma_db": round(sigma, 1),
+           "radius_m": {f"at {r} dBm": round(wifi_range(r, rssi_1m, exponent, sigma, K_SIGMA), 1)
+                        for r in (-50, -60, -70, -80)}}
+    _show(out, a.json)
 
 
 def cmd_opera(model, a) -> None:
@@ -819,6 +915,10 @@ FIELD_COMMANDS = {"run": cmd_run, "simulate-site": cmd_simulate_site, "mavlink":
                   "resume": cmd_resume, "estop": cmd_estop, "sense": cmd_sense, "broker": cmd_broker,
                   "_role": cmd_role, "monitor": cmd_monitor,
                   "export": cmd_export, "terrain": cmd_terrain, "score": cmd_score, "nmea": cmd_nmea}
+
+
+# Sub-commands that take something other than a program.
+STANDALONE = {"plan": cmd_plan, "level": cmd_level, "wifi-fit": cmd_wifi_fit}
 
 
 def print_report(r: dict) -> None:

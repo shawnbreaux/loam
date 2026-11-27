@@ -105,8 +105,10 @@ def grid_tin(xs: np.ndarray, ys: np.ndarray, z: np.ndarray) -> tuple[np.ndarray,
     return pts[used], remap[faces]
 
 
-def write_tin(path: str, name: str, pts: np.ndarray, faces: np.ndarray, units: str = "ft", digits: int = 3) -> None:
-    """Write a TIN surface (pts[N] as x, y, z; faces[M] as point indices) to LandXML 1.2."""
+def write_tin(path: str, name: str, pts: np.ndarray, faces: np.ndarray, units: str = "ft", digits: int = 3,
+              epsg: str | None = None) -> None:
+    """Write a TIN surface (pts[N] as x, y, z; faces[M] as point indices) to LandXML 1.2. `epsg` records the
+    coordinate system the points are in, by its EPSG code."""
     linear = LINEAR_UNITS.get(units)
     if linear is None:
         raise ValueError(f"no LandXML unit for {units!r}")
@@ -116,6 +118,8 @@ def write_tin(path: str, name: str, pts: np.ndarray, faces: np.ndarray, units: s
     ET.SubElement(u, "Imperial" if imperial else "Metric",
                   {"linearUnit": linear, "areaUnit": "squareFoot" if imperial else "squareMeter",
                    "volumeUnit": "cubicYard" if imperial else "cubicMeter"})
+    if epsg:
+        ET.SubElement(lx, "CoordinateSystem", {"epsgCode": str(epsg)})
     s = ET.SubElement(ET.SubElement(lx, "Surfaces"), "Surface", {"name": name})
     d = ET.SubElement(s, "Definition", {"surfType": "TIN"})
     pnts, fcs = ET.SubElement(d, "Pnts"), ET.SubElement(d, "Faces")

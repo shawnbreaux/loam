@@ -159,7 +159,8 @@ def lanes(port, out, host="localhost"):
     """Check the access rules on a running broker: a machine can report its own state and read its own orders,
     and nothing more. It cannot order another machine (or itself), speak for another machine, or read another
     machine's orders. The supervisor can stop and resume but not order; sensors can report but not command;
-    the camera system cannot pose as a machine.
+    the camera system cannot pose as a machine. Phones and access points can say where a device is and nothing
+    else: only the site's own sensors can publish what a lidar or camera saw.
     """
     t = lambda machine, kind: wire.topic("s", machine, kind)                 # noqa: E731
     ctl = client(port, out, "controller", ["loam/v0/#"], host=host)
@@ -168,6 +169,8 @@ def lanes(port, out, host="localhost"):
     dz2 = client(port, out, "dz2", [t("dz2", "order")], host=host)
     sup, sen = client(port, out, "supervisor", host=host), client(port, out, "sensors", host=host)
     cam = client(port, out, "frigate", [t(None, "estop"), "frigate/#"], host=host)
+    ears = client(port, out, "sensors", ["owntracks/#", "wifi/#", "sightings/#"], host=host)
+    trk = client(port, out, "trackers", ["loam/v0/#", "owntracks/#", "sightings/#"], host=host)
     try:
         time.sleep(0.3)
         # what must work
@@ -180,7 +183,15 @@ def lanes(port, out, host="localhost"):
         assert got(dz1, t(None, "estop")) == [{"pressed": True}]
         sen.pub(t(None, "detection"), {"kind": "person"}, qos=1)
         assert got(ctl, t(None, "detection")) == [{"kind": "person"}]
+        trk.pub("owntracks/sam/phone", {"lat": 34.5}, qos=1)
+        assert got(ears, "owntracks/sam/phone") == [{"lat": 34.5}]
+        trk.pub("wifi/barn", {"clients": {}}, qos=1)
+        assert got(ears, "wifi/barn") == [{"clients": {}}]
+        sen.pub("sightings/mast", {"objects": []}, qos=1)
+        assert got(ears, "sightings/mast") == [{"objects": []}]
         # what must not
+        trk.pub("sightings/mast", {"forged": 9}, qos=1)                      # a phone cannot say what a lidar saw
+        trk.pub(t(None, "detection"), {"forged": 10}, qos=1)                 # nor report a detection
         dz1.pub(t("dz2", "order"), {"forged": 1}, qos=1)                     # order another machine
         dz1.pub(t("dz1", "order"), {"forged": 2}, qos=1)                     # order itself
         dz1.pub(t("dz2", "state"), {"forged": 3}, qos=1)                     # speak for another machine
@@ -192,12 +203,13 @@ def lanes(port, out, host="localhost"):
         ctl.pub(t("dz2", "order"), {"order": 2}, qos=1)                      # the one genuine order
         assert got(dz2, t("dz2", "order")) == [{"order": 2}]
         time.sleep(0.5)
-        seen = ctl.drain() + dz2.drain() + dz1.drain()
+        seen = ctl.drain() + dz2.drain() + dz1.drain() + ears.drain()
+        assert not trk.drain()                                               # and it is told nothing at all
         assert not [tp for tp, _ in cam.drain() if tp.startswith("loam/")]  # it was sent the e-stop above: not for it
         assert not [m for _, m in seen if "forged" in m], seen
         assert not [m for tp, m in seen if tp == t("dz2", "order") and m != {"order": 2}]
     finally:
-        for b in (ctl, dz1, dz2, sup, sen, cam):
+        for b in (ctl, dz1, dz2, sup, sen, cam, ears, trk):
             b.stop()
 
 
@@ -283,7 +295,7 @@ def test_broker_command(tmp_path, capsys):
     out = str(tmp_path / "b")
     main(["broker", os.path.join(ROOT, "examples", "pad_north.loam"), "--host", "site-server", "--out", out])
     said = capsys.readouterr().out
-    assert "8 clients" in said and f"sudo sh {out}/install.sh" in said and "mqtts://<name>@site-server" in said
+    assert "9 clients" in said and f"sudo sh {out}/install.sh" in said and "mqtts://<name>@site-server" in said
     assert os.path.exists(os.path.join(out, "install.sh"))
 
 

@@ -43,7 +43,11 @@ name (`FG`, `Proposed`, `EG`, `Existing`, ...), or takes `--design` / `--existin
 - marks everything the file cannot tell it, such as fleet, stockpile location and coordinate system,
   with `# CHECK:`, and checks the program before returning.
 
-A fleet file is plain Loam: `machine` and `probe` declarations.
+A fleet file is plain Loam: `machine` and `probe` declarations. Tasks go to `class dozer` when the fleet has
+one, and otherwise to whatever machines have the capability (`by cap cut`), so a scraper and a grader will do.
+
+With no grading model at all, `loam level` makes the design from the ground (a plane with a set fall, cut
+balanced against fill) and then plans it the same way. See "A field with no design" in [FIELD.md](FIELD.md).
 
 ## 2. Control: `loam run`
 

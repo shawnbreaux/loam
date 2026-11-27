@@ -90,13 +90,15 @@ These are results of a simplified model with assumed soil factors, not field mea
 | `loam check`, `explain`, `compile` | Check a program; describe it in plain English; write its execution manifest |
 | `loam sim` | The reference simulator, in one process (closed or open loop) |
 | `loam plan` | Write a site program from a grading LandXML (existing and design surfaces) |
+| `loam level` | Design a levelled field from its ground alone (a free elevation model and a boundary traced in Google Earth), and write its program |
 | `loam run` | The site controller: orders, replans and safety rules over MQTT |
 | `loam simulate-site` | A simulated site to run the controller against: world, lidar probe, one process per machine, scripted faults |
 | `loam monitor` | Live web dashboard, Prometheus metrics, replay pages, MCAP recording |
 | `loam mavlink`, `vda5050`, `opera` | Drive a real vehicle as a Loam machine: ArduPilot Rover, VDA 5050 robots, OPERA machines on ROS 2 |
 | `loam nmea` | Publish an RTK receiver's position as a machine's state |
-| `loam terrain` | Grid a lidar scan onto the site; publish scans as they are written (`--watch`) |
-| `loam sense` | People from Frigate cameras and rain from an rtl_433 gauge, as Wire messages |
+| `loam terrain` | Grid a lidar scan onto the site; publish scans as they are written (`--watch`), with the person-sized things in them (`--objects`) |
+| `loam sense` | People from Frigate cameras, from their phones and trackers, and the two matched; rain from an rtl_433 gauge |
+| `loam wifi-fit` | Measure a site's Wi-Fi signal model from a walk, for locating phones |
 | `loam estop`, `resume` | Press or release the site e-stop; restart machines after a stop |
 | `loam broker` | Write a secured Mosquitto setup for the site, with its install script |
 | `loam export`, `score` | Next-pass surfaces and field files for grade control; score a survey against the design |
@@ -134,8 +136,9 @@ loam broker job.loam --host site-server --address 192.168.1.10 && sudo sh broker
 loam mavlink job.loam --machine dz1 --vehicle udp:127.0.0.1:14550 --broker mqtts://dz1@site-server
 
 # 3. Ground, people, rain
-loam terrain job.loam scans/ --watch --ground-filter --broker mqtts://sensors@site-server
-loam sense   job.loam --areas cameras.json --rain   --broker mqtts://sensors@site-server
+loam terrain job.loam scans/ --watch --ground-filter --objects --broker mqtts://sensors@site-server
+loam sense   job.loam --areas cameras.json --tags people.json --rain --origin LAT,LON \
+             --broker mqtts://sensors@site-server
 
 # 4. The controller, the dashboard with a recording of every message, and the e-stop
 loam run     job.loam --real-time --broker mqtts://controller@site-server
@@ -149,6 +152,11 @@ loam estop   job.loam                            --broker mqtts://supervisor@sit
 - **What cannot be seen is unsafe.** A blind camera, a silent camera system or a stopped sensor program counts
   as a person there. A machine whose clock is more than 2 s off gets no orders. Stale survey data holds
   every machine.
+- **People are found two ways and the two are compared.** Phones (OwnTracks, Wi-Fi signal, Meshtastic) say who
+  is on the site and roughly where; cameras calibrated to the ground and lidar scans say exactly where someone
+  stands. Where everyone on foot is tagged, a phone's wide circle becomes the place the person is seen, and a
+  phone heard where nobody is seen stops the machines. Wi-Fi alone places nobody: its circle is about 170 m
+  across a site. See "People on foot" in [docs/FIELD.md](docs/FIELD.md).
 - **Nothing depends on one message.** A machine announces itself again after every reconnect, sensors repeat
   what they see, and the e-stop is retained, so a dropped radio link or a restarted broker heals by itself.
 
@@ -226,12 +234,14 @@ Every integration is an optional, FOSS extra (`pip install "loam-lang[all]"`); t
 | `loam/wire.py` | Loam Wire message builders |
 | `loam/grid.py`, `loam/geo.py` | The site height grid; placing it on WGS84 and projected coordinates |
 | `loam/pointcloud.py` | Streaming LAS/LAZ and PCD readers (DJI L2, Livox Mid-360), gridding, ground filter |
-| `loam/surfaces.py` | IFC 4.3 and GeoTIFF surfaces, GeoJSON areas, GeoTIFF and GeoJSON export |
+| `loam/surfaces.py` | IFC 4.3 and GeoTIFF surfaces; GeoJSON, KML and shapefile areas; GeoTIFF and GeoJSON export |
 | `loam/survey.py` | Emlid/RTK survey CSV, NMEA GGA to Wire state, scoring against design |
 | `loam/plan.py` | `loam plan`: grading LandXML to a site program |
+| `loam/level.py` | `loam level`: a levelling design (best-fit plane, slope limits, cut/fill balance) from the ground alone |
 | `loam/runtime/` | Controller over MQTT, simulated world, machines (optionally PyBullet physics) and probe |
 | `loam/runtime/bridge.py`, `mavlink.py`, `vda5050.py`, `opera.py` | Real vehicles as Loam machines: one safety loop, three protocols |
-| `loam/sensors.py` | `loam sense`: people from Frigate, rain from rtl_433, as Wire messages |
+| `loam/sensors.py` | `loam sense`: people from Frigate (placed on the ground by calibrated cameras), rain from rtl_433, as Wire messages |
+| `loam/tags.py` | People located by phone, Wi-Fi and tracker; matching them with what lidar and cameras see; the Wi-Fi model learnt on site |
 | `loam/wirelog.py` | MCAP recorder for Wire messages |
 | `loam/broker.py` | `loam broker`: certificates, passwords, access rules and install script for the site's Mosquitto |
 | `loam/runtime/chrono_soil.py` | Roller compaction curves from Project Chrono's SCM soil model |
@@ -240,13 +250,13 @@ Every integration is an optional, FOSS extra (`pip install "loam-lang[all]"`); t
 | `loam/monitor.py`, `loam/monitor.html` | Live dashboard and replay pages |
 | `loam/target.py`, `loam/export.py` | Next-pass surface; LandXML (Cat Grade 3D), OpenGrade3D `.agd`, AgOpenGPS field folder |
 | `examples/` | Example program and surfaces, comparison plot, Monte Carlo study |
-| `tests/` | 203 tests: language, I/O, simulator invariants, field adapters, planner, controller loopback, a full multi-process MQTT run with faults in which every message is validated against the schema, reconnects and restarts, vehicle bridges (ArduPilot SITL and a fake ArduPilot, VDA 5050, RTKLIB, OPERA on Nav2 and ros2_control, ArduPilot fences and failsafe, Nav2's Collision Monitor), e-stop and SIGTERM safety, a TLS broker with access rules (also on a system-installed Mosquitto), site sensors (a stand-in Frigate, rtl_433 on recorded gauges), Chrono soil, integrations (PDAL cross-check included), parser fuzzing; every test also fails on a leaked thread, process or file |
+| `tests/` | 247 tests: language, I/O, simulator invariants, field adapters, planner, field levelling from rasters and boundary files, controller loopback, a full multi-process MQTT run with faults in which every message is validated against the schema, reconnects and restarts, vehicle bridges (ArduPilot SITL and a fake ArduPilot, VDA 5050, RTKLIB, OPERA on Nav2 and ros2_control, ArduPilot fences and failsafe, Nav2's Collision Monitor), e-stop and SIGTERM safety, a TLS broker with access rules (also on a system-installed Mosquitto), site sensors (a stand-in Frigate, rtl_433 on recorded gauges), people located by phone and matched with cameras and scans (3,000 random sites), Chrono soil, integrations (PDAL cross-check included), parser fuzzing; every test also fails on a leaked thread, process or file |
 
 ## Development
 
 ```bash
 pip install -e ".[dev]"
-pytest -q --cov=loam          # 203 tests, about 6 min; the MQTT tests need mosquitto
+pytest -q --cov=loam          # 247 tests, about 6 min; the MQTT tests need mosquitto
 python tools/site_soak.py out/ --speed 60     # a whole simulated site, watched; about 4 min
 ruff check loam tests examples
 mypy loam

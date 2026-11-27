@@ -3,6 +3,38 @@
 All notable changes are recorded here. The project follows [Semantic Versioning](https://semver.org/);
 before 1.0 any minor release may change the language.
 
+## [Unreleased]
+
+Added
+- **People located by what they carry.** `loam sense --tags people.json` reports each listed person as a circle
+  from the phone's GPS (OwnTracks), the Wi-Fi signal the site's access points hear (OpenWrt's hostapd table, or
+  single readings), or a Meshtastic tracker. The circle grows at walking pace while the device is silent. An
+  access point on a machine works as a proximity sensor. `loam wifi-fit` measures the signal model from a walk,
+  and the model is also learnt on site from people whose place is known.
+- **Phones matched with lidar and cameras.** A camera with ground calibration points places each person it
+  sees on the site; `loam terrain --objects` publishes the person-sized things in each scan; any other detector
+  can publish to `sightings/<name>`. Every sighting is a keep-out. On a site declared `everyone_tagged`, a
+  phone's wide circle becomes the place its owner is seen, and a phone heard where nobody is seen, or more
+  phones than people seen, keeps the wide circle.
+- **`loam level`.** A levelling design from the ground alone: a best-fit plane within slope limits, cut
+  balanced against fill, optionally blended into the ground at the edge. Ground from LandXML or a GeoTIFF
+  elevation model (USGS 3DEP, OpenDroneMap); boundary from KML, KMZ, shapefile or GeoJSON.
+- `loam plan` writes programs without compaction (`compaction=False`, used for cropland) and for fleets without
+  dozers (tasks by capability).
+- Shapefile area files (`area file "zone.shp"`, optional extra `shp`).
+- Broker: a `trackers` account for phones and access points, which can report positions and nothing else.
+
+Changed
+- Reading a GeoTIFF reads only the block of pixels needed, not the whole tile (a 3DEP tile is 100 million
+  pixels).
+- The stale-data rule `loam plan` writes follows the probe's own `stale_after`.
+
+Found while testing
+- Wi-Fi signal strength cannot place a person across a site: three access points 120 m apart leave a circle
+  about 170 m in radius. It is tight only close to an access point.
+- The default Wi-Fi model is a guess. On a simulated site where signal carries farther than it assumes, its
+  circles held the phone 8 % of the time; the model learnt on that site, 99 %.
+
 ## [0.0.8] - 2026-11-27
 
 Found by running a complete job on the example site as separate processes over a broker, for up to

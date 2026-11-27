@@ -15,6 +15,7 @@ the site with `Frame.projected_to_local`.
 """
 from __future__ import annotations
 
+import math
 import os
 import struct
 from collections.abc import Iterator
@@ -224,14 +225,16 @@ def read_points(path: str, ground_only: bool = False, chunk: int = CHUNK) -> Ite
 
 # -- gridding -------------------------------------------------------------------------
 class Binner:
-    """Streams points into per-cell count, mean and minimum height."""
+    """Streams points into per-cell count, mean and minimum height (and maximum, on request)."""
 
-    def __init__(self, grid: SiteGrid):
-        """Start with empty cells: point count, sum of heights and lowest height per cell."""
+    def __init__(self, grid: SiteGrid, top: bool = False):
+        """Start with empty cells: point count, sum of heights and lowest height per cell. With `top`, the highest
+        point per cell is kept too, for finding what stands on the ground."""
         self.g = grid
         self.n = np.zeros(grid.nx * grid.ny, np.int64)
         self.s = np.zeros(grid.nx * grid.ny)
         self.lo = np.full(grid.nx * grid.ny, np.inf)
+        self.hi = np.full(grid.nx * grid.ny, -np.inf) if top else None
         self.seen = self.used = 0
 
     def add(self, x: Grid, y: Grid, z: Grid) -> None:
@@ -247,6 +250,8 @@ class Binner:
         self.n += np.bincount(k, minlength=self.n.size)
         self.s += np.bincount(k, zz, minlength=self.s.size)
         np.minimum.at(self.lo, k, zz)
+        if self.hi is not None:
+            np.maximum.at(self.hi, k, zz)
 
     def result(self, stat: str = "mean", min_points: int = 1) -> tuple[Grid, NDArray[np.int64]]:
         """The height grid: the mean height per cell (`stat="mean"`) or the lowest (`"min"`), NaN where a cell has
@@ -276,8 +281,11 @@ def cloud_crs(path: str) -> str | None:
 
 def grid_cloud(path: str, grid: SiteGrid, frame: Frame, stat: str = "mean", ground_only: bool = False,
                min_points: int = 1, chunk: int = CHUNK, pmf: dict | None = None,
-               src_crs: str | None = None) -> tuple[Grid, dict]:
+               src_crs: str | None = None, objects: bool = False) -> tuple[Grid, dict]:
     """Rasterize a point cloud file onto the site grid. Returns (heights, stats).
+
+    With `objects` (and the ground filter), the stats also list the person-sized things standing on the ground,
+    as `standing_objects` finds them, in site coordinates.
 
     `pmf` = parameters for `ground_surface` (or {} for its defaults): a first pass finds the lowest point
     per cell, the morphological filter turns that into a ground surface, and the second pass keeps only
@@ -285,6 +293,9 @@ def grid_cloud(path: str, grid: SiteGrid, frame: Frame, stat: str = "mean", grou
     """
     if stat not in ("mean", "min"):
         raise ValueError("stat must be 'mean' or 'min'")
+    if objects and pmf is None:
+        raise ValueError("finding objects needs the ground filter (--ground-filter): they are what it removes")
+    standing: list[dict] = []
 
     src = src_crs or (cloud_crs(path) if frame.crs else None)
 
@@ -298,11 +309,16 @@ def grid_cloud(path: str, grid: SiteGrid, frame: Frame, stat: str = "mean", grou
             yield x, y, frame.height_to_local(h)
     ground = None
     if pmf is not None:
-        b0 = Binner(grid)
+        b0 = Binner(grid, top=objects)
         for x, y, z in points():
             b0.add(x, y, z)
         ground = ground_surface(b0.result("min")[0] * grid.u, grid.cell * grid.u, **pmf) / grid.u
         tol = pmf.get("dh_final", 0.15) / grid.u
+        if b0.hi is not None:
+            above = (b0.hi.reshape(grid.shape) - ground) * grid.u            # metres; -inf where nothing was seen
+            found = standing_objects(above, grid.cell * grid.u)
+            standing = [{"x": round(float(grid.x0 + cx / grid.u), 2), "y": round(float(grid.y0 + cy / grid.u), 2),
+                         "r": round(r / grid.u, 2), "height_m": round(h, 2)} for cx, cy, r, h in found]
     b = Binner(grid)
     for x, y, z in points():
         if ground is not None:
@@ -315,7 +331,53 @@ def grid_cloud(path: str, grid: SiteGrid, frame: Frame, stat: str = "mean", grou
     z, _ = b.result(stat, min_points)
     return z, {"points_read": int(b.seen if ground is None else b0.seen), "points_on_grid": int(b.used),
                "ground_filter": "pmf" if ground is not None else ("class 2" if ground_only else "none"),
-               "cells_covered_pct": round(100 * float(np.isfinite(z).mean()), 2)}
+               "cells_covered_pct": round(100 * float(np.isfinite(z).mean()), 2),
+               **({"objects": standing} if objects else {})}
+
+
+# What counts as person-sized, in metres: something this tall, on a footprint no wider than this.
+PERSON_HEIGHT_M = (0.8, 2.4)
+PERSON_WIDTH_M = 1.5
+STANDS_M = 0.3               # a cell holds part of an object if something in it is this far above the ground
+
+
+def standing_objects(above: Grid, cell_m: float, height: tuple[float, float] = PERSON_HEIGHT_M,
+                     width: float = PERSON_WIDTH_M) -> list[tuple[float, float, float, float]]:
+    """Person-sized things standing on the ground, from the height of the highest point in each cell above the
+    ground surface (metres). Returns (x, y, radius, height) for each, in metres from the grid's corner.
+
+    Cells with something standing in them are grouped into objects (cells that touch, corners included, are one
+    object). An object is person-sized if its footprint fits in a `width` square and its top is within `height`.
+    A machine is too wide, brush and stakes too low, a pole too tall. This is shape only: a barrel on end is
+    person-sized, and a person leaning on a machine is part of the machine. What it finds is a place to keep
+    clear of and to look at, not an identification.
+    """
+    up = np.isfinite(above) & (above >= STANDS_M)
+    out = []
+    ny, nx = up.shape
+    for j0, i0 in zip(*np.nonzero(up), strict=True):
+        if not up[j0, i0]:
+            continue                                     # already taken into an earlier object
+        # Flood fill from this cell: collect every touching cell that holds part of an object.
+        up[j0, i0] = False
+        todo, cells = [(int(j0), int(i0))], []
+        while todo:
+            j, i = todo.pop()
+            cells.append((j, i))
+            for a in range(max(j - 1, 0), min(j + 2, ny)):
+                for b in range(max(i - 1, 0), min(i + 2, nx)):
+                    if up[a, b]:
+                        up[a, b] = False
+                        todo.append((a, b))
+        js, is_ = np.array(cells).T
+        top = float(above[js, is_].max())
+        wide = (max(np.ptp(js), np.ptp(is_)) + 1) * cell_m
+        if wide <= max(width, cell_m) and height[0] <= top <= height[1]:
+            # The centre of the cells' bounding box, and a radius that reaches its corners.
+            cx, cy = (is_.min() + is_.max() + 1) / 2 * cell_m, (js.min() + js.max() + 1) / 2 * cell_m
+            r = math.hypot(np.ptp(is_) + 1, np.ptp(js) + 1) / 2 * cell_m
+            out.append((float(cx), float(cy), float(r), top))
+    return out
 
 
 def _morph(z: Grid, w: int, op) -> Grid:

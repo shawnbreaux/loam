@@ -31,7 +31,8 @@ from typing import Any
 
 ETC = "/etc/mosquitto"
 CA_DAYS, SERVER_DAYS = 3650, 825     # the authority lasts ten years; the broker's certificate is reissued by a rerun
-ROLES = ("controller", "supervisor", "sensors", "frigate", "rtl433")       # the clients that are not machines
+# The clients that are not machines.
+ROLES = ("controller", "supervisor", "sensors", "frigate", "rtl433", "trackers")
 
 ACL = """\
 # Who may publish and read what on a Loam site (written by `loam broker`; rerun it rather than editing).
@@ -60,12 +61,26 @@ topic write loam/v0/+/estop
 topic read frigate/#
 topic write frigate/onConnect
 topic read rtl_433/#
+# They also read where people's phones and trackers are, and where machines carrying an access point are, and
+# they exchange sightings (what a lidar or a camera sees): `loam terrain --objects` writes them, `loam sense` reads.
+topic read owntracks/#
+topic read wifi/#
+topic read msh/#
+topic read loam/v0/+/+/state
+topic readwrite sightings/#
 
 # The camera system and the weather receiver publish under their own prefixes only.
 user frigate
 topic readwrite frigate/#
 user rtl433
 topic write rtl_433/#
+
+# What people carry and what hears it: phones (OwnTracks), the access points' reports, the Meshtastic gateway.
+# They say where a device is and read nothing. They cannot publish a sighting.
+user trackers
+topic write owntracks/#
+topic write wifi/#
+topic write msh/#
 
 # Every machine: read its own orders and the site-wide safety topics, report its own state.
 # A machine cannot publish an order, not even to itself, and cannot speak for another machine.

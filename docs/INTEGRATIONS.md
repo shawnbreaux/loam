@@ -20,6 +20,13 @@ never links them.
 | PDAL | Classify ground with PDAL, then `--ground-only` | PDAL itself | BSD-3 | PDAL 2.10 `filters.smrf` |
 | QField / QGIS surveys | `--ground points.geojson`, `loam score points.geojson` | core | GPL (files only) | GeoJSON points |
 | Frigate | `loam sense --areas`: people seen by site cameras become `detection` messages | `.[run]` | MIT (Frigate, MQTT only) | Frigate's MQTT messages (source, v0.19-dev) |
+| OwnTracks | `loam sense --tags`: a phone's GPS position becomes a named person | `.[run]` | EPL-1.0 (app, MQTT only) | OwnTracks' documented JSON (booklet, tech/json.md) |
+| OpenWrt hostapd | `loam sense --tags`: which phones each access point hears, and how strongly | `.[run]` | BSD-3 (hostapd), GPL-2.0 (OpenWrt); not linked | hostapd's `get_clients` (source) |
+| Meshtastic | `loam sense --tags`: LoRa trackers as named people | `.[run]` | GPL-3.0 (firmware, MQTT only) | the firmware's JSON serializer (source) |
+| Sightings | Calibrated cameras, `loam terrain --objects` and any detector, matched with phones | `.[run]` | Apache-2.0 | synthetic camera and scans; 3,000 random sites |
+| USGS 3DEP and other DEMs | `loam level`: a levelling design from the ground alone | `.[raster]`, `.[crs]` | public domain data | synthetic rasters, projected and in degrees |
+| KML, KMZ | Field boundaries for `loam level` | core | open standard (OGC) | written in the test |
+| Shapefile (pyshp) | Field boundaries for `loam level`; `area file "x.shp"` | `.[shp]` | MIT | pyshp round trip |
 | rtl_433 | `loam sense --rain`: a wireless rain gauge becomes `weather` messages | `.[run]` | GPL-2.0 (rtl_433, MQTT only) | rtl_433 decoding recorded gauges |
 | Mosquitto with TLS | `loam broker` sets it up; `--broker mqtts://user@host`: encrypted, named clients, per-machine access rules | `.[run]`, openssl | EPL-2.0 / EDL-1.0 | Mosquitto 2.0, and Ubuntu's AppArmor-confined service in CI |
 | MCAP / Lichtblick | `loam monitor --mcap`: every Wire message in one log file | `.[mcap]` | MIT (Lichtblick MPL-2.0) | mcap's reader |
@@ -253,6 +260,12 @@ and each zone drawn in its picture, on the site as a circle, in site units:
 - Cameras miss people in dust, glare and darkness. This is supervision, not a safety function (ISO 13849). The
   e-stop and each machine's own protective devices stay in charge.
 
+**People by name, and exactly where.** `--tags people.json` adds what people carry (OwnTracks phones, Wi-Fi signal
+at the access points, Meshtastic trackers), and a camera with `"ground"` calibration points in the areas file
+places each person it sees on the ground. On a site where everyone on foot is tagged, the two are matched: a
+phone's wide circle becomes the place where a camera or lidar sees the person, and a phone that is heard where
+nobody is seen stays wide. See "People on foot" in [FIELD.md](FIELD.md) for the files, the rule and its limits.
+
 **Rain (rtl_433).** rtl_433 decodes inexpensive wireless weather stations with a USB radio receiver:
 
 ```
@@ -331,7 +344,7 @@ loam export site.loam --to landxml -o next.xml --ground odm_project/ --crs EPSG:
 
 - **IFC.** IFC surfaces are read through IfcOpenShell in world coordinates, in metres.
 - **GeoTIFF.** Rasters are sampled bilinearly in the site CRS.
-- **Area files.** Draw zones in QGIS and save them as GeoJSON in the site CRS. Use them with `area file "zone.geojson"`.
+- **Area files.** Draw zones in QGIS and save them as GeoJSON or a shapefile in the site CRS. Use them with `area file "zone.geojson"`. KML is always latitude and longitude, so it is accepted by `loam level --boundary`, which reprojects it, and refused as an area file.
 - **Exports.** `loam export --to geojson` writes the boundary, zones and stockpiles. `--to geotiff` writes the design or next-pass surface, georeferenced and rotated as the site is.
 
 ## Metrics

@@ -5,8 +5,10 @@
   export earthworks; needs `pip install ifcopenshell` (LGPL-3.0).
 * GeoTIFF elevation models (OpenDroneMap `odm_dem/dtm.tif`, QGIS, GDAL, most drone and lidar tools);
   needs `pip install rasterio` (BSD-3, bundles GDAL, MIT).
-* GeoJSON polygons for `area file "x.geojson"` (QGIS exports): built in. Coordinates are read as the
+* GeoJSON polygons for `area file "x.geojson"` (QGIS, farmOS exports): built in. Coordinates are read as the
   site's CRS, so export the layer in the site's CRS (QGIS: "Save Features As", CRS = project CRS).
+* Field boundaries as KML or KMZ (Google Earth, most farm apps): built in. Shapefiles (FSA common land units,
+  farm management software) need `pip install pyshp` (MIT).
 
 All readers return heights in site units on the caller's grid; cells a surface does not cover are NaN.
 """
@@ -14,6 +16,9 @@ from __future__ import annotations
 
 import json
 import os
+import struct
+import xml.etree.ElementTree as ET
+import zipfile
 from typing import Any
 
 import numpy as np
@@ -70,17 +75,25 @@ def raster_at(path: str, gx: np.ndarray, gy: np.ndarray) -> tuple[np.ndarray, st
         import rasterio
     except ImportError as e:
         raise ValueError("GeoTIFF surfaces need rasterio: pip install rasterio") from e
+    gx, gy = np.asarray(gx, float), np.asarray(gy, float)
     with rasterio.open(path) as src:
-        band = src.read(1, masked=True).astype(float).filled(np.nan)
         # The raster's transform maps pixel (column, row) to map coordinates; its inverse maps map coordinates to
         # pixels.
-        inv = ~src.transform
+        col, row = ~src.transform @ (gx.ravel(), gy.ravel())
+        col, row = np.asarray(col) - 0.5, np.asarray(row) - 0.5        # pixel centres
+        c0, r0 = np.floor(col).astype(int), np.floor(row).astype(int)
+        # Read only the block of pixels the points touch: an elevation tile is often a hundred million pixels, and
+        # a field is a corner of it.
+        ok = np.isfinite(col) & np.isfinite(row)
+        ca, ra = (max(int(v[ok].min()), 0) if ok.any() else 0 for v in (c0, r0))
+        cb, rb = (min(int(v[ok].max()) + 2, n) if ok.any() else 0 for v, n in ((c0, src.width), (r0, src.height)))
+        band = np.full((2, 2), np.nan)
+        if cb - ca >= 2 and rb - ra >= 2:
+            win = rasterio.windows.Window(ca, ra, cb - ca, rb - ra)
+            band = src.read(1, window=win, masked=True).astype(float).filled(np.nan)
         crs = src.crs.to_string() if src.crs else None
-    gx, gy = np.asarray(gx, float), np.asarray(gy, float)
-    col, row = inv @ (gx.ravel(), gy.ravel())
-    col, row = np.asarray(col) - 0.5, np.asarray(row) - 0.5        # pixel centres
-    c0, r0 = np.floor(col).astype(int), np.floor(row).astype(int)
-    tc, tr = col - c0, row - r0
+    c0, r0 = c0 - ca, r0 - ra
+    tc, tr = col - (c0 + ca), row - (r0 + ra)
     h, w = band.shape
     # Bilinear interpolation between the four pixel centres around each point; a point with any of the four off the
     # raster gets no value.
@@ -96,6 +109,26 @@ def raster_crs(path: str) -> str | None:
     import rasterio
     with rasterio.open(path) as src:
         return src.crs.to_string() if src.crs else None
+
+
+# The names GDAL gives a projected CRS's length unit, to Loam's.
+RASTER_UNITS = {"metre": "m", "meter": "m", "m": "m", "us survey foot": "usft", "foot_us": "usft", "foot": "ft"}
+
+
+def raster_info(path: str) -> dict:
+    """What an elevation raster says about itself: `crs` (string or None), `epsg` (or None), `geographic` (its
+    coordinates are longitude and latitude), `unit` of a projected CRS in Loam's names (or None), `bounds`
+    (west, south, east, north) and `res` (the larger side of a pixel), both in its own coordinates."""
+    try:
+        import rasterio
+    except ImportError as e:
+        raise ValueError("GeoTIFF surfaces need rasterio: pip install rasterio") from e
+    with rasterio.open(path) as src:
+        crs = src.crs
+        unit = RASTER_UNITS.get(str(crs.linear_units).lower()) if crs and crs.is_projected else None
+        return {"crs": crs.to_string() if crs else None, "epsg": crs.to_epsg() if crs else None,
+                "geographic": bool(crs and crs.is_geographic), "unit": unit,
+                "bounds": tuple(src.bounds), "res": float(max(abs(src.transform.a), abs(src.transform.e)))}
 
 
 def geotiff_ground(path: str, grid, frame, src_crs: str | None = None) -> np.ndarray:
@@ -175,15 +208,91 @@ def polygon_from_geojson(path: str) -> list[tuple[float, float]]:
     raise ValueError(f"{path}: no Polygon in the GeoJSON")
 
 
+def polygon_from_kml(path: str) -> list[tuple[float, float]]:
+    """Outer ring of the first Polygon in a KML or KMZ file (Google Earth, most farm apps), as (longitude,
+    latitude), closing point dropped. KML is always WGS 84."""
+    try:
+        if zipfile.is_zipfile(path):                 # a KMZ is a zip holding one .kml, usually doc.kml
+            with zipfile.ZipFile(path) as z:
+                inner = next((n for n in z.namelist() if n.lower().endswith(".kml")), None)
+                if inner is None:
+                    raise ValueError(f"{path}: no .kml inside the KMZ")
+                root = ET.fromstring(z.read(inner))
+        else:
+            root = ET.parse(path).getroot()
+    except ET.ParseError as e:
+        raise ValueError(f"{path}: not a KML file ({e})") from e
+    # Tags carry a namespace that differs between KML versions, so match on the local name.
+    local = lambda el: el.tag.rsplit("}", 1)[-1]  # noqa: E731
+    for poly in (el for el in root.iter() if local(el) == "Polygon"):
+        outer = next((el for el in poly if local(el) == "outerBoundaryIs"), poly)
+        text = next((el.text for el in outer.iter() if local(el) == "coordinates" and el.text), "")
+        try:
+            pts = [(float(c.split(",")[0]), float(c.split(",")[1])) for c in text.split()]   # lon,lat[,height]
+        except (ValueError, IndexError) as e:
+            raise ValueError(f"{path}: unreadable KML coordinates") from e
+        if len(pts) > 1 and pts[0] == pts[-1]:
+            pts = pts[:-1]
+        if len(pts) < 3:
+            raise ValueError(f"{path}: polygon has fewer than 3 points")
+        return pts
+    raise ValueError(f"{path}: no Polygon in the KML")
+
+
+def polygon_from_shapefile(path: str) -> tuple[list[tuple[float, float]], str | None]:
+    """Outer ring of the first polygon in a shapefile, closing point dropped, with the coordinate system its
+    `.prj` file states (as WKT) or None. Needs `pip install pyshp` (MIT)."""
+    try:
+        import shapefile
+    except ImportError as e:
+        raise ValueError("shapefiles need pyshp: pip install pyshp") from e
+    try:
+        with shapefile.Reader(path) as r:
+            # Polygon shape types are 5, 15 (with heights) and 25 (with measures).
+            shape = next((s for s in r.iterShapes() if s.shapeType in (5, 15, 25) and len(s.points) >= 3), None)
+    except (shapefile.ShapefileException, struct.error) as e:      # struct.error: a file too short to be one
+        raise ValueError(f"{path}: not a shapefile ({e})") from e
+    if shape is None:
+        raise ValueError(f"{path}: no polygon in the shapefile")
+    end = shape.parts[1] if len(shape.parts) > 1 else len(shape.points)      # the first part is the outer ring
+    pts = [(float(p[0]), float(p[1])) for p in shape.points[:end]]
+    if len(pts) > 1 and pts[0] == pts[-1]:
+        pts = pts[:-1]
+    if len(pts) < 3:
+        raise ValueError(f"{path}: polygon has fewer than 3 points")
+    prj = os.path.splitext(path)[0] + ".prj"
+    wkt = None
+    if os.path.exists(prj):
+        with open(prj, encoding="utf-8", errors="replace") as f:
+            wkt = f.read().strip() or None
+    return pts, wkt
+
+
+def polygon_from_file(path: str) -> tuple[list[tuple[float, float]], str | None]:
+    """A polygon from a GeoJSON, KML, KMZ or shapefile, chosen by the file's extension, with the coordinate
+    system the file itself states: "EPSG:4326" for KML, the `.prj` text for a shapefile, None when it does not
+    say (GeoJSON written in a site's own coordinates)."""
+    ext = os.path.splitext(path)[1].lower()
+    if ext in (".kml", ".kmz"):
+        return polygon_from_kml(path), "EPSG:4326"
+    if ext == ".shp":
+        return polygon_from_shapefile(path)
+    return polygon_from_geojson(path), None
+
+
 def resolve_area_files(model, base_dir: str) -> None:
-    """Load every `area file "..."` (zones, stockpiles, boundary) into a polygon, in place."""
+    """Load every `area file "..."` (zones, stockpiles, boundary) into a polygon, in place. The file is GeoJSON or
+    a shapefile, in site coordinates."""
     holders = [z.get("area") for z in model.zones.values()]
     holders += [sp.get("area") for sp in model.stockpiles.values()]
     holders.append(model.site.get("boundary"))
     for a in holders:
         if a and "file" in a and "polygon" not in a:
             p = a["file"] if os.path.isabs(a["file"]) else os.path.join(base_dir, a["file"])
-            a["polygon"] = polygon_from_geojson(p)
+            a["polygon"], crs = polygon_from_file(p)
+            if crs == "EPSG:4326":
+                raise ValueError(f"{p}: KML is in latitude and longitude; an area file must be in site coordinates "
+                                 "(GeoJSON or shapefile exported in the site's CRS)")
 
 
 def site_geojson(model, grid, frame=None) -> dict:
