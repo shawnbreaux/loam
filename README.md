@@ -171,13 +171,13 @@ See [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
 | `loam/monitor.py`, `loam/monitor.html` | Live dashboard and replay pages |
 | `loam/target.py`, `loam/export.py` | Next-pass surface; LandXML (Cat Grade 3D), OpenGrade3D `.agd`, AgOpenGPS field folder |
 | `examples/` | Example program and surfaces, comparison plot, Monte Carlo study |
-| `tests/` | 193 tests: language, I/O, simulator invariants, field adapters, planner, controller loopback, a full multi-process MQTT run with faults, vehicle bridges (ArduPilot SITL and a fake ArduPilot, VDA 5050, RTKLIB, OPERA on Nav2 and ros2_control, ArduPilot fences and failsafe, Nav2's Collision Monitor), e-stop and SIGTERM safety, a TLS broker with access rules, site sensors (a stand-in Frigate, rtl_433 on recorded gauges), Chrono soil, integrations (PDAL cross-check included), parser fuzzing; every test also fails on a leaked thread, process or file |
+| `tests/` | 199 tests: language, I/O, simulator invariants, field adapters, planner, controller loopback, a full multi-process MQTT run with faults, vehicle bridges (ArduPilot SITL and a fake ArduPilot, VDA 5050, RTKLIB, OPERA on Nav2 and ros2_control, ArduPilot fences and failsafe, Nav2's Collision Monitor), e-stop and SIGTERM safety, a TLS broker with access rules (also on a system-installed Mosquitto), site sensors (a stand-in Frigate, rtl_433 on recorded gauges), Chrono soil, integrations (PDAL cross-check included), parser fuzzing; every test also fails on a leaked thread, process or file |
 
 ## Development
 
 ```bash
 pip install -e ".[dev]"
-pytest -q --cov=loam          # 193 tests, about 6 min; the MQTT tests need mosquitto
+pytest -q --cov=loam          # 199 tests, about 6 min; the MQTT tests need mosquitto
 ruff check loam tests examples
 mypy loam
 python examples/study.py      # about 1 min on 2 cores; rewrites results/
