@@ -40,7 +40,7 @@ replan drift { when deviation() > 0.15 ft }
 | --- | --- |
 | [SPEC.md](SPEC.md) | Language, execution semantics, Loam Wire messages, safety model |
 | [docs/RUNTIME.md](docs/RUNTIME.md) | Running a site: plan, controller, simulated site, secured broker, monitor; what the system tests showed |
-| [docs/FIELD.md](docs/FIELD.md) | Field equipment: grade control, RTK, lidar, cameras; coordinates; what cannot be connected |
+| [docs/FIELD.md](docs/FIELD.md) | Field equipment: grade control, RTK, lidar, cameras; coordinates; levelling a field and cutting a swale with no design; what cannot be connected |
 | [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) | Every integration, its licence and what it was tested against; what was left out and why |
 | [docs/SIMULATOR.md](docs/SIMULATOR.md) | Reference simulator: model, equations, invariants, limitations |
 | [results/study.md](results/study.md) | Monte Carlo study, 420 seeded runs |
@@ -103,7 +103,7 @@ These are results of a simplified model with assumed soil factors, not field mea
 | `loam wifi-fit` | Measure a site's Wi-Fi signal model from a walk, for locating phones |
 | `loam estop`, `resume` | Press or release the site e-stop; restart machines after a stop |
 | `loam broker` | Write a secured Mosquitto setup for the site, with its install script |
-| `loam export`, `score` | Next-pass surfaces and field files for grade control; score a survey against the design |
+| `loam export`, `score` | Next-pass surfaces and field files for grade control and guidance (AgOpenGPS curve tracks included); score a survey against the design |
 | `loam soil-calibrate` | Roller compaction curves from Project Chrono's soil model |
 
 ## From a grading file to a running site
@@ -125,6 +125,45 @@ loam run job.loam
 In end-to-end runs on real design surfaces, with a person near a machine, a lidar outage, rain, GNSS
 float, a lost radio, a site e-stop and a crashed dozer, every fault was handled and the jobs finished
 with 95.8–97.6 % of cells in tolerance on the simulated true ground.
+
+## A field or a swale with no design
+
+A farm field usually comes with no grading model. Two commands write the design from the ground itself (a free
+USGS elevation tile, a drone survey, a rover walk) and then the program for it. See
+[docs/FIELD.md](docs/FIELD.md).
+
+```bash
+# level a field: one plane with enough fall to drain, the cuts paying for the fills
+loam level dem.tif --boundary north_field.kml -o north.loam --min-slope 0.1 --max-slope 0.3 --edge "20 ft"
+
+# cut a swale along a path drawn in Google Earth
+loam swale dem.tif --line swale.kml -o swale.loam --bottom "4 ft" --depth "1 ft" --side-slope 4 --grade 0.5
+```
+
+`loam swale` finds the highest bottom that drains: at least the asked depth below the ground everywhere, and
+falling at least the asked grade the whole way. No line that drains moves less earth. The channel has a flat
+bottom, sloped sides and rounded ends, and is only ever cut.
+
+**Work along a line.** A cut or finish task may carry `along [(x, y), ...]`: a swale's centreline, a ditch, a
+road's edge. Each pass is then a lane, the line itself or the line moved a whole number of tool widths to one
+side. A machine works its way along the line and comes back along it, and a lane stops short of an exclusion
+zone. The line says where to drive. The measured ground still says how deep each pass cuts and when the task
+is done.
+
+```loam
+task ditch {
+  op      cut
+  zone    strip
+  by      class grader
+  max_cut 0.4 ft per pass
+  along   [(20, 20), (60, 50), (100, 100)]
+  spoil   -> sp1
+  until   in_tolerance(strip)
+}
+```
+
+The sides of a swale slope across the direction of travel. They need a blade that tilts, or a machine whose own
+grade control takes the surface. Loam's own blade control moves one actuator and cuts the flat bottom.
 
 ## On a real site
 
@@ -150,7 +189,8 @@ loam estop   job.loam                            --broker mqtts://supervisor@sit
 
 - **Any machine that is open can be driven.** ArduPilot, ROS 2 with Nav2, VDA 5050, or Loam Wire spoken
   directly. `loam conform` checks a machine before it is trusted. For a machine with nobody aboard,
-  `loam mavlink --blade-servo` also holds the blade to the next-pass surface. See "Connecting a machine" in
+  `loam mavlink --blade-servo` also holds the blade to the next-pass surface, level across its width and
+  never deeper at either end than that end's ground allows. See "Connecting a machine" in
   [docs/FIELD.md](docs/FIELD.md), which also lists which machines on the market are open and which are not.
 - **Machines protect themselves.** `loam mavlink` uploads the site boundary and exclusion zones to the vehicle
   as fences and switches on its failsafe, so it holds if Loam or the radio dies. `loam opera` reports stops by
@@ -168,7 +208,8 @@ loam estop   job.loam                            --broker mqtts://supervisor@sit
 
 Loam works with the equipment through files and simple streams, with no vendor SDKs: LandXML next-pass
 surfaces for **Cat Grade with 3D** (and Trimble, Topcon, Leica), `.agd` design grids for **OpenGrade3D**,
-field folders for **AgOpenGPS**, survey points from **Emlid Reach**, **QField** and **QGIS**, NMEA from any
+field folders for **AgOpenGPS** (boundary, AB lines, and a curve track for every line a task runs along),
+survey points from **Emlid Reach**, **QField** and **QGIS**, NMEA from any
 RTK receiver, and LAS/PCD scans from a **DJI Zenmuse L2** or **Livox Mid-360**. See
 [docs/FIELD.md](docs/FIELD.md) for the commands, the coordinate setup and what cannot be connected
 (Cat Command, closed retrofit kits).
@@ -257,7 +298,7 @@ Every integration is an optional, FOSS extra (`pip install "loam-lang[all]"`); t
 | `tools/integration-envs.sh` | Conda environments for Chrono, ROS 2 (OPERA) and PDAL, for the integration tests |
 | `tools/site_soak.py` | Runs a whole simulated site and reports each process's memory, files and threads; can restart the broker or the controller mid-job |
 | `loam/monitor.py`, `loam/monitor.html` | Live dashboard and replay pages |
-| `loam/target.py`, `loam/export.py` | Next-pass surface; LandXML (Cat Grade 3D), OpenGrade3D `.agd`, AgOpenGPS field folder |
+| `loam/target.py`, `loam/export.py` | Next-pass surface; LandXML (Cat Grade 3D), OpenGrade3D `.agd`, AgOpenGPS field folder with AB lines and curve tracks |
 | `examples/` | Example program and surfaces, comparison plot, Monte Carlo study |
 | `tests/` | 279 tests: language, I/O, simulator invariants, field adapters, planner, field levelling from rasters and boundary files, passes along a line and the swale designer, controller loopback, a full multi-process MQTT run with faults in which every message is validated against the schema, reconnects and restarts, vehicle bridges (ArduPilot SITL and a fake ArduPilot, VDA 5050, RTKLIB, OPERA on Nav2 and ros2_control, ArduPilot fences and failsafe, Nav2's Collision Monitor), e-stop and SIGTERM safety, a TLS broker with access rules (also on a system-installed Mosquitto), site sensors (a stand-in Frigate, rtl_433 on recorded gauges), people located by phone and matched with cameras and scans (3,000 random sites), a blade held by the bridge and the conformance check (both against a fake ArduPilot), Chrono soil, integrations (PDAL cross-check included), parser fuzzing; every test also fails on a leaked thread, process or file |
 
