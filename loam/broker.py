@@ -110,7 +110,8 @@ install -m 600 "$here/server.key" "$etc/certs/loam-server.key"
 install -m 600 "$here/passwords" "$etc/loam-passwords"
 install -m 600 "$here/acl" "$etc/loam-acl"
 if [ "$(id -u)" = 0 ]; then
-    chown "$owner:" "$etc/certs/loam-server.key" "$etc/loam-passwords" "$etc/loam-acl"
+    # User and group both, named outright: `chown user:` does not set the group with every chown.
+    chown "$owner:$(id -gn "$owner")" "$etc/certs/loam-server.key" "$etc/loam-passwords" "$etc/loam-acl"
 fi
 if [ "$etc" = /etc/mosquitto ] && [ -d /run/systemd/system ]; then
     systemctl restart mosquitto || {{ tail -n 20 /var/log/mosquitto/mosquitto.log >&2; exit 1; }}
