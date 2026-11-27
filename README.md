@@ -170,7 +170,7 @@ loam score   site.loam rover.csv --zone pad --world-origin 600000,3812000
 `tools/site_soak.py` runs a complete job on the example site the way a real one runs: a broker, the
 controller, the dashboard and one process per machine, with a person near a machine, a lidar outage, rain,
 GNSS float, a lost radio and an e-stop along the way. It samples every process and validates every recorded
-message. The last run, 35 minutes at 6× real time:
+message. The run for v0.0.8, 35 minutes at 6× real time:
 
 | Checked | Result |
 | --- | --- |
@@ -182,9 +182,10 @@ message. The last run, 35 minutes at 6× real time:
 | Broker restarted mid-job | every process reconnected; job finished, 98.5 % in tolerance |
 | Controller killed mid-job | restarted 8 s later and finished the job, 97.8 % in tolerance |
 
-The first run of this test was not that clean. It found that a machine stayed written off after any reconnect,
-that a restarted controller reused its order ids, that one lost message could hold the site for good, that late
-surveys upset the soil estimates, and that the published schema did not match the messages. All are fixed;
+The first run of this test, on v0.0.7, was not that clean. It found that a machine stayed written off after any
+reconnect, that a restarted controller reused its order ids, that one lost message could hold the site for good,
+that late surveys upset the soil estimates, and that the published schema did not match the messages. All are
+fixed in v0.0.8;
 [docs/RUNTIME.md](docs/RUNTIME.md) has the details, and [CHANGELOG.md](CHANGELOG.md) the list.
 
 ## Integrations
@@ -257,7 +258,8 @@ tests against it, and runs lint, type checks and a reproducibility check of the 
 
 ## Status and safety
 
-v0.0.7 is an early draft; the language and wire format will change. **Loam does not make a
+v0.0.8 is an early draft; the language and wire format will change. Releases are pre-releases on
+[GitHub](https://github.com/shawnbreaux/loam/releases); [CHANGELOG.md](CHANGELOG.md) says what each one changed. **Loam does not make a
 machine safe.** Machines directed by Loam need their own certified safety systems and a site risk
 assessment (ISO 17757). The reference simulator is a test tool, not a planner for real equipment.
 

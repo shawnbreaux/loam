@@ -3,7 +3,7 @@
 All notable changes are recorded here. The project follows [Semantic Versioning](https://semver.org/);
 before 1.0 any minor release may change the language.
 
-## [Unreleased]
+## [0.0.8] - 2026-11-27
 
 Found by running a complete job on the example site as separate processes over a broker, for up to
 36 minutes at a time, while sampling every process, restarting the broker and the controller in the
