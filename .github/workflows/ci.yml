@@ -30,9 +30,9 @@ jobs:
           sudo apt-get update -q && sudo apt-get install -y -q mosquitto
           # The package confines Mosquitto to /etc/mosquitto (AppArmor); the security tests give it a
           # configuration, certificates and access rules in a temporary folder.
-          if [ -e /etc/apparmor.d/usr.sbin.mosquitto ]; then
-            sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mosquitto
-          fi
+          for profile in /etc/apparmor.d/mosquitto /etc/apparmor.d/usr.sbin.mosquitto; do
+            if [ -e "$profile" ]; then sudo apparmor_parser -R "$profile"; fi
+          done
       - name: RTKLIB str2str (BSD-2) for the positioning-stream test, pinned to the tested commit
         run: |
           git init -q /tmp/RTKLIB

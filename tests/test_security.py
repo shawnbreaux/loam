@@ -100,9 +100,9 @@ def secure_broker(tmp_path):
                     break
             if proc.poll() is not None:
                 why = proc.stderr.read()
-                if "Unable to open config file" in why:
+                if "Unable to open config file" in why and not os.environ.get("CI"):
                     # Ubuntu's Mosquitto package is confined by AppArmor to /etc/mosquitto and cannot read a
-                    # test folder. CI lifts the confinement (.github/workflows/ci.yml).
+                    # test folder. CI lifts the confinement (.github/workflows/ci.yml), so there this is an error.
                     pytest.skip("this Mosquitto may not read files outside /etc/mosquitto (AppArmor)")
                 raise AssertionError(why)
             time.sleep(0.05)
