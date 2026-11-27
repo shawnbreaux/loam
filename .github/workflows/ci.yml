@@ -10,12 +10,11 @@ jobs:
     steps:
       - run: |
           sudo apt-get update -q >/dev/null && sudo apt-get install -y -q mosquitto >/dev/null
-          echo "== profiles"; ls /etc/apparmor.d | grep -i mosq || echo none
-          echo "== package files"; dpkg -L mosquitto | grep -i -E "apparmor|systemd" || echo none
-          echo "== loaded"; sudo aa-status 2>/dev/null | grep -i mosq || echo none
-          mkdir -p /tmp/probe && cd /tmp/probe && printf 'listener 18883 127.0.0.1\nallow_anonymous true\n' > mosquitto.conf
-          echo "== relative"; (timeout 3 mosquitto -c mosquitto.conf; echo "exit $?") 2>&1 | tail -4
-          echo "== absolute"; (timeout 3 mosquitto -c /tmp/probe/mosquitto.conf; echo "exit $?") 2>&1 | tail -4
-          echo "== home"; mkdir -p ~/probe && cp mosquitto.conf ~/probe/ && (timeout 3 mosquitto -c ~/probe/mosquitto.conf; echo "exit $?") 2>&1 | tail -4
-          echo "== dmesg"; sudo dmesg | grep -i -E "apparmor.*mosq" | tail -5 || echo none
-          echo "== tmp"; ls -ld /tmp /tmp/probe; id; python3 -c "import tempfile; print(tempfile.gettempdir())"; echo "TMPDIR=$TMPDIR RUNNER_TEMP=$RUNNER_TEMP"
+          echo "== os"; . /etc/os-release; echo "$PRETTY_NAME"; mosquitto -h | head -1; openssl version
+          echo "== profile"; sudo cat /etc/apparmor.d/mosquitto
+          echo "== profile owner"; dpkg -S /etc/apparmor.d/mosquitto || true
+          echo "== default conf"; cat /etc/mosquitto/mosquitto.conf
+          echo "== etc tree"; sudo ls -laR /etc/mosquitto
+          echo "== user"; id mosquitto; systemctl is-active mosquitto || true
+          echo "== unit"; systemctl cat mosquitto | head -40
+          echo "== listening"; sudo ss -ltnp | grep -i mosq || echo none
