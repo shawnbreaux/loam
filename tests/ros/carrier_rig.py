@@ -1,8 +1,11 @@
 """ROS 2 side of the carrier test: Nav2 in the ic120 namespace, a kinematic tracked IC120 that obeys
 cmd_vel (with acceleration limits), the vessel's SetDumpAngle action (com3_msgs) and a pose recorder.
 
-usage: python carrier_rig.py PARAMS OUT_DIR X Y YAW      (inside ROS 2 Jazzy with com3_msgs built)
+usage: python carrier_rig.py PARAMS OUT_DIR X Y YAW [monitor]     (inside ROS 2 Jazzy with com3_msgs built)
 Writes OUT_DIR/poses.jsonl and OUT_DIR/dumps.jsonl; stops on SIGTERM.
+
+With `monitor`, Nav2's Collision Monitor runs between the controller and the machine, fed by a simulated laser
+scanner that sees an obstacle 2.5 m ahead for as long as the file OUT_DIR/obstacle exists.
 """
 import json
 import math
@@ -18,19 +21,28 @@ from geometry_msgs.msg import TransformStamped, Twist
 from nav_msgs.msg import Odometry
 from rclpy.action import ActionServer
 from rclpy.executors import MultiThreadedExecutor
+from sensor_msgs.msg import LaserScan
 from tf2_ros import StaticTransformBroadcaster, TransformBroadcaster
 
 PARAMS, OUT, X, Y, YAW = sys.argv[1], sys.argv[2], *map(float, sys.argv[3:6])
+MONITOR = sys.argv[6:7] == ["monitor"]
 NS = "ic120"
+DRIVERS = ("controller_server", "behavior_server")       # the Nav2 servers that publish velocity commands
 os.makedirs(OUT, exist_ok=True)
 # Start the four Nav2 servers in the machine's namespace, and the lifecycle manager that brings them up.
 ns = ["--ros-args", "-r", f"__ns:=/{NS}", "--params-file", PARAMS]
-procs = [subprocess.Popen(["ros2", "run", pkg, exe, *ns]) for pkg, exe in (
-    ("nav2_controller", "controller_server"), ("nav2_planner", "planner_server"),
-    ("nav2_behaviors", "behavior_server"), ("nav2_bt_navigator", "bt_navigator"))]
-procs.append(subprocess.Popen(["ros2", "run", "nav2_lifecycle_manager", "lifecycle_manager", "--ros-args", "-r",
-                               f"__ns:=/{NS}", "-r", "__node:=lifecycle_manager_navigation",
-                               "--params-file", PARAMS]))
+servers = [("nav2_controller", "controller_server"), ("nav2_planner", "planner_server"),
+           ("nav2_behaviors", "behavior_server"), ("nav2_bt_navigator", "bt_navigator")]
+via: list[str] = []
+if MONITOR:
+    # The monitor's parameters are added (a later file wins), it becomes a fifth server, and the two servers that
+    # command the tracks send their commands to it instead of to the machine.
+    ns += ["--params-file", os.path.join(os.path.dirname(os.path.abspath(__file__)), "collision_monitor.yaml")]
+    servers.append(("nav2_collision_monitor", "collision_monitor"))
+    via = ["-r", "cmd_vel:=cmd_vel_nav"]
+procs = [subprocess.Popen(["ros2", "run", pkg, exe, *ns, *(via if exe in DRIVERS else [])]) for pkg, exe in servers]
+procs.append(subprocess.Popen(["ros2", "run", "nav2_lifecycle_manager", "lifecycle_manager", *ns, "-r",
+                               "__node:=lifecycle_manager_navigation"]))
 
 rclpy.init()
 node = rclpy.create_node("ic120_sim")
@@ -93,7 +105,23 @@ def dump(goal):
     return SetDumpAngle.Result(success=True)
 
 
+def scan() -> None:
+    """Publish one sweep of the simulated laser scanner: nothing in sight, or, while the test's `obstacle` file
+    exists, something 2.5 m straight ahead (beams within 12 degrees of the machine's heading).
+    """
+    m = LaserScan()
+    m.header.stamp, m.header.frame_id = node.get_clock().now().to_msg(), "base_link"
+    m.angle_min, m.angle_max, m.angle_increment = -math.pi, math.pi, 2 * math.pi / 360
+    m.range_min, m.range_max = 0.1, 50.0
+    seen = os.path.exists(f"{OUT}/obstacle")
+    m.ranges = [2.5 if seen and abs(k - 180) <= 12 else math.inf for k in range(360)]
+    scan_pub.publish(m)
+
+
 ActionServer(node, SetDumpAngle, f"/{NS}/set_dump_angle", dump)
+if MONITOR:
+    scan_pub = node.create_publisher(LaserScan, f"/{NS}/scan", 10)
+    node.create_timer(0.1, scan)
 node.create_timer(DT, tick)
 ex = MultiThreadedExecutor()
 ex.add_node(node)

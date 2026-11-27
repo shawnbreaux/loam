@@ -12,7 +12,10 @@ Loam talks to field equipment through files and simple streams, so it works with
 | **AgOpenGPS** | Open-source autosteer | Loam writes a field folder: origin, boundary, exclusion zones, one AB line per work zone | `loam export --to agopengps` |
 | **Emlid Reach RS3** (rover) | Truth surveys | Loam reads Emlid Flow CSV exports (All columns, PNEZD, PENZD) | `loam score`, `--ground survey.csv` |
 | Emlid Reach (or any RTK receiver) on a machine | Live position | Loam reads NMEA GGA (TCP or serial) and emits Wire `state` messages | `loam nmea` |
-| **Livox Mid-360** on a mast | Overhead scans | Record with livox_ros_driver2 and save PCD (or LAS); Loam grids it | `loam terrain`, `--ground scan.pcd` |
+| **QField** (phone or tablet) or QGIS | Survey points | Loam reads GeoJSON points | `loam score`, `--ground points.geojson` |
+| **Livox Mid-360** on a mast | Overhead scans | Record with livox_ros_driver2 and save PCD (or LAS); Loam grids each scan as it is written | `loam terrain --watch`, `--ground scan.pcd` |
+| IP cameras with **Frigate** | Sees people on the site | Loam reads Frigate's MQTT messages | `loam sense --areas` |
+| Wireless rain gauge with **rtl_433** | Rain rate | Loam reads rtl_433's MQTT events | `loam sense --rain` |
 | **DJI Zenmuse L2** | Drone scans | Process in DJI Terra, export LAS; Loam grids it | `loam terrain`, `--ground scan.las` |
 | Any lidar or photogrammetry tool | Scans | LAS 1.0–1.4 (uncompressed), PCD, or x y z text | same |
 
@@ -23,7 +26,7 @@ These have no public interface that third-party software can use to command the 
 - **Cat Command** (remote control). It is a closed radio link between Cat's console or station and the machine. Loam cannot send it steering commands.
 - **Teleo** and **Bluelight** retrofit kits. Both are closed. Ask each vendor whether they will accept orders over an API; Loam Wire is designed for exactly that.
 - **DJI flight control.** Fly with DJI's own apps; Loam only reads the scans.
-- **Livox SDK2 live stream.** Loam reads recordings (PCD/LAS), not the live UDP stream. A small ROS 2 node that publishes terrain tiles on MQTT is the next step.
+- **Livox SDK2 live stream.** Loam reads recordings (PCD/LAS), not the live UDP stream. `loam terrain --watch` publishes each recording as soon as it is written.
 - **Cat VisionLink API.** It carries machine hours, location and fuel (ISO 15143-3), not control. A reader is possible later; it isn't needed for grading.
 
 ## Placing the site on the earth
@@ -69,6 +72,9 @@ On a Cat machine, LandXML must be in the same projected coordinate system as the
 ```
 # Mast scan to the site grid; also as a Wire terrain message and an as-built surface
 loam terrain site.loam scan.pcd --world-origin E,N --wire terrain.jsonl --landxml asbuilt.xml
+
+# The same for every scan that appears in a folder, sent to the running controller
+loam terrain site.loam scans/ --watch --ground-filter --broker mqtts://sensors@site-server
 
 # Next-pass surface for Cat Grade 3D (projected LandXML)
 loam export site.loam --to landxml -o next.xml --ground scan.las --world-origin E,N --world-units usft

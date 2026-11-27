@@ -10,7 +10,9 @@ import json
 import math
 import os
 import shutil
+import signal
 import subprocess
+import sys
 import threading
 import time
 
@@ -387,6 +389,107 @@ def test_ardupilot_rover_sitl(model, mqtt_broker, tmp_path):
         ctl.wait(lambda m: "stopLatencyS" in m)
     finally:
         ctl.close(*bridges)                                     # the bridge closes its MAVLink link first
+        sitl.terminate()
+        sitl.wait(10)
+
+
+# The yard again, with a well machines must keep away from, right on the straight line from the cut to the dump.
+FENCED = """loam 0.0.2
+site yard { crs "LOCAL:ft"; units ft; design "d.xml"; boundary rect (0, 0) (200, 100); grid 2 ft }
+probe p { kind tethered_uav; rate 5 min; accuracy 0.05 ft; coverage site; stale_after 15 min }
+machine dz1 { class dozer; blade 10 ft; max_speed 3 mph }
+zone pad { role cut; area rect (0, 0) (200, 100); tolerance ±0.1 ft }
+zone well { role exclusion; area rect (90, 40) (110, 60); buffer 5 ft }
+task cut_pad { op cut; zone pad; by dz1; until in_tolerance(pad) }
+"""
+
+
+@pytest.mark.skipif(ARDUROVER is None, reason="needs the ArduPilot Rover SITL binary (ARDUROVER)")
+def test_ardupilot_fences_and_failsafe_sitl(mqtt_broker, tmp_path):
+    """The real ArduPilot Rover firmware protects itself once `loam mavlink` has set it up.
+
+    1. A haul whose straight line runs through an exclusion zone is driven around it: the rover never enters the
+       zone or its buffer, and still arrives.
+    2. The bridge process is killed outright in mid-drive (a crashed computer, a dead radio). With nobody left to
+       tell it anything, the rover goes to HOLD by itself within seconds and stays where it is.
+    """
+    pytest.importorskip("pymavlink")
+    os.environ.setdefault("MAVLINK20", "1")
+    from pymavlink import mavutil
+    root = os.path.dirname(os.path.dirname(os.path.dirname(ARDUROVER)))
+    parms = [os.path.join(root, "..", "Tools", "autotest", "default_params", p) for p in ("rover.parm",
+                                                                                         "rover-skid.parm")]
+    parms = [p for p in parms if os.path.exists(p)]
+    lat0, lon0 = 34.4459, -85.7197
+    frame = Frame(FT, 0.0, lat0, lon0)
+    home_lat, home_lon = frame.local_to_wgs84(20.0, 50.0)                   # the rover starts inside the yard
+    program = tmp_path / "yard.loam"
+    program.write_text(FENCED)
+    sitl = subprocess.Popen([ARDUROVER, "--model", "rover-skid", "--home", f"{home_lat:.7f},{home_lon:.7f},200,0",
+                             "--speedup", "1", "-I", "4", *(["--defaults", ",".join(parms)] if parms else [])],
+                            cwd=tmp_path, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    ctl = Controller(mqtt_broker, "yard", "dz1")
+    bridge = watch = None
+    try:
+        time.sleep(2)
+        with open(tmp_path / "bridge.log", "w") as log:
+            bridge = subprocess.Popen([sys.executable, "-m", "loam.cli", "mavlink", str(program), "--machine", "dz1",
+                                       "--vehicle", "tcp:127.0.0.1:5800", "--origin", f"{lat0},{lon0}",
+                                       "--min-fix", "3", "--broker", mqtt_broker], stdout=log, stderr=log)
+        first = ctl.wait(lambda m: m["safetyState"] == "ok", timeout=120)
+        assert math.hypot(first["pose"]["x"] - 20, first["pose"]["y"] - 50) < 5
+        setup = (tmp_path / "bridge.log").read_text()
+        assert "uploaded 2 fence polygon(s), 8 corners" in setup and "FS_GCS_ENABLE: 0 -> 1" in setup
+
+        # 1. cut along y = 50 from x = 30 to 60, dump at (160, 50): the well, with its buffer, covers x 85-115, y 35-65
+        dump = {"window": [(155, 45), (165, 45), (165, 55), (155, 55)]}
+        ctl.send("order", wire.order("yard", "dz1", 1, "r1", 0, "cut", "cut", [(30, 45), (60, 45), (60, 55), (30, 55)],
+                                     {}, {"maxSpeed": 2.0}, deposit=dump))
+        ctl.wait(lambda m: m["orderId"] == "r1" and m["driving"], timeout=30)
+        ctl.wait(lambda m: m["orderId"] == "r1" and m["progress"] == 1.0, timeout=240)
+        track = np.array([[s["pose"]["x"], s["pose"]["y"]] for s in ctl.states if s["orderId"] == "r1"])
+        inside = (track[:, 0] > 85) & (track[:, 0] < 115) & (track[:, 1] > 35) & (track[:, 1] < 65)
+        assert not inside.any(), track[inside][:5]                          # never in the zone or its buffer
+        assert track[:, 0].max() > 150                                      # and it did reach the dump
+        beside = track[(track[:, 0] > 90) & (track[:, 0] < 110)]
+        assert len(beside) and np.abs(beside[:, 1] - 50).min() > 15         # it passed beside the well, not over it
+
+        # 2. a long run along y = 20; then the bridge dies
+        ctl.send("order", loam_order("yard", "dz1", "r2", [(30, 15), (190, 15), (190, 25), (30, 25)], 1.5))
+        ctl.wait(lambda m: m["orderId"] == "r2" and m["driving"] and m["pose"]["x"] > 60 and m["pose"]["y"] < 25,
+                 timeout=120)
+        watch = mavutil.mavlink_connection("tcp:127.0.0.1:5802", source_system=200)    # not the rover's ground station
+        watch.wait_heartbeat(timeout=10)
+        watch.mav.command_long_send(watch.target_system, watch.target_component, 511, 0, 33, 2e5, 0, 0, 0, 0, 0)
+        moving = watch.recv_match(type="HEARTBEAT", blocking=True, timeout=5)
+        assert moving.custom_mode == 10 and moving.base_mode & 128          # AUTO and armed: it is driving
+        bridge.send_signal(signal.SIGKILL)
+        killed = time.time()
+        mode = 10
+        while mode != 4 and time.time() - killed < 15:
+            hb = watch.recv_match(type="HEARTBEAT", blocking=True, timeout=2)
+            mode = hb.custom_mode if hb is not None and hb.get_srcSystem() == watch.target_system else mode
+        assert mode == 4, "the rover did not go to HOLD by itself"
+        assert time.time() - killed < 8                                     # 3 s timeout, plus the 1 Hz heartbeat
+        time.sleep(3)                                                       # let it come to rest
+
+        def position():
+            """The rover's position now, in site feet."""
+            while watch.recv_match(type="GLOBAL_POSITION_INT", blocking=False) is not None:
+                pass
+            p = watch.recv_match(type="GLOBAL_POSITION_INT", blocking=True, timeout=5)
+            return frame.wgs84_to_local(p.lat / 1e7, p.lon / 1e7)
+
+        (xa, ya), _, (xb, yb) = position(), time.sleep(4), position()
+        assert math.hypot(xb - xa, yb - ya) < 1 and xb < 185                # at rest, short of the end of the line
+    finally:
+        if watch is not None:
+            watch.close()
+        if bridge is not None and bridge.poll() is None:
+            bridge.terminate()
+        if bridge is not None:
+            bridge.wait(15)
+        ctl.close()
         sitl.terminate()
         sitl.wait(10)
 

@@ -24,7 +24,7 @@ from loam.grid import SiteGrid
 from loam.landxml import rasterize, read_tin, write_grid_tin
 from loam.parser import parse
 from loam.pointcloud import Binner, fill_gaps, grid_cloud, read_las, read_pcd, read_xyz, write_las, write_pcd
-from loam.survey import idw, nmea_states, parse_gga, read_points_csv, score
+from loam.survey import idw, nmea_states, parse_gga, read_points, read_points_csv, score
 from loam.target import next_target
 
 # A site origin (latitude, longitude) and matching projected coordinates (easting, northing) for the tests.
@@ -270,6 +270,40 @@ def test_read_points_csv_layouts(tmp_path):
         read_points_csv(str(tmp_path / "r.csv"), f)
 
 
+def test_read_points_geojson(tmp_path):
+    """Survey points exported from QField or QGIS as GeoJSON are read: longitude and latitude with the height as the
+    third coordinate; a projected file (QGIS states its coordinate system) with the height as a property; a file
+    without heights is refused.
+    """
+    f = Frame(0.3048, 0.0, LAT0, LON0, E0, N0, 1.0)
+    lat, lon = f.local_to_wgs84(100.0, 50.0)
+    e, n = f.local_to_projected(100.0, 50.0)
+
+    def feature(coords, **props):
+        """One GeoJSON point feature."""
+        return {"type": "Feature", "id": 7, "properties": props, "geometry": {"type": "Point", "coordinates": coords}}
+
+    plain = tmp_path / "qfield.geojson"
+    plain.write_text(json.dumps({"type": "FeatureCollection", "features": [
+        feature([float(lon), float(lat), 30.48], name="cp1"), feature([float(lon), float(lat)], name="no height"),
+        {"type": "Feature", "properties": {}, "geometry": {"type": "LineString", "coordinates": [[0, 0], [1, 1]]}}]}))
+    s = read_points(str(plain), f)
+    assert s.name == ["cp1"] and s.x[0] == pytest.approx(100, abs=1e-4) and s.y[0] == pytest.approx(50, abs=1e-4)
+    assert s.z[0] == pytest.approx(100.0)                         # 30.48 m is 100 ft
+    projected = tmp_path / "qgis.geojson"
+    projected.write_text(json.dumps({
+        "type": "FeatureCollection", "crs": {"type": "name", "properties": {"name": "urn:ogc:def:crs:EPSG::32616"}},
+        "features": [feature([float(e), float(n)], Elevation=30.48),
+                     {"type": "Feature", "properties": {"z": 3.048}, "geometry": {
+                         "type": "MultiPoint", "coordinates": [[float(e), float(n)], [float(e), float(n), 6.096]]}}]}))
+    s = read_points(str(projected), f)
+    assert s.name == ["7", "1", "1"] and s.x == pytest.approx([100, 100, 100], abs=1e-5)
+    assert s.z == pytest.approx([100.0, 10.0, 20.0])
+    plain.write_text(json.dumps({"type": "FeatureCollection", "features": [feature([1.0, 2.0])]}))
+    with pytest.raises(ValueError, match="no points with a height"):
+        read_points(str(plain), f)
+
+
 def test_idw_and_score(site):
     """Sparse survey points are spread onto the grid by inverse-distance weighting, and a zone is scored against its
     tolerance with a 95 % confidence interval.
@@ -343,7 +377,8 @@ def test_landxml_site_and_projected(site):
 
 
 def _read_agd(path):
-    """OpenGrade3D FileOpenAgdDesign, restated: skip the header, split on commas, code in column 5."""
+    """OpenGrade3D FileOpenAgdDesign, restated: skip the header, split on commas, code in column 5. Compared again
+    with OpenGrade3D 4.0.2 (commit 48cbd89, November 2026): unchanged."""
     pts = []
     with open(path) as f:
         f.readline()

@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import csv
+import json
 import math
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
@@ -87,6 +88,49 @@ def read_points_csv(path: str, frame: Frame, layout: str = "PNEZD", fix_only: bo
         z = frame.height_to_local(a[:, 2])
         names = [r[0] for r in rows]
     return Survey(names, np.asarray(x), np.asarray(y), np.asarray(z))
+
+
+def read_points_geojson(path: str, frame: Frame) -> Survey:
+    """Read survey points from a GeoJSON file, as QField and QGIS export them, into site coordinates.
+
+    Every Point (and each point of a MultiPoint) with a height is taken. The height is the third coordinate, or
+    else a property named elevation, z or height. Plain GeoJSON is longitude and latitude (RFC 7946) and needs
+    the frame's WGS84 origin; a file that QGIS wrote in a projected coordinate system says so in its `crs`
+    member and is read as easting and northing.
+    """
+    with open(path, encoding="utf-8-sig") as f:
+        doc = json.load(f)
+    crs = str(((doc.get("crs") or {}).get("properties") or {}).get("name", ""))
+    lonlat = not crs or crs.endswith(("CRS84", "EPSG::4326", "EPSG:4326"))
+    feats = doc.get("features") if doc.get("type") == "FeatureCollection" else [doc]
+    names, e, n, h = [], [], [], []
+    for k, ft in enumerate(feats or []):
+        geom, props = ft.get("geometry") or {}, ft.get("properties") or {}
+        low = {str(key).lower(): v for key, v in props.items()}
+        kind, at = geom.get("type"), geom.get("coordinates") or []
+        coords: list = [at] if kind == "Point" else list(at) if kind == "MultiPoint" else []
+        for c in coords:
+            z = c[2] if len(c) > 2 else next((low[key] for key in ("elevation", "z", "height") if key in low), None)
+            if z is None:
+                continue
+            names.append(str(low.get("name", ft.get("id", k))))
+            e.append(float(c[0]))
+            n.append(float(c[1]))
+            h.append(float(z))
+    if not names:
+        raise ValueError(f"{path}: no points with a height (a third coordinate, or an elevation property)")
+    if lonlat:
+        x, y = frame.wgs84_to_local(np.array(n), np.array(e))           # GeoJSON order is longitude, latitude
+    else:
+        x, y = frame.projected_to_local(np.array(e), np.array(n))
+    return Survey(names, np.asarray(x), np.asarray(y), np.asarray(frame.height_to_local(np.array(h))))
+
+
+def read_points(path: str, frame: Frame, layout: str = "PNEZD", fix_only: bool = True) -> Survey:
+    """Read survey points from a CSV or, going by the file name, a GeoJSON file."""
+    if path.lower().endswith((".geojson", ".json")):
+        return read_points_geojson(path, frame)
+    return read_points_csv(path, frame, layout, fix_only)
 
 
 # -- NMEA ------------------------------------------------------------------------------

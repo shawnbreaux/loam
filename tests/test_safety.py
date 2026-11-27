@@ -20,8 +20,10 @@ import pytest
 from conftest import EXAMPLE, EXAMPLES
 
 from loam import wire
+from loam.checker import check, has_errors
 from loam.cli import load, main
 from loam.geo import Frame
+from loam.parser import parse
 
 pytest.importorskip("paho.mqtt")
 from loam.runtime.bus import Bus, tolerant, wait_clock
@@ -125,7 +127,8 @@ def test_bus_order_and_failed_connection(mqtt_broker):
 # -- MAVLink against a fake ArduPilot -----------------------------------------------------------------------
 class FakeRover(threading.Thread):
     """Enough of ArduPilot Rover's MAVLink behaviour: heartbeats, positions (zeros until its EKF has an
-    origin), GPS, the mission handshake, modes, arming; in AUTO it reaches each waypoint in turn."""
+    origin), GPS, the mission and fence handshakes, parameters, modes, arming; in AUTO it reaches each waypoint
+    in turn."""
 
     def __init__(self, port: int, lat0: float, lon0: float):
         """Connect out to the bridge's UDP port, as a vehicle at (lat0, lon0) in HOLD (mode 4), disarmed."""
@@ -136,6 +139,11 @@ class FakeRover(threading.Thread):
         self.armed, self.mode, self.items, self.reached = False, 4, [], 0
         self.commands, self.modes, self.running, self.beating = [], [], True, True
         self.reject = False                       # refuse the next mission upload (MAV_MISSION_ERROR)
+        # Rover 4.8's defaults for the parameters the bridge sets up, and what has been uploaded as fences.
+        self.params = {"FENCE_ENABLE": 0.0, "FENCE_TYPE": 6.0, "FENCE_ACTION": 1.0, "OA_TYPE": 0.0,
+                       "FS_GCS_ENABLE": 0.0, "FS_ACTION": 2.0, "FS_GCS_TIMEOUT": 5.0, "MAV_GCS_SYSID": 255.0}
+        self.fence, self.incoming, self.sets = [], {}, []
+        self.gcs_beats, self.breach = [], False   # times of heartbeats from the bridge; "outside the fence"
 
     def send_state(self):
         """Send what a vehicle streams: heartbeat, position and GPS status (RTK fixed)."""
@@ -145,6 +153,7 @@ class FakeRover(threading.Thread):
         lat, lon = (self.lat, self.lon) if self.origin else (0.0, 0.0)
         mav.global_position_int_send(0, round(lat * 1e7), round(lon * 1e7), 0, 0, 0, 0, 0, 9000)
         mav.gps_raw_int_send(0, 6, round(self.lat * 1e7), round(self.lon * 1e7), 0, 50, 50, 0, 0, 20)
+        mav.fence_status_send(int(self.breach), int(self.breach), 0, 0)
 
     def run(self):
         """The vehicle's loop: stream state ten times a second, answer messages, and in AUTO (mode 10) and armed, jump
@@ -173,17 +182,32 @@ class FakeRover(threading.Thread):
         mode changes.
         """
         t = msg.get_type()
+        kind = getattr(msg, "mission_type", 0)                        # 0: mission, 1: fence
         if t == "MISSION_COUNT" and self.reject:
-            self.m.mav.mission_ack_send(255, 0, 1, 0)                 # the old mission stays on board
+            self.m.mav.mission_ack_send(255, 0, 1, kind)              # the old mission stays on board
         elif t == "MISSION_COUNT":
-            self.items, self.reached = [None] * msg.count, 0
-            self.m.mav.mission_request_int_send(255, 0, 0, 0)
+            self.incoming[kind] = [None] * msg.count
+            self.m.mav.mission_request_int_send(255, 0, 0, kind)
         elif t == "MISSION_ITEM_INT":
-            self.items[msg.seq] = msg
-            if msg.seq + 1 < len(self.items):
-                self.m.mav.mission_request_int_send(255, 0, msg.seq + 1, 0)
+            got = self.incoming[kind]
+            got[msg.seq] = msg
+            if msg.seq + 1 < len(got):
+                self.m.mav.mission_request_int_send(255, 0, msg.seq + 1, kind)
             else:
-                self.m.mav.mission_ack_send(255, 0, 0, 0)
+                if kind == 1:
+                    self.fence = got
+                else:
+                    self.items, self.reached = got, 0
+                self.m.mav.mission_ack_send(255, 0, 0, kind)
+        elif t in ("PARAM_REQUEST_READ", "PARAM_SET"):
+            name = str(msg.param_id).rstrip("\x00")
+            if name in self.params:                                   # an unknown parameter gets no answer
+                if t == "PARAM_SET":
+                    self.params[name] = float(msg.param_value)
+                    self.sets.append(name)
+                self.m.mav.param_value_send(name.encode(), self.params[name], 9, len(self.params), 0)
+        elif t == "HEARTBEAT" and msg.type == 6:
+            self.gcs_beats.append((msg.get_srcSystem(), time.time()))
         elif t == "COMMAND_LONG":
             self.commands.append((msg.command, msg.param1, msg.param2))
             if msg.command == 400:
@@ -267,6 +291,116 @@ def test_mavlink_bridge_against_fake_ardupilot(mqtt_broker):
         assert lost["safetyState"] == "stopped"
     finally:
         ctl.close(bridge)
+        rover.running = False
+        rover.join(5)
+
+
+FENCED = """loam 0.0.2
+site yard { crs "LOCAL:ft"; units ft; design "d.xml"; boundary rect (0, 0) (200, 100); grid 2 ft }
+probe p { kind tethered_uav; rate 5 min; accuracy 0.05 ft; coverage site; stale_after 15 min }
+machine dz1 { class dozer; blade 10 ft; max_speed 3 mph }
+zone pad { role cut; area rect (0, 0) (200, 100); tolerance ±0.1 ft }
+zone well { role exclusion; area rect (90, 40) (110, 60); buffer 5 ft }
+stockpile sp { area rect (210, 0) (240, 30); available 0 yd3 }
+task cut_pad { op cut; zone pad; by dz1; spoil -> sp; until in_tolerance(pad) }
+"""
+
+
+def test_offset_polygon():
+    """A polygon grows by the same distance on every side, whichever way its corners are listed, including at an
+    inside corner; a negative distance shrinks it.
+    """
+    from loam.geo import offset_polygon
+    square = [(0, 0), (10, 0), (10, 10), (0, 10)]
+    grown = [(-2, -2), (12, -2), (12, 12), (-2, 12)]
+    assert offset_polygon(square, 2.0) == pytest.approx(grown)
+    assert offset_polygon(square[::-1], 2.0) == pytest.approx(grown[::-1])                # clockwise
+    assert offset_polygon(square, -2.0) == pytest.approx([(2, 2), (8, 2), (8, 8), (2, 8)])
+    ell = [(0, 0), (10, 0), (10, 4), (4, 4), (4, 10), (0, 10)]                           # L-shaped
+    assert offset_polygon(ell, 1.0) == pytest.approx([(-1, -1), (11, -1), (11, 5), (5, 5), (5, 11), (-1, 11)])
+
+
+def test_site_limits_become_vehicle_fences():
+    """The vehicle's inclusion fence is the hull of everything the program names (here the boundary and a stockpile
+    outside it), grown by a margin; each exclusion zone, grown by its buffer, is an exclusion fence. Converted
+    back from latitude and longitude the corners are where the program put them. No areas, no fence.
+    """
+    from loam.geo import convex_hull
+    from loam.runtime.mavlink import CMD_FENCE_INSIDE, CMD_FENCE_OUTSIDE, fence_items
+    model, diags = check(parse(FENCED))
+    assert not has_errors(diags)
+    frame = Frame(0.3048, 30.0, 34.4459, -85.7197)                                        # a site turned 30 degrees
+
+    def corners(items):
+        """The fence corners back in site coordinates, with each item's command and polygon size."""
+        x, y = frame.wgs84_to_local([i[7] / 1e7 for i in items], [i[8] / 1e7 for i in items])
+        return [(i[2], i[3]) for i in items], np.column_stack([x, y])
+
+    kinds, xy = corners(fence_items(model, frame, margin_m=0.0))
+    assert kinds == [(CMD_FENCE_INSIDE, 5)] * 5 + [(CMD_FENCE_OUTSIDE, 4)] * 4
+    want = [(0, 0), (240, 0), (240, 30), (200, 100), (0, 100), (85, 35), (115, 35), (115, 65), (85, 65)]
+    assert xy == pytest.approx(np.array(want, float), abs=0.05)                           # 1e-7 degrees is 1 cm
+    only_pad, _ = check(parse(FENCED.replace("stockpile sp { area rect (210, 0) (240, 30); available 0 yd3 }\n", "")
+                              .replace("spoil -> sp; ", "")))
+    kinds, xy = corners(fence_items(only_pad, frame))                                     # the default 10 m margin
+    m = 10 / 0.3048
+    assert xy[:4] == pytest.approx(np.array([(-m, -m), (200 + m, -m), (200 + m, 100 + m), (-m, 100 + m)]), abs=0.05)
+    assert [i[0] for i in fence_items(model, frame)] == list(range(9))                    # items are numbered in order
+    assert convex_hull([(0, 0), (4, 0), (4, 4), (0, 4), (2, 2), (2, 0), (4, 0)]) == [(0, 0), (4, 0), (4, 4), (0, 4)]
+    assert convex_hull([(0, 0), (1, 1)]) == [(0, 0), (1, 1)]
+
+
+def test_mavlink_setup_makes_the_vehicle_protect_itself(capsys):
+    """Connecting sets the vehicle up: its failsafe watches the bridge's heartbeat, the fences are on board and
+    switched on, and only parameters that differ are written (a second connection writes none). The bridge then
+    sends a heartbeat every second, and reports a fence breach as a fault. Older parameter names are found; a
+    vehicle that will not be set up is refused, with the link closed.
+    """
+    from loam.runtime.mavlink import VEHICLE_SETUP, Vehicle, fence_items
+    model, _ = check(parse(FENCED))
+    lat0, lon0 = 34.4459, -85.7197
+    frame = Frame(0.3048, 0.0, lat0, lon0)
+    fences = fence_items(model, frame)
+    port = free_port()
+    rover = FakeRover(port, lat0, lon0)
+    rover.start()
+    try:
+        v = Vehicle(f"udpin:127.0.0.1:{port}", frame, fences=fences)
+        try:
+            want = {names[0]: value for names, value, _ in VEHICLE_SETUP}
+            assert rover.params == want and sorted(rover.sets) == sorted(n for n in want if n != "FS_ACTION")
+            assert [(f.command, f.param1, f.x, f.y, f.mission_type) for f in rover.fence] == \
+                [(i[2], i[3], i[7], i[8], 1) for i in fences]
+            err = capsys.readouterr().err
+            assert "FS_GCS_ENABLE: 0 -> 1" in err and "uploaded 2 fence polygon(s), 9 corners" in err
+            end = time.time() + 3.2
+            while time.time() < end:
+                v.poll()
+                time.sleep(0.05)
+            beats = [t for sysid, t in rover.gcs_beats if sysid == 254]
+            assert len(beats) >= 4 and np.diff(beats).max() < 1.5
+            assert v.fault is None
+            rover.breach = True
+            end = time.time() + 2
+            while v.fault is None and time.time() < end:
+                v.poll()
+                time.sleep(0.05)
+            assert v.fault == "vehicleFenceBreach"
+        finally:
+            v.close()
+        rover.sets.clear()
+        Vehicle(f"udpin:127.0.0.1:{port}", frame, fences=fences).close()                  # nothing left to change
+        assert rover.sets == []
+        Vehicle(f"udpin:127.0.0.1:{port}", frame, fences=[]).close()                      # a site without limits:
+        assert rover.sets == []                                                           # failsafe only, no upload
+        rover.params["FS_TIMEOUT"] = rover.params.pop("FS_GCS_TIMEOUT") + 2               # firmware before 4.4
+        rover.params["SYSID_MYGCS"] = rover.params.pop("MAV_GCS_SYSID") + 1
+        Vehicle(f"udpin:127.0.0.1:{port}", frame, fences=fences).close()
+        assert rover.params["FS_TIMEOUT"] == 3 and rover.params["SYSID_MYGCS"] == 254
+        del rover.params["FENCE_ACTION"]                                                  # not a Rover at all
+        with pytest.raises(ValueError, match="FENCE_ACTION"):
+            Vehicle(f"udpin:127.0.0.1:{port}", frame, fences=fences)
+    finally:
         rover.running = False
         rover.join(5)
 
@@ -499,7 +633,7 @@ def test_bridge_state_position_and_ok_come_from_one_reading():
     from loam.runtime.bus import Clock
     ms = machine()
     ms.last_hb = time.time()
-    vehicle = SimpleNamespace(pose=None, fault=None, order_error=None, fix_ok=True, fix_name="rtk-fixed")
+    vehicle = SimpleNamespace(pose=None, fault=None, order_error=None, blocked=None, fix_ok=True, fix_name="rtk-fixed")
     none = bridge_state(ms, vehicle, Clock(), 0.0)
     assert none["safetyState"] == "stopped" and wire.error("vehicleNoPose") in none["errors"]
     vehicle.pose = (12.5, 7.25, 1.0)                 # arrives after the loop's last look at it

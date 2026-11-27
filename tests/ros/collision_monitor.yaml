@@ -1,0 +1,27 @@
+# Nav2's Collision Monitor for the carrier test, added on top of nav2_ic120.yaml. It sits between Nav2's
+# controller and the machine: velocity commands come in on cmd_vel_nav and go out on cmd_vel, zeroed while
+# anything is in the stop zone. This is the layout Nav2's own bringup uses.
+/ic120/collision_monitor:
+  ros__parameters:
+    base_frame_id: base_link
+    odom_frame_id: odom
+    cmd_vel_in_topic: cmd_vel_nav
+    cmd_vel_out_topic: cmd_vel
+    state_topic: collision_monitor_state      # off by default; `loam opera` reads it to report the stop
+    transform_tolerance: 0.5
+    source_timeout: 2.0
+    stop_pub_timeout: 2.0
+    polygons: ["StopAhead"]
+    StopAhead:                                # 3.5 m ahead of the machine, 3 m wide
+      type: polygon
+      points: "[[4.0, 1.5], [4.0, -1.5], [0.5, -1.5], [0.5, 1.5]]"
+      action_type: stop
+      min_points: 4
+      visualize: false
+    observation_sources: ["scan"]
+    scan: {type: scan, topic: scan, enabled: true}
+# The lifecycle manager brings the monitor up with the rest of Nav2.
+/ic120/lifecycle_manager_navigation:
+  ros__parameters:
+    autostart: true
+    node_names: ["controller_server", "planner_server", "behavior_server", "bt_navigator", "collision_monitor"]

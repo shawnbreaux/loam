@@ -32,6 +32,9 @@ from .bus import Bus, Clock, tolerant
 STATE_TIMEOUT_S = 3.0
 ORDER_RETRY_MIN = 1.0     # after a machine reports it cannot run an order, before it is given another
 HELD_PASS_MIN = 30.0      # a pass whose machine has not been in a safe, working state for this long is withdrawn
+# How far a machine's or probe's clock may differ from the controller's. Surveys and finished passes are put in
+# order by their timestamps, so a clock that is off makes the plan count a pass twice or not at all.
+MAX_CLOCK_SKEW_S = 2.0
 
 
 class Controller(Sim):
@@ -53,6 +56,7 @@ class Controller(Sim):
         finished      site time at which it reported its pass complete
         unsafe_since  site time since which it has not been "ok"
         retry_at      no new order before this site time
+        skew          seconds its clock differs from the controller's (real sites only)
     """
     def __init__(self, model: Model, base_dir: str, bus: Bus, clock: Clock, record: str | None = None,
                  log=print, max_minutes: float = 48 * 60, dt: float = 0.25):
@@ -73,7 +77,7 @@ class Controller(Sim):
         self.recent: list[tuple[float, np.ndarray, np.ndarray, np.ndarray]] = []
         self.order_of: dict[str, str] = {}
         self.terrain: dict | None = None
-        self.people: dict[str, tuple[float, float]] = {}
+        self.people: dict[str, tuple[float, float, float]] = {}   # per sensor: x, y and how well they are known
         self.rain = 0.0
         self.estop = False
         self.abandoned = 0
@@ -117,6 +121,12 @@ class Controller(Sim):
             if msg["safetyState"] != s["safety"] and s["safety"] != "unknown":
                 why = ", ".join(e["code"] for e in msg.get("errors", []))
                 self.log(f"{n}: safety {msg['safetyState']}" + (f" ({why})" if why else ""))
+            # On a real site (real time), a state stamped far from now means that machine's clock is wrong.
+            skew = time.time() - wire.parse_ts(msg["timestamp"]) if self.clock.speed == 1.0 else 0.0
+            if (abs(skew) > MAX_CLOCK_SKEW_S) != (abs(s.get("skew", 0.0)) > MAX_CLOCK_SKEW_S):
+                self.log(f"{n}: clock is {skew:+.1f} s from the controller's; no orders until it is synchronised"
+                         if abs(skew) > MAX_CLOCK_SKEW_S else f"{n}: clock synchronised")
+            s["skew"] = skew
             s.update(seen=time.time(), safety=msg["safetyState"], x=msg["pose"]["x"], y=msg["pose"]["y"],
                      order=msg.get("orderId"), progress=msg.get("progress", 0.0), ts=max(s["ts"], ts))
             if s["conn"] == "unknown":
@@ -142,8 +152,8 @@ class Controller(Sim):
         elif kind == "detection":
             if msg["kind"] == "clear":
                 self.people.pop(msg["sensor"], None)
-            elif msg["kind"] == "person":
-                self.people[msg["sensor"]] = (msg["x"], msg["y"])
+            elif msg["kind"] in ("person", "unknown"):    # unknown: a sensor that cannot tell, or has failed
+                self.people[msg["sensor"]] = (float(msg["x"]), float(msg["y"]), float(msg.get("radius") or 0.0))
         elif kind == "weather":
             self.rain = float(msg.get("rain", 0.0))
         elif kind == "estop":
@@ -209,6 +219,13 @@ class Controller(Sim):
             self.log(f"terrain from {msg.get('probe')} ignored: shape {msg['shape']} is not the site grid")
             return
         scan_t = self._minutes(msg["timestamp"])
+        if self.clock.speed == 1.0 and scan_t > self.t + MAX_CLOCK_SKEW_S / 60.0:
+            # A scan cannot come from the future: the probe's clock is ahead. Using it would hide the passes
+            # that finish between now and its timestamp.
+            self.terrain = None
+            self.log(f"terrain from {msg.get('probe')} ignored: stamped {(scan_t - self.t) * 60:.0f} s in the "
+                     "future; synchronise the probe's clock")
+            return
         # Wait until every machine with a pass in flight has reported a state at or after the scan,
         # so we know which passes the scan saw. A silent machine is not waited for long.
         waiting = [n for n in self.inflight if self.mstate[n]["ts"] < scan_t]
@@ -235,8 +252,11 @@ class Controller(Sim):
     def proximity(self, a: str, b: str) -> float:
         """The smallest distance between any detected person and any machine, in metres (infinite when nobody is
         detected). The arguments are the two names in the program's `proximity(a, b)`.
+
+        A detection with a radius means "somewhere within this circle", so the distance counts from the edge of
+        the circle nearest the machine: the cautious reading.
         """
-        d = [math.hypot(px - s["x"], py - s["y"]) for px, py in self.people.values()
+        d = [max(0.0, math.hypot(px - s["x"], py - s["y"]) - r) for px, py, r in self.people.values()
              for s in self.mstate.values() if s["x"] is not None]
         return min(d) * self.u if d else math.inf
 
@@ -253,12 +273,12 @@ class Controller(Sim):
 
     def machine_ready(self, name: str) -> bool:
         """May this machine be given an order? It must be online, heard from within 3 s, reporting "ok", not held by
-        an e-stop, and past any retry delay.
+        an e-stop, past any retry delay, and its clock must agree with the controller's.
         """
         s = self.mstate[name]
         fresh = time.time() - s["seen"] < STATE_TIMEOUT_S
         return s["conn"] == "online" and fresh and s["safety"] == "ok" and not self.estop \
-            and self.t >= s.get("retry_at", 0.0)
+            and self.t >= s.get("retry_at", 0.0) and abs(s.get("skew", 0.0)) <= MAX_CLOCK_SKEW_S
 
     # -- reporting ---------------------------------------------------------------------------
     def status(self) -> dict:
@@ -270,6 +290,7 @@ class Controller(Sim):
             "tasks": {n: {"started": self.started[n], "done": self.done_at[n], "passes": self.task_passes[n]}
                       for n in self.m.tasks},
             "machines": {n: {"conn": s["conn"], "safety": s["safety"], "ready": self.machine_ready(n),
+                             "clock_skew_s": round(s.get("skew", 0.0), 2),
                              "order": self.order_of.get(n) if n in self.inflight else None}
                          for n, s in self.mstate.items()},
             "rules": [n for n, on in self.active_rules.items() if on]

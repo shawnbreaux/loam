@@ -304,3 +304,59 @@ def test_ic120_hauls_dumps_and_stops_on_nav2(site, mqtt_broker):
     assert len(on_line) > 50 and k_b > k_a
     assert off < 0.30                                       # Regulated Pure Pursuit on a tracked base
     assert vmax <= 0.8 + 1e-6
+
+
+@need_ros
+@pytest.mark.slow
+def test_ic120_stops_for_an_obstacle_and_says_why(site, mqtt_broker):
+    """Nav2's Collision Monitor, the machine's own protective layer, stops the carrier for an obstacle in its path
+    whatever Loam has ordered, and `loam opera` reports why.
+
+    A simulated laser scanner sees something 2.5 m ahead in mid-drive. The carrier must stand still, be reported
+    as stopped with `vehicleObstacle` (a warning: it clears by itself), carry on once the way is clear, and
+    finish the order.
+    """
+    _, tmp, _ = site
+    rig = ros(f"python {HERE}/ros/carrier_rig.py {HERE}/ros/nav2_ic120.yaml {tmp}/rig 5.0 10.0 0.0 monitor",
+              log=tmp / "rig.log")
+    bridge = None
+    ctl = Controller(mqtt_broker, "yard", "dt1")
+    obstacle = tmp / "rig" / "obstacle"
+    try:
+        wait_for(str(tmp / "rig.log"), "SIM UP", 120)
+        bridge = ros(f"python -m loam.cli opera {tmp}/s.loam --machine dt1 --namespace ic120 --kind carrier "
+                     f"--broker {mqtt_broker}", log=tmp / "bridge.log")
+        ctl.wait(lambda s: s["safetyState"] == "ok", timeout=60)
+        line = [[30, 25], [70, 25], [70, 35], [30, 35]]                       # ft; work line y = 30 ft, x 30 to 70
+        ctl.send("order", wire.order("yard", "dt1", 1, "o-1", 0, "dig", "cut", line, {}, {"maxSpeed": 0.8}))
+        # At full speed on the work line (x from 30 to 70 ft), well clear of the corner at its start.
+        ctl.wait(lambda s: s["orderId"] == "o-1" and s["driving"] and 42 < s["pose"]["x"] < 55, timeout=200)
+        obstacle.touch()
+        seen_at = time.time()
+        held = ctl.wait(lambda s: any(e["code"] == "vehicleObstacle" for e in s["errors"]), timeout=10)
+        assert held["safetyState"] == "stopped" and not held["driving"]
+        assert [e["level"] for e in held["errors"] if e["code"] == "vehicleObstacle"] == ["warning"]
+        time.sleep(6.0)
+        assert any(e["code"] == "vehicleObstacle" for e in ctl.latest()["errors"])        # still held
+        obstacle.unlink()
+        cleared_at = time.time()
+        ctl.wait(lambda s: s["safetyState"] == "ok" and s["driving"], timeout=30)
+        end = ctl.wait(lambda s: s["orderId"] == "o-1" and s["progress"] == 1.0, timeout=300)
+        assert end["safetyState"] == "ok" and end["errors"] == []
+    finally:
+        ctl.close()
+        if bridge is not None:
+            stop(bridge)
+        stop(rig)
+    poses = jsonl(tmp / "rig" / "poses.jsonl")
+    # From 2.5 s after the obstacle appeared (0.8 m/s at 0.5 m/s^2 takes 1.6 s to stop) until it went: at rest.
+    still = [p for p in poses if seen_at + 2.5 < p["t"] < cleared_at]
+    moved = math.hypot(still[-1]["x"] - still[0]["x"], still[-1]["y"] - still[0]["y"])
+    before = [p for p in poses if p["t"] <= seen_at][-1]
+    travel = math.hypot(still[0]["x"] - before["x"], still[0]["y"] - before["y"])
+    print(f"\nIC120 and the Collision Monitor: stopped within {travel:.2f} m of where the obstacle was first seen "
+          f"(it was 2.5 m ahead); moved {moved * 100:.1f} cm while held")
+    assert before["v"] > 0.7                                # it was at speed when the obstacle appeared
+    assert len(still) > 100 and moved < 0.02
+    assert 0.3 < travel < 2.0                               # braked from that speed, and short of the obstacle
+

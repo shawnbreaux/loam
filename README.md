@@ -125,12 +125,23 @@ See [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
   ArduPilot SITL, the official VDA 5050 schemas, Nav2 and ros2_control.
 - **Soil physics:** `loam soil-calibrate` derives roller compaction per pass from Project Chrono's SCM
   soil model; `simulate-site --soil-table` uses it.
+- **Vehicles that protect themselves:** `loam mavlink` uploads the site boundary and exclusion zones to the
+  vehicle as fences and switches on its failsafe, so it holds if Loam or the radio dies; `loam opera`
+  reports stops by Nav2's Collision Monitor.
+- **Site sensors:** `loam sense` turns people seen by Frigate's cameras and rain from an rtl_433 gauge
+  into Wire messages; a camera or a sensor program that stops counts as a person everywhere.
+  `loam terrain --watch` publishes scans as they are written, and `loam estop` is the site e-stop from a
+  keyboard.
+- **Broker security:** `mqtts://` with named clients and per-machine access rules (`examples/broker/`).
 - **Positioning:** `loam nmea tcp://…` reads RTKLIB, RTKBase or a receiver directly and publishes to MQTT.
+  The controller refuses orders to a machine whose clock is off.
 - **Survey data:** OpenDroneMap project folders, LAZ with a ground filter that removes machines, people
-  and brush, GeoTIFF DEMs, and real CRSs through pyproj.
+  and brush (checked against PDAL's SMRF), GeoTIFF DEMs, QField and QGIS survey points, and real CRSs
+  through pyproj.
 - **Design data:** IFC 4.3 surfaces through IfcOpenShell; GeoTIFF surfaces; GeoJSON areas from QGIS;
   `export --to geotiff | geojson`.
-- **Operations:** `loam monitor` serves Prometheus `/metrics` for Grafana.
+- **Operations:** `loam monitor` serves Prometheus `/metrics` for Grafana and records every Wire message
+  to MCAP (`--mcap`) for Lichtblick or PlotJuggler.
 
 ## Repository layout
 
@@ -151,18 +162,20 @@ See [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
 | `loam/plan.py` | `loam plan`: grading LandXML to a site program |
 | `loam/runtime/` | Controller over MQTT, simulated world, machines (optionally PyBullet physics) and probe |
 | `loam/runtime/bridge.py`, `mavlink.py`, `vda5050.py`, `opera.py` | Real vehicles as Loam machines: one safety loop, three protocols |
+| `loam/sensors.py` | `loam sense`: people from Frigate, rain from rtl_433, as Wire messages |
+| `loam/wirelog.py` | MCAP recorder for Wire messages |
 | `loam/runtime/chrono_soil.py` | Roller compaction curves from Project Chrono's SCM soil model |
 | `tools/integration-envs.sh` | Conda environments for Chrono and ROS 2 (OPERA), for the integration tests |
 | `loam/monitor.py`, `loam/monitor.html` | Live dashboard and replay pages |
 | `loam/target.py`, `loam/export.py` | Next-pass surface; LandXML (Cat Grade 3D), OpenGrade3D `.agd`, AgOpenGPS field folder |
-| `examples/` | Example program and surfaces, comparison plot, Monte Carlo study |
-| `tests/` | 165 tests: language, I/O, simulator invariants, field adapters, planner, controller loopback, a full multi-process MQTT run with faults, vehicle bridges (ArduPilot SITL and a fake ArduPilot, VDA 5050, RTKLIB, OPERA on Nav2 and ros2_control), e-stop and SIGTERM safety, Chrono soil, integrations, parser fuzzing; every test also fails on a leaked thread, process or file |
+| `examples/` | Example program and surfaces, comparison plot, Monte Carlo study, a secured Mosquitto configuration |
+| `tests/` | 193 tests: language, I/O, simulator invariants, field adapters, planner, controller loopback, a full multi-process MQTT run with faults, vehicle bridges (ArduPilot SITL and a fake ArduPilot, VDA 5050, RTKLIB, OPERA on Nav2 and ros2_control, ArduPilot fences and failsafe, Nav2's Collision Monitor), e-stop and SIGTERM safety, a TLS broker with access rules, site sensors (a stand-in Frigate, rtl_433 on recorded gauges), Chrono soil, integrations (PDAL cross-check included), parser fuzzing; every test also fails on a leaked thread, process or file |
 
 ## Development
 
 ```bash
 pip install -e ".[dev]"
-pytest -q --cov=loam          # 165 tests, about 3 min; the MQTT tests need mosquitto
+pytest -q --cov=loam          # 193 tests, about 6 min; the MQTT tests need mosquitto
 ruff check loam tests examples
 mypy loam
 python examples/study.py      # about 1 min on 2 cores; rewrites results/
@@ -173,7 +186,7 @@ example surfaces. Contributions: see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Status and safety
 
-v0.0.2 is an early draft; the language and wire format will change. **Loam does not make a
+v0.0.6 is an early draft; the language and wire format will change. **Loam does not make a
 machine safe.** Machines directed by Loam need their own certified safety systems and a site risk
 assessment (ISO 17757). The reference simulator is a test tool, not a planner for real equipment.
 

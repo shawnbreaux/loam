@@ -4,7 +4,8 @@
     Try it on a model        sim (the reference simulator)
     Start from a design      plan (LandXML grading model -> Loam program)
     Work with field data     export, terrain, score, nmea
-    Run a site               run (controller), monitor (dashboard), resume (after a stop)
+    Run a site               run (controller), monitor (dashboard), estop, resume (after a stop)
+    Connect site sensors     sense (people from cameras, rain from a gauge), terrain --watch (scans as they arrive)
     Simulate a site          simulate-site, soil-calibrate
     Connect real machines    mavlink, vda5050, opera
 
@@ -48,7 +49,7 @@ def load(path: str):
 
 # commands that run until stopped: a service manager's SIGTERM must still run their cleanup (hold the
 # vehicle, cancel its goal, report it offline), which Python's default SIGTERM action skips
-LONG_RUNNING = {"run", "simulate-site", "monitor", "_role", "mavlink", "vda5050", "opera", "nmea"}
+LONG_RUNNING = {"run", "simulate-site", "monitor", "_role", "mavlink", "vda5050", "opera", "nmea", "sense", "terrain"}
 
 
 def _stop_cleanly_on_sigterm() -> None:
@@ -184,14 +185,14 @@ def load_ground(path: str, grid, frame, a):
     import numpy as np
 
     from .pointcloud import fill_gaps, grid_cloud
-    from .survey import idw, read_points_csv
+    from .survey import idw, read_points
     if path == "existing":
         ex = grid.m.site.get("existing") or {}
         if "file" not in ex:
             raise ValueError("the site declares no existing surface")
         return grid.surface(ex, allow_gaps=True), {"source": "existing"}
-    if path.lower().endswith(".csv") and _is_survey_csv(path):
-        s = read_points_csv(path, frame, a.layout)
+    if path.lower().endswith(".geojson") or (path.lower().endswith(".csv") and _is_survey_csv(path)):
+        s = read_points(path, frame, a.layout)
         z = idw(grid, s.x, s.y, s.z, a.radius / grid.u)
         return z, {"source": "survey", "points": len(s.z),
                    "cells_covered_pct": round(100 * float(np.isfinite(z).mean()), 2)}
@@ -251,7 +252,7 @@ def add_field_commands(sub) -> None:
     p.add_argument("--surface", choices=["design", "next"], default="next",
                    help="design, or the next-pass target computed from --ground (default)")
     p.add_argument("--ground", default="existing",
-                   help="measured ground: 'existing', a survey .csv, or a .las/.pcd/.xyz cloud")
+                   help="measured ground: 'existing', a survey .csv or .geojson, or a .las/.pcd/.xyz cloud")
     p.add_argument("--benchmark", type=_pair, default=(0.0, 0.0), metavar="X,Y",
                    help="agd: site position of the master benchmark")
     p.add_argument("--json", action="store_true")
@@ -263,6 +264,12 @@ def add_field_commands(sub) -> None:
     p.add_argument("--probe", default=None, help="probe name for the message (default: the program's first)")
     p.add_argument("--wire", help="append the terrain message to this JSON-lines file")
     p.add_argument("--landxml", help="also write the gridded scan as a LandXML surface (site coordinates)")
+    p.add_argument("--broker", help="publish the terrain message to this MQTT broker, for a running controller")
+    p.add_argument("--watch", action="store_true",
+                   help="CLOUD is a folder: publish every scan that appears in it, until stopped (needs --broker)")
+    p.add_argument("--settle", type=float, default=2.0, metavar="S",
+                   help="with --watch: a file counts as complete once it has not changed for S seconds")
+    p.add_argument("--max-seconds", type=float, help=argparse.SUPPRESS)       # for tests: stop --watch after this
     _frame_args(p)
     _ground_args(p)
     p = sub.add_parser("score", help="score a survey against the design inside a zone")
@@ -297,6 +304,9 @@ def add_field_commands(sub) -> None:
                    help="lowest GPS fix type to work on (6 RTK fixed, 5 float, 3 3D; default 6)")
     p.add_argument("--sim-world", action="store_true", help="part of `loam simulate-site`: its clock and world")
     _frame_args(p)
+    p.add_argument("--no-vehicle-setup", action="store_true",
+                   help="leave the vehicle's own parameters and fences alone (default: upload the site boundary and "
+                        "exclusion zones as fences and switch on its ground-station failsafe)")
     p = sub.add_parser("vda5050", help="drive a VDA 5050 3.0 mobile robot as a Loam machine")
     p.add_argument("file")
     p.add_argument("--machine", required=True, help="the Loam machine this robot is")
@@ -310,6 +320,24 @@ def add_field_commands(sub) -> None:
     p.add_argument("--machine", help="one machine (default: the whole site)")
     p.add_argument("--reason", default="resumed by operator")
     p.add_argument("--broker", default="localhost:1883")
+    p.add_argument("--json", action="store_true")
+    p = sub.add_parser("estop", help="press (or release) the site e-stop from the supervisor's computer")
+    p.add_argument("file")
+    p.add_argument("--release", action="store_true", help="release it; machines stay stopped until `loam resume`")
+    p.add_argument("--reason", help="why (default: pressed, or released, by operator)")
+    p.add_argument("--broker", default="localhost:1883")
+    p.add_argument("--json", action="store_true")
+    p = sub.add_parser("sense", help="site sensors as Wire messages: people from Frigate cameras, rain from rtl_433")
+    p.add_argument("file")
+    p.add_argument("--broker", default="localhost:1883")
+    p.add_argument("--areas", help='people: JSON file placing Frigate\'s cameras and zones on the site, '
+                                   '{"cameras": {"yard": {"x": 80, "y": 50, "radius": 60, "zones": {...}}}}')
+    p.add_argument("--frigate-prefix", default="frigate", help="Frigate's MQTT topic prefix")
+    p.add_argument("--rain", nargs="?", const="rtl_433/+/events", metavar="TOPIC",
+                   help="rain: rtl_433's events topic (default rtl_433/+/events)")
+    p.add_argument("--gauge", metavar="MODEL[:ID]", help="the rain gauge to use (default: the first one heard)")
+    p.add_argument("--name", default="sense", help="this sensor's name in the messages")
+    p.add_argument("--max-seconds", type=float, help=argparse.SUPPRESS)       # for tests
     p.add_argument("--json", action="store_true")
     p = sub.add_parser("opera", help="drive an OPERA (ROS 2) machine as a Loam machine: IC120 carrier, ZX200")
     p.add_argument("file")
@@ -338,6 +366,7 @@ def add_field_commands(sub) -> None:
     p.add_argument("--host", default="127.0.0.1",
                    help="address to listen on; 0.0.0.0 lets other machines (a Prometheus server) reach it")
     p.add_argument("--record", help="record dashboard frames as JSON lines")
+    p.add_argument("--mcap", help="record every Wire message to this MCAP file (for Lichtblick, PlotJuggler)")
     p.add_argument("--replay", help="a recording to turn into a self-contained page (with --html)")
     p.add_argument("--html", help="where to write the replay page")
     p.add_argument("--split", action="store_true", help="write a folder: index.html + run.json")
@@ -417,9 +446,12 @@ def cmd_export(model, a) -> None:
     _show(out, a.json)
 
 
+SCAN_TYPES = (".las", ".laz", ".pcd", ".xyz", ".csv", ".geojson", ".tif", ".tiff")
+
+
 def cmd_terrain(model, a) -> None:
-    """`loam terrain`: grid measured ground onto the site and write it as a Loam Wire terrain message and/or a LandXML
-    surface.
+    """`loam terrain`: grid measured ground onto the site and hand it on as a Loam Wire terrain message (to a file
+    and/or a broker) and/or a LandXML surface. With `--watch`, do so for every scan that appears in a folder.
     """
     import json as _json
 
@@ -427,25 +459,93 @@ def cmd_terrain(model, a) -> None:
     from .landxml import write_grid_tin
     grid = _grid(model, a)
     frame = _frame(grid, a)
-    z, info = load_ground(a.cloud, grid, frame, a)
+    site = model.site["name"]
     probe = a.probe or next(iter(model.probes), "probe")
+    topic = wire.topic(site, None, "terrain")
+
+    def message(path: str, seq: int):
+        """Grid one scan. The message is stamped with the file's time: when the scan was taken, not when it was
+        processed. The controller needs that to know which passes the scan already shows.
+        """
+        z, info = load_ground(path, grid, frame, a)
+        return z, info, wire.terrain(site, probe, seq, (grid.x0, grid.y0), grid.cell, grid.shape,
+                                     data=wire.encode_heights(z), ts=os.path.getmtime(path))
+
+    if a.watch:
+        if not a.broker or not os.path.isdir(a.cloud):
+            raise ValueError("--watch needs --broker and a folder to watch")
+        _watch_scans(a, topic, message)
+        return
+    z, info, msg = message(a.cloud, 1)
     if a.wire:
-        msg = wire.terrain(model.site["name"], probe, 1, (grid.x0, grid.y0), grid.cell, grid.shape,
-                           data=wire.encode_heights(z), ts=os.path.getmtime(a.cloud))
         with open(a.wire, "a", encoding="utf-8") as f:
-            f.write(_json.dumps({"topic": wire.topic(model.site["name"], None, "terrain"), "payload": msg}) + "\n")
+            f.write(_json.dumps({"topic": topic, "payload": msg}) + "\n")
         info["wire"] = a.wire
     if a.landxml:
         write_grid_tin(a.landxml, "SCAN", grid.xs, grid.ys, z, grid.unit)
         info["landxml"] = a.landxml
+    if a.broker:
+        from .runtime.bus import Bus
+        bus = Bus(a.broker, f"loam-terrain-{os.getpid()}").start([])
+        try:
+            bus.pub(topic, msg, qos=1, wait=10.0)
+        finally:
+            bus.stop()
+        info["published"] = topic
     _show(info, False)
+
+
+def _watch_scans(a, topic: str, message) -> None:
+    """Publish each scan file that appears in the folder `a.cloud`, oldest first, until stopped.
+
+    This is how a mast lidar or a drone-mapping computer feeds a running site: it writes scan files into a
+    folder, by whatever means it has. Of the files already there at the start only the newest is published: it
+    is the current ground. A file is taken once it has stopped changing for `a.settle` seconds, since the writer
+    may still be writing it. A file that cannot be read is reported and skipped, never retried.
+    """
+    from .runtime.bus import Bus
+
+    def scans() -> dict[str, float]:
+        """The scan files in the folder now, with their modification times."""
+        out = {}
+        for e in os.scandir(a.cloud):
+            if e.is_file() and e.name.lower().endswith(SCAN_TYPES):
+                out[e.path] = e.stat().st_mtime
+        return out
+
+    done = scans()
+    newest = max(done, key=lambda path: done[path], default=None)
+    if newest is not None:
+        del done[newest]
+    bus = Bus(a.broker, f"loam-terrain-{os.getpid()}").start([])
+    seq = int(time.time())
+    end = time.time() + a.max_seconds if a.max_seconds else float("inf")
+    try:
+        while time.time() < end:
+            for path, mtime in sorted(scans().items(), key=lambda kv: kv[1]):
+                if done.get(path) == mtime or time.time() - mtime < a.settle:
+                    continue
+                done[path] = mtime
+                seq += 1
+                try:
+                    _, info, msg = message(path, seq)
+                except (ValueError, OSError) as e:
+                    print(f"loam terrain: skipped {path}: {e}", file=sys.stderr, flush=True)
+                    continue
+                bus.pub(topic, msg, qos=1, wait=10.0)
+                print(f"published {os.path.basename(path)} ({info.get('source', 'scan')})", flush=True)
+            for path in set(done) - set(scans()):               # forget files that were removed
+                del done[path]
+            time.sleep(0.5)
+    finally:
+        bus.stop()
 
 
 def cmd_score(model, a) -> None:
     """`loam score`: how much of a zone a survey shows within tolerance of the design. This is the number a field test
     is judged by.
     """
-    from .survey import read_points_csv, score
+    from .survey import read_points, score
     grid = _grid(model, a)
     frame = _frame(grid, a)
     z = model.zones.get(a.zone)
@@ -453,7 +553,7 @@ def cmd_score(model, a) -> None:
         raise ValueError(f"no polygon zone named {a.zone!r}")
     tol = z["tolerance"].to(grid.unit) if z.get("tolerance") else 0.1 / (grid.u / 0.3048)
     design = grid.surface(model.site["design"], allow_gaps=True)
-    s = read_points_csv(a.survey, frame, a.layout)
+    s = read_points(a.survey, frame, a.layout)
     r = score(grid, design, s, z["area"]["polygon"], tol)
     r.update({"zone": a.zone, "tolerance": tol, "units": grid.unit})
     _show(r, a.json)
@@ -536,7 +636,8 @@ def cmd_simulate_site(model, a) -> None:
 def cmd_mavlink(model, a) -> None:
     """`loam mavlink`: make an ArduPilot Rover (or other MAVLink ground vehicle) one of the program's machines."""
     from .runtime.mavlink import run_mavlink
-    run_mavlink(model, a.machine, a.broker, a.vehicle, _frame(_grid(model, a), a), a.min_fix, a.sim_world)
+    run_mavlink(model, a.machine, a.broker, a.vehicle, _frame(_grid(model, a), a), a.min_fix, a.sim_world,
+                setup=not a.no_vehicle_setup)
 
 
 def cmd_vda5050(model, a) -> None:
@@ -616,6 +717,38 @@ def cmd_resume(model, a) -> None:
     _show({"resumed": a.machine or "site", "reason": a.reason}, a.json)
 
 
+def cmd_estop(model, a) -> None:
+    """`loam estop`: press or release the site e-stop over the broker.
+
+    Every machine stops at once on a press, without waiting for the controller. A release restarts nothing: the
+    machines stay stopped until `loam resume`. The message is retained, so a machine that connects during an
+    e-stop learns of it. This is a software stop over a radio link; it does not replace the hard-wired stop
+    button on each machine.
+    """
+    from . import wire
+    from .runtime.bus import Bus
+    site = model.site["name"]
+    reason = a.reason or ("released by operator" if a.release else "pressed by operator")
+    bus = Bus(a.broker, f"loam-estop-{os.getpid()}").start([])
+    try:
+        bus.pub(wire.topic(site, None, "estop"),
+                wire.estop(site, int(time.time()), not a.release, reason, ts=time.time()), qos=1, retain=True,
+                wait=5.0)
+    finally:
+        bus.stop()
+    _show({"estop": "released" if a.release else "pressed", "reason": reason}, a.json)
+
+
+def cmd_sense(model, a) -> None:
+    """`loam sense`: republish people seen by Frigate's cameras and rain measured by an rtl_433 gauge as Loam Wire
+    detection and weather messages, until stopped.
+    """
+    from .sensors import load_areas, run_sense
+    sent = run_sense(model, a.broker, load_areas(a.areas) if a.areas else None, a.frigate_prefix, a.rain, a.gauge,
+                     a.name, a.max_seconds)
+    _show({"sent": sent}, a.json)
+
+
 def cmd_opera(model, a) -> None:
     """`loam opera`: make an OPERA (ROS 2) machine one of the program's machines."""
     from .runtime.opera import run_opera
@@ -638,7 +771,7 @@ def cmd_monitor(model, a) -> None:
             raise ValueError("--replay needs --html OUT")
         _show(monitor.replay_html(a.replay, a.html, split=a.split), False)
         return
-    monitor.serve(model, os.path.dirname(os.path.abspath(a.file)), a.broker, a.port, a.record, a.host)
+    monitor.serve(model, os.path.dirname(os.path.abspath(a.file)), a.broker, a.port, a.record, a.host, a.mcap)
 
 
 def cmd_role(model, a) -> None:
@@ -651,7 +784,7 @@ def cmd_role(model, a) -> None:
 # traceback.
 FIELD_COMMANDS = {"run": cmd_run, "simulate-site": cmd_simulate_site, "mavlink": cmd_mavlink, "vda5050": cmd_vda5050,
                   "soil-calibrate": cmd_soil_calibrate, "opera": cmd_opera,
-                  "resume": cmd_resume,
+                  "resume": cmd_resume, "estop": cmd_estop, "sense": cmd_sense,
                   "_role": cmd_role, "monitor": cmd_monitor,
                   "export": cmd_export, "terrain": cmd_terrain, "score": cmd_score, "nmea": cmd_nmea}
 

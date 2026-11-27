@@ -158,7 +158,7 @@ def carrier(**kw):
     c.__dict__.update(frame=MapFrame(1.0), dumper=None, goal=None, lock=threading.Lock(), state="idle",
                       nav=Client(), follow=Client(), speed_pub=Pub(), odom=odom(), line_step=0.25, k=0, left=[],
                       sent=0, total=1, max_speed=None, speed_at=0.0, waiting_since=0.0, tried_at=0.0,
-                      dump_angle=1.0, steps=[], aborts=0)
+                      dump_angle=1.0, steps=[], aborts=0, held_by_monitor=False)
     from nav2_msgs.action import FollowPath, NavigateThroughPoses
     from nav2_msgs.msg import SpeedLimit
     c.NTP, c.FP, c.SpeedLimit = NavigateThroughPoses, FollowPath, SpeedLimit
@@ -270,6 +270,56 @@ def test_carrier_waits_for_nav2_and_never_fails_the_order(ros_stubs):
     assert c.state == "failed" and c.order_error == "vehicleNavFailed" and c.fault is None
     c.odom.fresh = lambda: False
     assert c.fault == "vehicleLinkLost"
+
+
+def test_carrier_reports_a_collision_monitor_stop_and_does_not_fail_the_order(ros_stubs):
+    """While Nav2's Collision Monitor holds the machine for an obstacle, the adapter says so (`blocked`), and Nav2
+    giving up for lack of progress is retried without counting. Once the way is clear, aborts count again.
+    """
+    c = carrier()
+    c.start([(0, 30), (60, 30)], {}, None)
+    c.pause(False)
+    assert c.blocked is None
+    c._monitor(Msg(action_type=1, polygon_name="StopAhead"))          # STOP
+    assert c.blocked == "vehicleObstacle" and c.fault is None
+    for _ in range(6):                                                # far more often than the three retries
+        finish(c.nav.accept(), status=6)
+        assert c.state == "waiting" and c.aborts == 0
+        c.tried_at -= 2.5
+        c.poll()
+        assert c.state == "driving"
+    c._monitor(Msg(action_type=2, polygon_name="SlowAhead"))          # SLOWDOWN: moving again
+    assert c.blocked is None
+    for _ in range(3):
+        finish(c.nav.accept(), status=6)
+        c.tried_at -= 2.5
+        c.poll()
+    finish(c.nav.accept(), status=6)
+    assert c.state == "failed"
+
+
+def test_bridge_reports_a_protective_stop_without_pausing_the_vehicle():
+    """A vehicle held by its own protective device is reported as stopped, with a warning that names the reason,
+    and is not counted as driving. It is not a fault: a fault, or the machine's own safety state, comes first.
+    """
+    from conftest import EXAMPLE
+
+    from loam.cli import load
+    from loam.runtime.bridge import bridge_state
+    from loam.runtime.bus import Clock
+    from loam.runtime.machine import MachineSim
+    ms = MachineSim(load(EXAMPLE), "dz1", "unused", (0.0, 0.0))
+    ms.last_hb, ms.order, ms.waiting = time.time(), {"orderId": "o1"}, False
+    adapter = Msg(pose=(1.0, 2.0, 0.0), fault=None, blocked=None, fix_name="odom")
+    st = bridge_state(ms, adapter, Clock(), 0.0)
+    assert st["safetyState"] == "ok" and st["driving"] and st["errors"] == []
+    adapter.blocked = "vehicleObstacle"
+    st = bridge_state(ms, adapter, Clock(), 0.0)
+    assert st["safetyState"] == "stopped" and not st["driving"]
+    assert st["errors"] == [{"code": "vehicleObstacle", "level": "warning", "text": ""}]
+    adapter.fault = "vehicleLinkLost"
+    st = bridge_state(ms, adapter, Clock(), 0.0)
+    assert [e["code"] for e in st["errors"]] == ["vehicleLinkLost"]
 
 
 def test_carrier_dumps_only_standing_still(ros_stubs, monkeypatch):

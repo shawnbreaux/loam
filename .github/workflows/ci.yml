@@ -25,8 +25,9 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
           cache: pip
-      - name: Mosquitto (the end-to-end and bridge tests run a real MQTT broker)
-        run: sudo apt-get update -q && sudo apt-get install -y -q mosquitto
+      - name: Mosquitto (the end-to-end, bridge and broker-security tests run a real MQTT broker) and PDAL
+          (BSD-3; the ground filter is checked against its SMRF filter)
+        run: sudo apt-get update -q && sudo apt-get install -y -q mosquitto pdal
       - name: RTKLIB str2str (BSD-2) for the positioning-stream test, pinned to the tested commit
         run: |
           git init -q /tmp/RTKLIB

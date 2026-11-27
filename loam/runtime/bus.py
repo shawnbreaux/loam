@@ -7,17 +7,31 @@ The simulated site runs faster than real time. The world publishes a retained
 clock message `sim/<site>/clock` = {"t0": wall seconds, "speed": factor,
 "epoch": site epoch seconds}; every process converts wall time to site minutes
 with it. A real site has no clock topic and runs at speed 1.
+
+A broker address is "host:port", or a URL: `mqtt://host:1883` (plain) or
+`mqtts://user@host:8883` (TLS). Secrets never go on the command line, where
+every user of the computer could read them with `ps`; they come from the
+environment:
+
+    LOAM_BROKER_USER           user name (if the URL has none)
+    LOAM_BROKER_PASSWORD       password, or
+    LOAM_BROKER_PASSWORD_FILE  a file holding it (systemd credentials, Docker secrets)
+    LOAM_BROKER_CA             CA certificate that signed the broker's (default: the system's)
+    LOAM_BROKER_CERT, LOAM_BROKER_KEY   this client's certificate and key, for mutual TLS
 """
 from __future__ import annotations
 
 import contextlib
 import json
+import os
 import queue
+import socket
+import ssl
 import sys
 import threading
 import time
-from collections.abc import Iterator
-from typing import Any
+from collections.abc import Iterator, Mapping
+from typing import Any, NamedTuple
 
 try:
     import paho.mqtt.client as mqtt
@@ -25,26 +39,88 @@ except ImportError as e:  # pragma: no cover
     raise SystemExit("the Loam runtime needs paho-mqtt: pip install 'loam[run]'") from e
 
 
-def parse_broker(text: str) -> tuple[str, int]:
-    """A broker address "host:port" as (host, port); the host defaults to localhost and the port to 1883, the standard
-    MQTT port.
+class Broker(NamedTuple):
+    """Where the broker is and how to reach it: host, port, whether to use TLS, and the user name (or None)."""
+    host: str
+    port: int
+    tls: bool
+    user: str | None
+
+
+def parse_broker(text: str) -> Broker:
+    """A broker address as a `Broker`.
+
+    Accepts "host:port", `mqtt://[user@]host[:port]` and `mqtts://[user@]host[:port]`. The host defaults to
+    localhost; the port to 1883, or 8883 with TLS (the two standard MQTT ports). A password in the address is
+    refused: command lines are visible to every user of the computer.
     """
-    host, _, port = text.partition(":")
-    return host or "localhost", int(port or 1883)
+    scheme, sep, rest = text.partition("://")
+    if not sep:
+        scheme, rest = "mqtt", text
+    if scheme not in ("mqtt", "mqtts"):
+        raise SystemExit(f"broker address {text!r}: use host:port, mqtt://host or mqtts://host")
+    user, at, hostport = rest.rpartition("@")
+    if ":" in user:
+        raise SystemExit("put the broker password in LOAM_BROKER_PASSWORD or LOAM_BROKER_PASSWORD_FILE, "
+                         "not in the address")
+    host, _, port = hostport.rstrip("/").partition(":")
+    tls = scheme == "mqtts"
+    try:
+        return Broker(host or "localhost", int(port or (8883 if tls else 1883)), tls, user if at else None)
+    except ValueError:
+        raise SystemExit(f"broker address {text!r}: the port must be a number") from None
+
+
+def _password(env: Mapping[str, str]) -> str | None:
+    """The broker password from the environment: LOAM_BROKER_PASSWORD, else the first line of the file named by
+    LOAM_BROKER_PASSWORD_FILE.
+    """
+    if env.get("LOAM_BROKER_PASSWORD"):
+        return env["LOAM_BROKER_PASSWORD"]
+    path = env.get("LOAM_BROKER_PASSWORD_FILE")
+    if not path:
+        return None
+    try:
+        with open(path, encoding="utf-8") as f:
+            return f.readline().rstrip("\r\n")
+    except OSError as e:
+        raise SystemExit(f"cannot read the broker password file: {e}") from e
 
 
 class Bus:
     """One MQTT connection with a receive queue, JSON publishing and an optional last will."""
 
-    def __init__(self, broker: str, client_id: str, will: tuple[str, dict] | None = None):
+    def __init__(self, broker: str, client_id: str, will: tuple[str, dict] | None = None, raw: bool = False,
+                 env: Mapping[str, str] | None = None):
         """Prepare a connection (it is opened by `start`).
 
         `client_id` must be unique on the broker. `will` is a (topic, message) pair the broker publishes for us,
         retained, if this client vanishes without saying goodbye: how a machine that loses its radio link gets
-        reported.
+        reported. With `raw`, payloads that are not JSON objects are delivered too, as text: other programs'
+        status topics ("online", "offline") are like that. `env` supplies the credentials (see the module
+        docstring); it defaults to the process environment.
         """
-        self.host, self.port = parse_broker(broker)
+        if env is None:
+            env = os.environ
+        self.host, self.port, tls, user = parse_broker(broker)
+        self.raw = raw
+        self.refused: str | None = None               # why the broker turned us away, if it did
         self.c = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=client_id, clean_session=True)
+        user = user or env.get("LOAM_BROKER_USER")
+        if user:
+            self.c.username_pw_set(user, _password(env))
+        if tls:
+            # Verify the broker's certificate and its host name; never fall back to an unverified connection.
+            # TLS 1.2 is the oldest version accepted.
+            try:
+                ctx = ssl.create_default_context(cafile=env.get("LOAM_BROKER_CA") or None)
+                ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+                if env.get("LOAM_BROKER_CERT"):
+                    ctx.load_cert_chain(env["LOAM_BROKER_CERT"], env.get("LOAM_BROKER_KEY") or None)
+            except (OSError, ssl.SSLError) as e:
+                self._close_wakeup()
+                raise SystemExit(f"cannot load the broker TLS certificates: {e}") from e
+            self.c.tls_set_context(ctx)
         self.inbox: queue.Queue[tuple[str, Any]] = queue.Queue()
         self.pushback: list[tuple[str, Any]] = []     # handed back by the consumer; drained first, in order
         self.subs: list[str] = []
@@ -58,8 +134,11 @@ class Bus:
 
     def _on_connect(self, client, userdata, flags, rc, props=None) -> None:
         """Runs on every connect and reconnect: subscribe again, since the broker forgets a clean session's
-        subscriptions.
+        subscriptions. A refusal is kept for `start` to report.
         """
+        if getattr(rc, "is_failure", False):          # wrong password, not authorised, ...
+            self.refused = str(rc)
+            return
         for t in self.subs:
             client.subscribe(t, qos=1)
         self.connected.set()
@@ -67,8 +146,13 @@ class Bus:
     def _on_message(self, client, userdata, msg) -> None:
         """Runs on paho's network thread: decode and queue the message for the owner's own thread."""
         with contextlib.suppress(ValueError, UnicodeDecodeError):   # not ours: ignore malformed traffic
-            payload = json.loads(msg.payload)
-            if isinstance(payload, dict):                           # every Loam message is a JSON object
+            try:
+                payload = json.loads(msg.payload)
+            except ValueError:
+                if not self.raw:
+                    raise
+                payload = msg.payload.decode("utf-8")
+            if isinstance(payload, dict) or self.raw:               # every Loam message is a JSON object
                 self.inbox.put((msg.topic, payload))
 
     def start(self, subs: list[str], timeout: float = 10.0) -> Bus:
@@ -78,22 +162,44 @@ class Bus:
         self.subs = subs
         try:
             self.c.connect(self.host, self.port, keepalive=5)
-        except OSError as e:                          # refused, unreachable, unknown host
+        except OSError as e:                          # refused, unreachable, unknown host, TLS handshake failed
+            # paho does not close the socket when the TLS handshake fails; it is left to the garbage collector.
+            # Close it now: the socket is a local variable of the frames the error passed through.
+            tb = e.__traceback__
+            while tb is not None:
+                for v in list(tb.tb_frame.f_locals.values()):
+                    if isinstance(v, socket.socket):
+                        v.close()
+                tb = tb.tb_next
             self._close_wakeup()
             raise SystemExit(f"cannot reach the MQTT broker at {self.host}:{self.port}: {e}") from e
         self.c.loop_start()
-        if not self.connected.wait(timeout):
+        end = time.time() + timeout
+        while not self.connected.wait(0.05) and self.refused is None and time.time() < end:
+            pass
+        if not self.connected.is_set():
             self.stop()                               # no network thread or sockets left behind
-            raise SystemExit(f"cannot reach the MQTT broker at {self.host}:{self.port}")
+            if self.refused:
+                raise SystemExit(f"the MQTT broker at {self.host}:{self.port} refused the connection: {self.refused}")
+            raise SystemExit(f"cannot reach the MQTT broker at {self.host}:{self.port}: no answer")
         return self
 
-    def pub(self, topic: str, payload: dict, retain: bool = False, qos: int = 0) -> None:
+    def pub(self, topic: str, payload: dict, retain: bool = False, qos: int = 0, wait: float = 0.0) -> None:
         """Publish a message as compact JSON.
 
         `qos=0` is fire-and-forget, right for state that is repeated anyway; `qos=1` is delivered at least once,
         for orders and one-off events. `retain` makes the broker keep the message for clients that subscribe later.
+        `wait` blocks up to that many seconds until the broker has the message: for a program that publishes
+        and exits.
         """
-        self.c.publish(topic, json.dumps(payload, separators=(",", ":")), qos=qos, retain=retain)
+        info = self.c.publish(topic, json.dumps(payload, separators=(",", ":")), qos=qos, retain=retain)
+        if wait:
+            with contextlib.suppress(RuntimeError, ValueError):     # not connected: there is nothing to wait for
+                info.wait_for_publish(wait)
+
+    def poke(self, topic: str) -> None:
+        """Publish an empty message: how some programs are asked to report."""
+        self.c.publish(topic, b"", qos=0)
 
     def clear(self, topic: str) -> None:
         """Delete a retained message."""
@@ -118,6 +224,9 @@ class Bus:
         """Disconnect cleanly (no last will is sent) and release the network thread and sockets."""
         self.c.disconnect()                     # the network loop sends DISCONNECT, then exits
         self.c.loop_stop()
+        sock = self.c.socket()                  # left open if paho was part-way through a reconnect
+        if sock is not None:
+            sock.close()
         self._close_wakeup()
 
     def _close_wakeup(self) -> None:

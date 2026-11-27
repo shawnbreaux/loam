@@ -146,8 +146,8 @@ Loam Wire is the JSON-over-MQTT layer that carries orders to machines and state 
 | `loam/v0/<site>/<machine>/connection` | machine → controller | `online`, `offline`, `connectionBroken`, retained and set as the MQTT last will |
 | `loam/v0/<site>/terrain` | probe → controller | Measured surface tiles: origin, cell size, shape, σ, encoded heights |
 | `loam/v0/<site>/safety` | controller → all | Site-wide stop or hold, plus a 1 Hz heartbeat |
-| `loam/v0/<site>/estop` | e-stop radio → all | `pressed` true/false. Machines stop at once without waiting for the controller. Releasing it restarts nothing: machines stay stopped (`estopReset`) until a `resume` (ISO 13850) |
-| `loam/v0/<site>/detection` | site sensors → controller | A person or vehicle seen at (x, y); `kind: "clear"` ends it. Feeds `proximity()` |
+| `loam/v0/<site>/estop` | e-stop radio → all | `pressed` true/false, retained so that a machine connecting later still gets it. Machines stop at once without waiting for the controller. Releasing it restarts nothing: machines stay stopped (`estopReset`) until a `resume` (ISO 13850) |
+| `loam/v0/<site>/detection` | site sensors → controller | A person or vehicle seen at (x, y), per `sensor`. With `radius`, anywhere in that circle: distances are measured from its edge. `kind: "unknown"` means the sensor cannot see its area and counts as a person; `kind: "clear"` ends a sensor's detection. Feeds `proximity()` |
 | `loam/v0/<site>/weather` | site sensors → controller | Rain rate (m/s). Feeds `weather(rain)` |
 | `loam/v0/<site>/status` | controller → monitors | Tasks, machines, active rules, replans, measured % in tolerance (retained) |
 
@@ -157,6 +157,8 @@ Conventions:
 - `pose.heading` is in radians, counter-clockwise from the site +x axis (the VDA 5050 convention). A state may add `pose.z` (site units) and a `gnss` object (`fix`, `sats`, `hdop`, `age`).
 - A new `orderId` replaces the machine's current order; a higher `orderUpdateId` amends it. A machine never executes an `orderId` twice, and after losing its link it drops the current order rather than resume it unasked.
 - **Targets and spread patterns.** Cut and finish orders carry `target.pattern`: the planned height change per grid cell over the window (metres, negative = cut, `float32-le-base64`, row-major from the window's low corner, `target.shape` = rows, cols). Grade control holds the blade to it and never cuts below design. Deposits carry `deposit.pattern` the same way: the planned loose thickness per cell, with `volume` (m³ in the pattern), `planned` (all loose spoil of a cut, m³; the rest goes to `overflow`) or `bank` (m³ to take from `source`).
+- **Clocks.** Timestamps are UTC from the sender's clock. A controller on a real site must not send orders to a machine whose state stamps differ from its own clock by more than 2 s, and must ignore a survey stamped more than 2 s in the future.
+- **Protective stops.** A machine halted by its own protective device reports `safetyState: stopped` with a warning-level error (`vehicleObstacle`), keeps its order, and carries on when the device releases it.
 - **Done means done.** A machine reports `progress: 1.0` for an order only once the work has really been done, and stamps that state with the time it finished. The controller matches each survey's timestamp against these, so a survey taken before a pass finished never counts that pass twice.
 - Timestamps are ISO 8601 UTC with optional milliseconds (`2026-12-01T07:00:00.250Z`).
 - **Fail-safe heartbeat:** a machine that hears no `safety` heartbeat for 3 s stops on its own and reports `safetyState: "stopped"`.

@@ -144,10 +144,30 @@ def terrain(site: str, probe: str, seq: int, origin: tuple, cell: float, shape: 
     return msg
 
 
-def detection(site: str, sensor: str, seq: int, kind: str, x: float, y: float, ts: float = 0) -> dict:
-    """Something a site sensor saw at (x, y) in site coordinates; kind "clear" ends earlier detections."""
+# A detection radius that covers any site: "somewhere here, we cannot say where".
+EVERYWHERE = 1.0e9
+
+
+def detection(site: str, sensor: str, seq: int, kind: str, x: float, y: float, ts: float = 0,
+              radius: float | None = None) -> dict:
+    """Something a site sensor saw at (x, y) in site coordinates.
+
+    `kind` is "person", "unknown" (the sensor cannot say who is where, for example because it has failed: treated
+    as a person) or "clear", which ends that sensor's earlier detection. `radius`, in site units, says how well
+    the position is known: the person is somewhere within that distance of (x, y). A camera that only knows
+    "in my field of view" reports the middle of its view and its reach.
+    """
     msg = header(seq, ts)
     msg.update({"site": site, "sensor": sensor, "kind": kind, "x": x, "y": y})
+    if radius is not None:
+        msg["radius"] = radius
+    return msg
+
+
+def estop(site: str, seq: int, pressed: bool, reason: str = "", ts: float = 0) -> dict:
+    """The site e-stop: pressed (every machine stops at once) or released (nothing restarts until a resume)."""
+    msg = header(seq, ts)
+    msg.update({"site": site, "pressed": pressed, "reason": reason})
     return msg
 
 

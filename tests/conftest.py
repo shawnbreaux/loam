@@ -6,6 +6,7 @@ say what they need.
 """
 import contextlib
 import gc
+import json
 import os
 import re
 import shutil
@@ -60,6 +61,14 @@ def example_model(example_src):
 
 
 MOSQUITTO = shutil.which("mosquitto") or ("/usr/sbin/mosquitto" if os.path.exists("/usr/sbin/mosquitto") else None)
+
+
+def wire_valid(kind: str, payload: dict) -> None:
+    """Check a message against one definition in the published Loam Wire JSON Schema; raises if it does not fit."""
+    jsonschema = pytest.importorskip("jsonschema")
+    with open(os.path.join(ROOT, "schemas", "wire", "loam-wire-0.0.1.schema.json"), encoding="utf-8") as f:
+        defs = json.load(f)["$defs"]
+    jsonschema.validate(payload, {"$defs": defs, "$ref": f"#/$defs/{kind}"})
 
 
 @pytest.fixture

@@ -3,6 +3,54 @@
 All notable changes are recorded here. The project follows [Semantic Versioning](https://semver.org/);
 before 1.0 any minor release may change the language.
 
+## [0.0.6] - 2026-11-26
+
+What a first field test needs beyond the vehicle bridges: machines that protect themselves, real
+sensors, a secured broker and a record of the run. Every new piece is FOSS and optional; the core
+still needs numpy only.
+
+Safety
+- **ArduPilot protects itself.** `loam mavlink` uploads the working area and the exclusion zones as
+  fences, has the rover plan around them, and switches on its ground-station failsafe, watched by the
+  bridge's own 1 Hz heartbeat. On SITL the rover went around an exclusion zone it had driven straight
+  through before, and held 4.3 s after the bridge was killed. `--no-vehicle-setup` leaves the vehicle
+  alone. A fence breach is reported as `vehicleFenceBreach`. The bridge now requires MAVLink 2.
+- **Protective stops.** A stop by Nav2's Collision Monitor is reported (`stopped`, `vehicleObstacle`
+  warning) and no longer counts against the order: the carrier carries on when the way is clear.
+  Before, the aborted goals could fail the order.
+- **A secured broker.** `--broker mqtts://user@host` with TLS 1.2+, certificate and host-name checks,
+  and passwords from the environment or a file, never from the command line. `examples/broker/` holds a
+  Mosquitto configuration with access rules: a machine can read only its own orders and cannot publish
+  one. A refused login is reported in words.
+- **Clocks.** On a real site the controller sends no orders to a machine whose clock is more than 2 s
+  off its own, and ignores a survey stamped in the future. Before, a wrong clock silently broke the
+  matching of scans to finished passes.
+- **What sensors cannot see is unsafe.** Detections can cover an area (`radius`) and can say `unknown`:
+  a blind camera, a silent Frigate or a stopped `loam sense` counts as a person there.
+- `loam estop` presses and releases the site e-stop. The message is retained, so machines that connect
+  later still get it.
+
+Added
+- `loam sense`: people from Frigate's cameras (MIT) and rain from an rtl_433 gauge (GPL-2.0), both over
+  MQTT, as Wire `detection` and `weather` messages.
+- `loam terrain --broker` publishes a scan to a running controller; `--watch` does so for every scan
+  written to a folder.
+- `loam monitor --mcap`: every Wire message in one MCAP file for Lichtblick or PlotJuggler; a
+  `machine_clock_skew_seconds` metric.
+- Survey points from QField and QGIS (GeoJSON) wherever a survey CSV is accepted.
+- The Wire schema defines `detection`, `weather` and `estop`.
+
+Fixed
+- **Ground filter.** A machine's low parts (blade, tracks) stayed in the filtered ground as a bump of
+  up to 0.9 m, because next to the cab they passed for part of something wide. Around wide objects the
+  filter is now repeated until it finds nothing new. Bare ground is unchanged. Found by checking the
+  filter against PDAL's SMRF, which is now a test: the two agree to 0.4 mm RMS.
+- A failed TLS handshake or refused login no longer leaves a socket open.
+
+Checked and left out, with reasons in docs/INTEGRATIONS.md: EMQX, Foxglove Studio and Isaac Sim (not
+FOSS); Fields2Cover and AgIsoStack++ (not needed yet). OpenGrade3D 4.0.2 reads the `.agd` files
+unchanged.
+
 ## [0.0.5] - 2026-11-26
 
 A review for leaks and errors, and CI fixed. CI had failed since 0.0.3: an unused `type: ignore` in

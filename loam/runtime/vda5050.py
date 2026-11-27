@@ -125,6 +125,11 @@ class Robot:
             return "vehicleOrderRejected"            # it never took the order: do not wait on it forever
         return None
 
+    @property
+    def blocked(self) -> None:
+        """Never: a VDA 5050 robot's own stops show up as errors in its state (see `fault`)."""
+        return None
+
     def start(self, path: list[tuple[float, float]], order: dict, max_speed_ms: float | None) -> None:
         """Send the order. Nodes are numbered 0, 2, 4, ... and edges take the odd numbers between, so the last node is
         2 x (points - 1).

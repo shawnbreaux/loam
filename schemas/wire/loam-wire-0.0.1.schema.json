@@ -523,6 +523,116 @@
         "command"
       ],
       "additionalProperties": false
+    },
+    "detection": {
+      "type": "object",
+      "description": "loam/v0/<site>/detection \u2014 a site sensor saw someone. One detection per sensor is current; kind 'clear' ends it.",
+      "properties": {
+        "version": {
+          "type": "string",
+          "const": "0.0.1"
+        },
+        "headerId": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "site": {
+          "type": "string"
+        },
+        "sensor": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "person",
+            "unknown",
+            "clear"
+          ],
+          "description": "'unknown': the sensor cannot say who is where (it may have failed); treated as a person."
+        },
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        },
+        "radius": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Site units. The person is within this distance of (x, y)."
+        }
+      },
+      "required": [
+        "version",
+        "headerId",
+        "timestamp",
+        "site",
+        "sensor",
+        "kind",
+        "x",
+        "y"
+      ],
+      "additionalProperties": false
+    },
+    "weather": {
+      "type": "object",
+      "description": "loam/v0/<site>/weather \u2014 a weather reading.",
+      "properties": {
+        "version": {
+          "type": "string",
+          "const": "0.0.1"
+        },
+        "headerId": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "site": {
+          "type": "string"
+        },
+        "sensor": {
+          "type": "string"
+        },
+        "rain": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Rain rate, m/s."
+        }
+      },
+      "required": [
+        "version",
+        "headerId",
+        "timestamp",
+        "site",
+        "sensor",
+        "rain"
+      ],
+      "additionalProperties": false
+    },
+    "estop": {
+      "type": "object",
+      "description": "loam/v0/<site>/estop \u2014 the site e-stop. Machines stop on pressed=true without waiting for the controller; released restarts nothing. Only 'pressed' is required, so the simplest radio can send it.",
+      "properties": {
+        "site": {
+          "type": "string"
+        },
+        "pressed": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "pressed"
+      ]
     }
   }
 }

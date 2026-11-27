@@ -325,6 +325,9 @@ def _morph(z: Grid, w: int, op) -> Grid:
     return op(win(op(win(p, w, axis=1), axis=-1), w, axis=0), axis=-1)
 
 
+FILTER_ROUNDS = 4            # most rounds of the ground filter; one is enough unless the scan holds a wide object
+
+
 def ground_surface(zmin: Grid, cell_m: float, max_window_m: float = 10.0, slope: float = 0.3,
                    dh0: float = 0.1, dh_max: float = 1.5, dh_final: float = 0.15) -> Grid:
     """Progressive morphological filter (Zhang et al., 2003) on a lowest-point grid (metres expected).
@@ -334,24 +337,45 @@ def ground_surface(zmin: Grid, cell_m: float, max_window_m: float = 10.0, slope:
     holes are filled from the surrounding ground, so the surface is not biased low on slopes.
     `dh_final` is used by `grid_cloud` for the point pass.
 
+    One round misses the low parts of a wide object (a dozer's blade and tracks under its cab): beside the cab
+    they look like part of something wide, which only the widest window, with the largest threshold, can remove.
+    So around every wide object the filter is repeated on its own result (at most `FILTER_ROUNDS` rounds, until
+    nothing new is found): with the cab gone, the low parts stand alone and the small windows take them.
+    Elsewhere one round is final, so ground is not worn down by the repeats.
+
     `slope` trades banks against low objects: at 0.3 (3:1 banks) a wide object must stand about 1.3 m
     above ground to be removed at 1 m cells, which catches machines and people seen from above; on flat
-    sites a lower slope also catches low objects. Returns the ground surface."""
+    sites a lower slope also catches low objects. Crests sharper than `slope` are taken for objects.
+    Returns the ground surface."""
     z = fill_gaps(zmin, max(zmin.shape))
     if np.isnan(z).all():
         return z
-    obj = np.zeros(z.shape, bool)
-    # Windows of 3, 5, 9, 17, ... cells. An *opening* (erosion then dilation) removes anything narrower than the
-    # window; what the opening lowered by more than the threshold was an object standing on the ground. The threshold
-    # grows with the window so that real slopes survive.
-    cur, w_prev, k = z, 3, 1
-    while (2 * k - 1) * cell_m <= max_window_m:
-        w = 2 * k + 1
-        opened = _morph(_morph(cur, w, np.min), w, np.max)
-        obj |= cur - opened > min(dh_max, dh0 + slope * (w - w_prev) * cell_m)
-        cur, w_prev, k = opened, w, k * 2
-    holes = obj | np.isnan(zmin)
-    return relax(fill_gaps(np.where(holes, np.nan, zmin), max(zmin.shape)), holes)
+    unseen = np.isnan(zmin)
+    obj = np.zeros(z.shape, bool)                # every cell found to hold an object
+    wide = np.zeros(z.shape, bool)               # those found by a window wider than the smallest
+    near = np.ones(z.shape, bool)                # where to look: everywhere at first, then around the wide objects
+    for _ in range(FILTER_ROUNDS):
+        found = np.zeros(z.shape, bool)
+        # Windows of 3, 5, 9, 17, ... cells. An *opening* (erosion then dilation) removes anything narrower than the
+        # window; what the opening lowered by more than the threshold was an object standing on the ground. The
+        # threshold grows with the window so that real slopes survive.
+        cur, w_prev, k, w = z, 3, 1, 3
+        while (2 * k - 1) * cell_m <= max_window_m:
+            w = 2 * k + 1
+            opened = _morph(_morph(cur, w, np.min), w, np.max)
+            hit = (cur - opened > min(dh_max, dh0 + slope * (w - w_prev) * cell_m)) & ~obj & near
+            found |= hit
+            if w > 3:
+                wide |= hit
+            cur, w_prev, k = opened, w, k * 2
+        if not found.any():
+            break
+        obj |= found
+        z = relax(fill_gaps(np.where(obj | unseen, np.nan, zmin), max(zmin.shape)), obj | unseen)
+        if not wide.any():
+            break
+        near = _morph(wide, w, np.max)           # within half the widest window of a wide object
+    return z
 
 
 def relax(z: Grid, free: NDArray[np.bool_], tol: float = 1e-4, max_iter: int = 2000) -> Grid:

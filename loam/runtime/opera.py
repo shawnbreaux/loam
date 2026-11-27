@@ -331,11 +331,30 @@ class Carrier:
         self.total = 1
         self.max_speed: float | None = None
         self.speed_at = 0.0
+        # Nav2's Collision Monitor, if the machine runs one, says when it is holding the machine for an obstacle.
+        # (It publishes that only when its `state_topic` parameter is set to "collision_monitor_state".)
+        self.held_by_monitor = False
+        try:
+            from nav2_msgs.msg import CollisionMonitorState
+        except ImportError:                  # a Nav2 older than that message
+            pass
+        else:
+            ros.node.create_subscription(CollisionMonitorState, f"/{self.ns}/collision_monitor_state",
+                                         self._monitor, 10)
+
+    def _monitor(self, msg) -> None:
+        """Nav2's Collision Monitor has changed what it is doing: 1 (STOP) means an obstacle is in its stop zone."""
+        self.held_by_monitor = msg.action_type == 1
 
     # Position comes from odometry, which has no fix quality to report, so the fix always reads as good.
     pose = property(lambda self: self.odom.pose)
     fix_ok = property(lambda self: True)
     fix_name = property(lambda self: "odom")
+
+    @property
+    def blocked(self) -> str | None:
+        """`vehicleObstacle` while Nav2's Collision Monitor is holding the machine, else None."""
+        return "vehicleObstacle" if self.held_by_monitor else None
 
     @property
     def fault(self) -> str | None:
@@ -505,6 +524,11 @@ class Carrier:
             if f.result().status == GoalStatus.STATUS_SUCCEEDED:
                 self.left, self.sent, self.aborts = self.left[self.sent:], 0, 0
                 self._send()
+            elif self.held_by_monitor:
+                # Nav2 gives up on a goal when the machine makes no progress, which is what standing in front of
+                # an obstacle looks like. That is no failure of the order: try again, without counting.
+                self._wait_retry()
+                self.tried_at = time.time() + 1.0
             elif self.aborts < NAV_RETRIES:            # e.g. Nav2 still waiting for its transforms
                 self.aborts += 1
                 self._wait_retry()
@@ -646,6 +670,7 @@ class Excavator:
     pose = property(lambda self: self.odom.pose)
     fix_ok = property(lambda self: True)
     fix_name = property(lambda self: "odom")
+    blocked = property(lambda self: None)       # the arm has no protective stop of its own to report
 
     @property
     def fault(self) -> str | None:

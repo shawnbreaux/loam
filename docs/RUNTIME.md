@@ -1,6 +1,6 @@
 # Running a site: plan, controller, machines, monitor
 
-Loam 0.0.2 goes from the grading file a project manager receives to a monitored site with machines
+Loam goes from the grading file a project manager receives to a monitored site with machines
 taking orders. This page describes the parts, how to run them, and what the end-to-end tests showed.
 
 ```
@@ -58,7 +58,8 @@ and safety logic is the same code, `Sim.step`. What changes:
 | --- | --- | --- |
 | Measured surface | simulated scan | `terrain` messages |
 | A pass lands | after its planned duration | when the machine reports `progress: 1.0` |
-| People, rain, e-stop | scripted | `detection`, `weather`, `estop` messages |
+| People, rain, e-stop | scripted | `detection`, `weather`, `estop` messages, from `loam sense` and `loam estop` or your own sensors |
+| Clocks | one clock | a machine whose clock is more than 2 s off the controller's gets no orders |
 | A machine drops off | n/a | pass withdrawn; the machine gets no orders until it is back online, fresh, and `safetyState: ok` |
 | A machine stays unsafe | n/a | after 30 site minutes not `ok` (outside an e-stop) its pass is withdrawn, e.g. after a rollover |
 
@@ -117,6 +118,55 @@ e-stop is released. Leave it out and the site stays stopped, as a real one would
  "crash":        [{"machine": "dz2", "at": 170}]}
 ```
 
+## Securing the broker
+
+On a real site, anyone who can reach an open broker can publish an order. Run the broker encrypted, with a
+name and password for every client and with access rules. `examples/broker/` holds a Mosquitto configuration
+and the rules:
+
+| User | May |
+| --- | --- |
+| `controller` | read and write everything under `loam/v0/` |
+| `supervisor` | read everything; publish the site stop, `resume` and the e-stop |
+| `sensors` | publish detections, weather, terrain and the e-stop; read the camera system's and the rain gauge's topics |
+| a machine, logged in under its machine name | read its own orders and the site's safety topics; publish its own state |
+
+A machine cannot publish an order, not even to itself, and cannot speak for another machine.
+
+Create the site's certificate authority and the broker's certificate once. Current TLS libraries refuse a
+certificate authority without the key-usage extension, so keep the `-addext` lines:
+
+```bash
+openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -subj "/CN=Loam site CA" \
+  -addext "basicConstraints=critical,CA:TRUE" -addext "keyUsage=critical,keyCertSign,cRLSign" \
+  -keyout ca.key -out ca.crt
+openssl req -newkey rsa:2048 -nodes -subj "/CN=site-server" -keyout server.key -out server.csr
+printf "subjectAltName=DNS:site-server,IP:192.168.1.10\nkeyUsage=digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\nsubjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid\n" > san.cnf
+openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial -days 825 -extfile san.cnf -out server.crt
+mosquitto_passwd -c passwords controller      # then, without -c: supervisor, sensors, dz1, ...
+chmod 600 server.key passwords acl
+mosquitto -c mosquitto.conf
+```
+
+`subjectAltName` must hold the name or address the clients connect to. Keep `ca.key` off the site server. Every
+client gets a copy of `ca.crt` and connects with `mqtts://`:
+
+```bash
+export LOAM_BROKER_CA=ca.crt LOAM_BROKER_PASSWORD_FILE=/etc/loam/password
+loam run job.loam --broker mqtts://controller@site-server
+loam mavlink job.loam --machine dz1 --vehicle … --broker mqtts://dz1@site-server
+```
+
+- The password comes from `LOAM_BROKER_PASSWORD` or the file named by `LOAM_BROKER_PASSWORD_FILE`. A password
+  in the address is refused, because every user of the computer can read it in the process list.
+- `LOAM_BROKER_USER` names the user when the address does not. `LOAM_BROKER_CERT` and `LOAM_BROKER_KEY` add a
+  client certificate. Without `LOAM_BROKER_CA` the system's certificate store is used.
+- TLS 1.2 or later, and the broker's certificate and host name are always checked.
+- A wrong password or a certificate that does not match is reported in words, not as a timeout.
+
+Tested against Mosquitto with exactly these files (`tests/test_security.py`): a machine reads only its own
+orders, and an order it tries to publish is not delivered.
+
 ## 4. Monitor: `loam monitor`
 
 The dashboard shows:
@@ -128,7 +178,8 @@ The dashboard shows:
 
 It uses Server-Sent Events, has no JavaScript dependencies, and nothing leaves the machine.
 `loam monitor job.loam --replay run.jsonl --html replay.html` builds a self-contained replay page
-(`--split` writes `index.html` + `run.json` instead).
+(`--split` writes `index.html` + `run.json` instead). `--mcap run.mcap` records every Wire message for
+Lichtblick or PlotJuggler (see [INTEGRATIONS.md](INTEGRATIONS.md)).
 
 ## 5. What the end-to-end tests showed
 
@@ -197,4 +248,6 @@ out at the end cluster along the job's edge, where the design ties into existing
 - The world applies a pass's effect at completion. Real ground changes during the pass.
 - Physics machines model motion only. The blade's interaction with soil stays in the world process.
 - One probe per site. Lidar occlusion by machines is not modelled.
+- People are located only as well as the cameras allow: a detection is a circle, not a point, and cameras
+  miss people. `loam sense` is supervision, not a certified safety function.
 - Results are simulation results, not field measurements.

@@ -154,3 +154,42 @@ class Frame:
             return e, n, z
         e2, n2, z2 = _transformer(src, self.crs).transform(e, n, z)
         return np.asarray(e2, float), np.asarray(n2, float), np.asarray(z2, float)
+
+
+def offset_polygon(poly: list, d: float) -> list[tuple[float, float]]:
+    """A simple polygon grown by `d` on every side (shrunk, if `d` is negative).
+
+    Each edge moves `d` along its outward normal and neighbouring edges are joined where they meet (a mitre
+    join), so a rectangle stays a rectangle. At a very sharp corner the joint would run far out; it is capped
+    at four times `d`.
+    """
+    p = np.asarray(poly, float)
+    nxt = np.roll(p, -1, axis=0)
+    # Twice the signed area: positive when the corners run anticlockwise, which decides which side is outside.
+    side = 1.0 if float(np.sum(p[:, 0] * nxt[:, 1] - nxt[:, 0] * p[:, 1])) > 0 else -1.0
+    e = nxt - p
+    n = side * np.column_stack([e[:, 1], -e[:, 0]]) / np.hypot(e[:, 0], e[:, 1])[:, None]   # outward, per edge
+    before = np.roll(n, 1, axis=0)                  # the normal of the edge that ends at each corner
+    k = np.maximum(1.0 + np.sum(before * n, axis=1), 0.25)
+    out = p + d * (before + n) / k[:, None]
+    return [(float(x), float(y)) for x, y in out]
+
+
+def convex_hull(points: list) -> list[tuple[float, float]]:
+    """The smallest convex polygon around a set of points, corners anticlockwise (Andrew's monotone chain)."""
+    pts = sorted({(float(x), float(y)) for x, y in points})
+    if len(pts) < 3:
+        return pts
+
+    def half(seq: list) -> list:
+        """One side of the hull: walk the points, dropping any that would make a right turn or run straight on."""
+        out: list = []
+        for p in seq:
+            while len(out) >= 2 and ((out[-1][0] - out[-2][0]) * (p[1] - out[-2][1])
+                                     - (out[-1][1] - out[-2][1]) * (p[0] - out[-2][0])) <= 0:
+                out.pop()
+            out.append(p)
+        return out[:-1]
+
+    return half(pts) + half(pts[::-1])
+

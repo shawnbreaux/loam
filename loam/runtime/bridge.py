@@ -42,6 +42,8 @@ class Adapter(Protocol):
     #   fix_name     the position quality in words, for the error text
     #   fault        why the vehicle cannot work at all right now (link lost, its own e-stop, ...), or None
     #   order_error  why it cannot carry out the *current order* (refused, navigation failed, ...), or None
+    #   blocked      why the vehicle's own protection is holding it for the moment (an obstacle ahead), or None;
+    #                the bridge reports it and leaves the vehicle alone, since it carries on by itself
     #   poll()       read whatever the vehicle has sent; called every cycle
     #   start(path, order, max_speed_ms)   take a new order; the vehicle must not move until pause(False)
     #   pause(on)    hold the vehicle (True) or let it work (False); called every cycle, so it must be cheap
@@ -59,6 +61,8 @@ class Adapter(Protocol):
     def fault(self) -> str | None: ...
     @property
     def order_error(self) -> str | None: ...
+    @property
+    def blocked(self) -> str | None: ...
 
     def poll(self) -> None: ...
     def start(self, path: list[tuple[float, float]], order: dict, max_speed_ms: float | None) -> None: ...
@@ -166,6 +170,10 @@ def bridge_state(ms: MachineSim, adapter: Adapter, clock: Clock, t: float) -> di
     fault = adapter.fault or (None if pose is not None else "vehicleNoPose")
     if fault is not None:
         safety, errors = "stopped", [*errors, wire.error(fault)]
+    blocked = adapter.blocked
+    if blocked is not None and safety == "ok":
+        # Held by its own protective device. A warning, not a fault: it clears without anyone's help.
+        safety, errors = "stopped", [*errors, wire.error(blocked, level="warning")]
     errors = [e for e in errors if e["code"] != "gnssQuality"]
     if ms.gnss_bad:
         errors.append(wire.error("gnssQuality", adapter.fix_name, "warning"))

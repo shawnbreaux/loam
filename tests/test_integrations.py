@@ -1,6 +1,10 @@
 """Optional integrations: LAZ and ground filtering, CRSs (pyproj), GeoTIFF (rasterio), IFC 4.3
-(IfcOpenShell), GeoJSON areas (QGIS). Each test skips when its FOSS extra is not installed."""
+(IfcOpenShell), GeoJSON areas (QGIS), and a cross-check of the ground filter against PDAL. Each test skips when its
+FOSS extra or tool is not installed."""
 import json
+import os
+import shutil
+import subprocess
 
 import numpy as np
 import pytest
@@ -11,7 +15,7 @@ from loam.geo import Frame
 from loam.grid import SiteGrid
 from loam.landxml import write_grid_tin
 from loam.parser import parse
-from loam.pointcloud import grid_cloud, ground_surface
+from loam.pointcloud import grid_cloud, ground_surface, write_las
 
 E0, N0 = 600000.0, 3812000.0                 # UTM 16N, DeKalb County, AL
 UTM = "EPSG:32616"
@@ -73,11 +77,80 @@ def test_ground_filter_removes_machines_and_brush(name, surface):
     assert np.mean(np.abs(e[brush]) < 0.1) > 0.998
 
 
+def test_ground_filter_removes_the_low_parts_of_a_machine(monkeypatch):
+    """A dozer seen from above is not one block: the scanner also hits its blade and tracks, well below the cab.
+    The filter removes all of it, where a single round leaves the low parts in the ground as a 0.9 m bump.
+    """
+    import loam.pointcloud as pc
+    y, x = np.mgrid[0:60, 0:60] * 1.0
+    g = 0.03 * x + 0.01 * y
+    rng = np.random.default_rng(3)
+    z = g + np.abs(rng.normal(0, 0.02, g.shape))
+    body = np.zeros(g.shape, bool)
+    body[20:25, 30:36] = True                    # 6 m x 5 m: cab and engine deck, 2 to 3 m
+    low = np.zeros(g.shape, bool)
+    low[20:25, 36] = True                        # the blade across the front, 0.9 m
+    low[20, 30:36] = low[24, 30:36] = True       # the tracks along both sides, 0.6 m
+    z[body] += rng.uniform(2.0, 3.0, g.shape)[body]
+    z[low] = g[low] + np.where(x[low] == 36, 0.9, 0.6)
+    e = ground_surface(z, 1.0) - g
+    assert np.abs(e[body | low]).max() < 0.1 and np.sqrt(np.mean(e[~(body | low)] ** 2)) < 0.025
+    monkeypatch.setattr(pc, "FILTER_ROUNDS", 1)
+    assert np.abs((ground_surface(z, 1.0) - g)[low]).max() > 0.5
+
+
 def test_ground_filter_degenerate():
     """An empty scan stays empty, and flat ground comes back unchanged."""
     assert np.isnan(ground_surface(np.full((5, 5), np.nan), 1.0)).all()
     flat = np.full((9, 9), 2.0)
     np.testing.assert_array_equal(ground_surface(flat, 1.0), flat)
+
+
+PDAL = os.environ.get("PDAL") or shutil.which("pdal") or next(
+    (c for c in ("/opt/mm/envs/pdal/bin/pdal",) if os.path.exists(c)), None)
+
+
+@pytest.mark.skipif(PDAL is None, reason="needs PDAL (PDAL=/path/to/pdal)")
+def test_ground_filter_agrees_with_pdal_smrf(tmp_path):
+    """Loam's ground filter against an independent one: PDAL's Simple Morphological Filter (Pingel et al., 2013).
+
+    One scan of a sloping site with a parked machine, two people and brush is cleaned twice: by Loam's own filter,
+    and by PDAL, whose ground classification Loam then reads with `--ground-only`. Both must match the true ground,
+    and each other, so a site can use either: the built-in filter with no extra software, or PDAL when a surveyor
+    wants a filter with a published record.
+    """
+    _, g = site(tmp_path)
+    frame = Frame(1.0)
+    rng = np.random.default_rng(7)
+    x, y = rng.uniform(0, 40, 200_000), rng.uniform(0, 20, 200_000)
+    z = design(x, y) + rng.normal(0, 0.01, x.size)
+    machine = (x > 25) & (x < 31) & (y > 5) & (y < 10)
+    z[machine] += rng.uniform(1.5, 3.0, machine.sum())
+    people = ((np.hypot(x - 8, y - 6) < 0.3) | (np.hypot(x - 14, y - 15) < 0.3))
+    z[people] += rng.uniform(0.3, 1.8, people.sum())
+    brush = (rng.random(x.size) < 0.15) & ~machine & ~people
+    z[brush] += rng.uniform(0.2, 0.6, brush.sum())
+    raw, classified = tmp_path / "scan.las", tmp_path / "classified.las"
+    write_las(str(raw), np.column_stack([x, y, z]), classification=1)           # 1 = not yet classified
+    # The same height tolerance as Loam's filter (0.15 m); the rest are PDAL's defaults.
+    done = subprocess.run([PDAL, "translate", str(raw), str(classified), "smrf", "--filters.smrf.threshold=0.15"],
+                          capture_output=True, text=True, timeout=120)
+    assert done.returncode == 0, done.stderr
+
+    truth = design(*np.meshgrid(g.xs, g.ys))
+    unfiltered, _ = grid_cloud(str(raw), g, frame)
+    ours, info = grid_cloud(str(raw), g, frame, pmf={})
+    theirs, pdal_info = grid_cloud(str(classified), g, frame, ground_only=True)
+    assert info["ground_filter"] == "pmf" and pdal_info["ground_filter"] == "class 2"
+    both = np.isfinite(ours) & np.isfinite(theirs)
+    rms = [float(np.sqrt(np.nanmean(d ** 2))) for d in (ours - truth, theirs - truth, (ours - theirs)[both])]
+    print(f"\nground filters on one scan: unfiltered up to {np.nanmax(unfiltered - truth):.2f} m high; "
+          f"Loam {rms[0] * 1000:.1f} mm RMS from the truth, PDAL SMRF {rms[1] * 1000:.1f} mm, "
+          f"{rms[2] * 1000:.1f} mm between them; cells with ground: Loam {np.isfinite(ours).sum()}, "
+          f"PDAL {np.isfinite(theirs).sum()} of {ours.size}")
+    assert np.nanmax(unfiltered - truth) > 0.5                       # the machine is in the raw surface
+    assert np.nanmax(np.abs(ours - truth)) < 0.03 and np.nanmax(np.abs(theirs - truth)) < 0.03
+    assert rms[2] < 0.005 and both.mean() > 0.95
 
 
 # -- LAZ + CRS ------------------------------------------------------------------------------------

@@ -29,8 +29,12 @@ import sys
 import time
 from typing import Any
 
+# pymavlink chooses its protocol version when it is first imported: ask for MAVLink 2 before that can happen.
+os.environ.setdefault("MAVLINK20", "1")
+
 from ..checker import Model
-from ..geo import Frame
+from ..geo import Frame, convex_hull, offset_polygon
+from ..units import length_unit_si
 from .bridge import run_bridge
 from .machine import HEARTBEAT_TIMEOUT_S
 
@@ -41,6 +45,24 @@ CMD_WAYPOINT, CMD_CHANGE_SPEED, CMD_ARM = 16, 178, 400
 FRAME_REL_ALT = 3                     # MAV_FRAME_GLOBAL_RELATIVE_ALT (the INT variant takes the same id)
 MODE_HOLD, MODE_AUTO = 4, 10          # ArduPilot Rover custom modes
 FORCE_DISARM = 21196
+
+
+# Fences travel by the same upload protocol as missions, told apart by the mission type.
+MISSION, FENCE = 0, 1                 # MAV_MISSION_TYPE_MISSION, MAV_MISSION_TYPE_FENCE
+CMD_FENCE_INSIDE, CMD_FENCE_OUTSIDE = 5001, 5002   # MAV_CMD_NAV_FENCE_POLYGON_VERTEX_INCLUSION / _EXCLUSION
+GCS_SYSTEM = 254                      # the MAVLink system id this bridge speaks as
+# What `Vehicle.setup` asks of an ArduPilot Rover, so that the vehicle protects itself when Loam, the radio or
+# this bridge fails. Each entry: the parameter (and its name in older firmware), the value, and what it does.
+VEHICLE_SETUP: list[tuple[tuple[str, ...], float, str]] = [
+    (("FENCE_ENABLE",), 1, "fences on"),
+    (("FENCE_TYPE",), 4, "polygon fences"),
+    (("FENCE_ACTION",), 2, "hold at a fence breach"),
+    (("OA_TYPE",), 2, "plan routes around fences (Dijkstra)"),
+    (("FS_GCS_ENABLE",), 1, "ground-station failsafe on"),
+    (("FS_ACTION",), 2, "hold on failsafe"),
+    (("FS_GCS_TIMEOUT", "FS_TIMEOUT"), 3, "seconds without this bridge's heartbeat before the failsafe"),
+    (("MAV_GCS_SYSID", "SYSID_MYGCS"), GCS_SYSTEM, "the failsafe watches this bridge, not an operator's laptop"),
+]
 
 
 def bearing_to_heading(bearing_deg: float, frame: Frame) -> float:
@@ -66,24 +88,59 @@ def mission_items(path: list[tuple[float, float]], frame: Frame, speed_ms: float
     return items
 
 
+def fence_items(model: Model, frame: Frame, margin_m: float = 10.0) -> list[tuple]:
+    """The site's limits as MAVLink fence items, in the same tuple layout as `mission_items`.
+
+    * One inclusion polygon, which the vehicle may not leave: the convex hull of the site boundary, every zone
+      and every stockpile, grown by `margin_m` metres for turning room. Stockpiles often lie outside the stated
+      boundary, so the boundary alone would fence a machine off from its own work.
+    * One exclusion polygon per exclusion zone, grown by the zone's buffer, which the vehicle may not enter.
+
+    Each item is one corner and carries the number of corners of its polygon. A program that names no areas at
+    all gives no fence.
+    """
+    unit = model.site.get("units", "ft")
+    areas = [(model.site.get("boundary") or {}).get("polygon")]
+    areas += [(z.get("area") or {}).get("polygon") for z in [*model.zones.values(), *model.stockpiles.values()]]
+    corners = [p for poly in areas if poly for p in poly]
+    polys: list[tuple[int, list]] = []
+    if len(corners) >= 3:
+        polys.append((CMD_FENCE_INSIDE, offset_polygon(convex_hull(corners), margin_m / length_unit_si(unit))))
+    for z in model.zones.values():
+        if z.get("role") == "exclusion" and "polygon" in (z.get("area") or {}):
+            buffer = z["buffer"].to(unit) if z.get("buffer") is not None else 0.0
+            polys.append((CMD_FENCE_OUTSIDE, offset_polygon(z["area"]["polygon"], buffer)))
+    items: list[tuple] = []
+    for cmd, poly in polys:
+        lat, lon = frame.local_to_wgs84([p[0] for p in poly], [p[1] for p in poly])
+        for la, lo in zip(lat, lon, strict=True):
+            items.append((len(items), 0, cmd, len(poly), 0, 0, 0, _e7(la), _e7(lo), 0))     # frame 0: MAV_FRAME_GLOBAL
+    return items
+
+
 class Vehicle:
     """A MAVLink ground vehicle as a bridge adapter: telemetry, missions, HOLD/AUTO, arming."""
 
-    def __init__(self, url: str, frame: Frame, min_fix: int = 6, timeout: float = 30.0):
+    def __init__(self, url: str, frame: Frame, min_fix: int = 6, timeout: float = 30.0,
+                 fences: list[tuple] | None = None):
         """Connect and wait up to `timeout` seconds for the vehicle's heartbeat.
 
         `url` is a pymavlink connection string (for example `udpin:0.0.0.0:14550` or `/dev/ttyUSB0`). `frame`
         places the site grid on the Earth. `min_fix` is the lowest GNSS fix type good enough to work by (6 is RTK
-        fixed, centimetre level).
+        fixed, centimetre level). With `fences` (from `fence_items`; may be empty) the vehicle is set up to
+        protect itself: see `setup`. With None its parameters and fences are left alone.
         """
         try:
             from pymavlink import mavutil
         except ImportError as e:
             raise ValueError("MAVLink vehicles need pymavlink: pip install pymavlink") from e
-        os.environ.setdefault("MAVLINK20", "1")
         self.frame, self.min_fix = frame, min_fix
+        if mavutil.mavlink.WIRE_PROTOCOL_VERSION != "2.0":
+            # Something imported pymavlink before this module could ask for MAVLink 2. Fences and their
+            # acknowledgements only exist in MAVLink 2, so do not run half-protected.
+            raise ValueError("pymavlink is running MAVLink 1; set MAVLINK20=1 in the environment")
         # The bridge identifies itself as a ground station (system 254), component 191 (MAV_COMP_ID_ONBOARD_COMPUTER).
-        self.m: Any = mavutil.mavlink_connection(url, source_system=254, source_component=191)
+        self.m: Any = mavutil.mavlink_connection(url, source_system=GCS_SYSTEM, source_component=191)
         if self.m.wait_heartbeat(timeout=timeout) is None:
             self.m.close()
             raise ValueError(f"no MAVLink heartbeat on {url}")
@@ -93,8 +150,16 @@ class Vehicle:
         self.sent_at = 0.0
         self.failed: str | None = None          # why the current order cannot run, until the next order
         self.last_hb = time.time()
-        for msg_id, hz in ((33, 10), (24, 5)):                 # GLOBAL_POSITION_INT, GPS_RAW_INT
+        self.beat_at = 0.0                      # when this bridge last sent its own heartbeat
+        self.breached = False                   # the vehicle reports it is outside its fences
+        for msg_id, hz in ((33, 10), (24, 5), (162, 2)):       # GLOBAL_POSITION_INT, GPS_RAW_INT, FENCE_STATUS
             self.command(511, msg_id, 1e6 / hz)                # MAV_CMD_SET_MESSAGE_INTERVAL
+        if fences is not None:
+            try:
+                self.setup(fences)
+            except ValueError:
+                self.m.close()
+                raise
 
     # -- adapter -------------------------------------------------------------------------
     @property
@@ -109,17 +174,28 @@ class Vehicle:
 
     @property
     def fault(self) -> str | None:
-        """`vehicleLinkLost` when the vehicle's own heartbeat has not been heard for 3 s, else None."""
-        return None if time.time() - self.last_hb < HEARTBEAT_TIMEOUT_S else "vehicleLinkLost"
+        """`vehicleLinkLost` when the vehicle's own heartbeat has not been heard for 3 s; `vehicleFenceBreach`
+        while it reports being outside its fences (it holds there until a person drives it back); else None.
+        """
+        if time.time() - self.last_hb >= HEARTBEAT_TIMEOUT_S:
+            return "vehicleLinkLost"
+        return "vehicleFenceBreach" if self.breached else None
 
     @property
     def order_error(self) -> str | None:
         """Why the current order cannot run (the mission was refused), or None."""
         return self.failed
 
+    @property
+    def blocked(self) -> None:
+        """Never: an ArduPilot vehicle does not report protective stops of its own."""
+        return None
+
     def poll(self) -> None:
-        """Read every MAVLink message that has arrived: heartbeat (armed, mode), position, fix type, waypoint reached.
+        """Read every MAVLink message that has arrived: heartbeat (armed, mode), position, fix type, waypoint reached,
+        fence status. Also send this bridge's own heartbeat when one is due.
         """
+        self._beat()
         while (msg := self.m.recv_match(blocking=False)) is not None:
             t = msg.get_type()
             # Only the vehicle's own heartbeat counts. Type 6 is a ground station, such as an operator's laptop on the
@@ -139,6 +215,8 @@ class Vehicle:
                 self.fix = msg.fix_type
             elif t == "MISSION_ITEM_REACHED":
                 self.reached = msg.seq
+            elif t == "FENCE_STATUS":
+                self.breached = bool(msg.breach_status)
 
     def start(self, path: list[tuple[float, float]], order: dict, max_speed_ms: float | None) -> None:
         """Upload the order as a mission. The vehicle is in HOLD for the upload (which blocks for up to
@@ -199,28 +277,88 @@ class Vehicle:
         q = [*p, *[0.0] * (7 - len(p))]
         self.m.mav.command_long_send(self.m.target_system, self.m.target_component, cmd, 0, *q)
 
-    def upload(self, items: list[tuple], timeout: float = 10.0) -> None:
-        """Upload a mission with the MAVLink mission protocol: send the count, then answer each request for an item
-        until the vehicle acknowledges.
+    def upload(self, items: list[tuple], timeout: float = 10.0, kind: int = MISSION) -> None:
+        """Upload a mission (or, with `kind=FENCE`, the fences) with the MAVLink mission protocol: send the count,
+        then answer each request for an item until the vehicle acknowledges.
 
-        Raises ValueError if the vehicle rejects the mission or does not finish within `timeout` seconds.
+        Raises ValueError if the vehicle rejects the upload or does not finish within `timeout` seconds.
         """
         m = self.m
-        m.mav.mission_count_send(m.target_system, m.target_component, len(items), 0)
+        what = "fence" if kind == FENCE else "mission"
+        m.mav.mission_count_send(m.target_system, m.target_component, len(items), kind)
         end = time.time() + timeout
         while time.time() < end:
+            self._beat()
             msg = m.recv_match(type=["MISSION_REQUEST_INT", "MISSION_REQUEST", "MISSION_ACK"], blocking=True,
                                timeout=0.5)
-            if msg is None:
+            if msg is None or getattr(msg, "mission_type", MISSION) != kind:
                 continue
             if msg.get_type() == "MISSION_ACK":
                 if msg.type != 0:
-                    raise ValueError(f"vehicle rejected the mission (MAV_MISSION_RESULT {msg.type})")
+                    raise ValueError(f"vehicle rejected the {what} (MAV_MISSION_RESULT {msg.type})")
                 return
             s, fr, cmd, p1, p2, p3, p4, x, y, z = items[msg.seq]
             m.mav.mission_item_int_send(m.target_system, m.target_component, s, fr, cmd, 0, 1,
-                                        p1, p2, p3, p4, x, y, z, 0)
-        raise ValueError("mission upload timed out")
+                                        p1, p2, p3, p4, x, y, z, kind)
+        raise ValueError(f"{what} upload timed out")
+
+    def _beat(self) -> None:
+        """Send this bridge's heartbeat once a second, as a ground station (type 6, no autopilot: 8).
+
+        The vehicle's ground-station failsafe watches for it: if this bridge or the radio link dies, the vehicle
+        holds by itself (see `setup`).
+        """
+        if time.time() - self.beat_at >= 1.0:
+            self.beat_at = time.time()
+            self.m.mav.heartbeat_send(6, 8, 0, 0, 0)
+
+    def param(self, names: tuple[str, ...], value: float | None = None, timeout: float = 2.0) -> tuple[str, float]:
+        """Read a parameter, or set it when `value` is given; returns its name and the value the vehicle reports.
+
+        `names` lists the parameter's name in current firmware first, then older names. Raises ValueError if the
+        vehicle answers to none of them.
+        """
+        m = self.m
+        for name in names:
+            if value is None:
+                m.mav.param_request_read_send(m.target_system, m.target_component, name.encode(), -1)
+            else:
+                m.mav.param_set_send(m.target_system, m.target_component, name.encode(), float(value), 9)  # REAL32
+            end = time.time() + timeout
+            while time.time() < end:
+                self._beat()
+                msg = m.recv_match(type="PARAM_VALUE", blocking=True, timeout=0.2)
+                if msg is not None and str(msg.param_id).rstrip("\x00") == name:
+                    return name, float(msg.param_value)
+        raise ValueError(f"the vehicle does not answer for parameter {' / '.join(names)}")
+
+    def setup(self, fences: list[tuple]) -> None:
+        """Make the vehicle protect itself, and say what was changed.
+
+        * Its ground-station failsafe is switched on and pointed at this bridge: without the bridge's heartbeat
+          for 3 s (bridge crashed, radio lost), the vehicle holds.
+        * `fences` are uploaded and switched on: the vehicle holds if it leaves the working area or enters an
+          exclusion zone, and plans its routes around them, whatever mission it is given.
+
+        Parameters that already have the wanted value are not touched. The changes are stored on the vehicle
+        and stay after this program ends. Raises ValueError if the vehicle refuses any of it: better not to
+        start than to run unprotected.
+        """
+        for names, want, why in VEHICLE_SETUP:
+            if not fences and names[0] in ("FENCE_ENABLE", "FENCE_TYPE", "FENCE_ACTION", "OA_TYPE"):
+                continue                                  # the program states no boundary and no exclusion zone
+            name, have = self.param(names)
+            if abs(have - want) > 1e-6:
+                name, now = self.param((name,), want)
+                if abs(now - want) > 1e-6:
+                    raise ValueError(f"the vehicle did not accept {name} = {want:g} (it reports {now:g})")
+                print(f"loam: vehicle parameter {name}: {have:g} -> {want:g} ({why})", file=sys.stderr, flush=True)
+        if fences:
+            self.upload(fences, kind=FENCE)
+            n, i = 0, 0
+            while i < len(fences):                        # each corner carries its polygon's corner count
+                n, i = n + 1, i + int(fences[i][3])
+            print(f"loam: uploaded {n} fence polygon(s), {len(fences)} corners", file=sys.stderr, flush=True)
 
     def set_mode(self, mode: int) -> None:
         """Ask for an ArduPilot custom mode (the 1 says the number is a custom mode)."""
@@ -232,6 +370,11 @@ class Vehicle:
 
 
 def run_mavlink(model: Model, name: str, broker: str, url: str, frame: Frame, min_fix: int = 6,
-                sim_world: bool = False, max_wall_s: float | None = None):
-    """Bridge one MAVLink vehicle as Loam machine `name` (see `bridge.run_bridge`)."""
-    return run_bridge(model, name, broker, Vehicle(url, frame, min_fix), sim_world, max_wall_s)
+                sim_world: bool = False, max_wall_s: float | None = None, setup: bool = True):
+    """Bridge one MAVLink vehicle as Loam machine `name` (see `bridge.run_bridge`).
+
+    With `setup` (the default) the vehicle is first given the site's fences and its failsafe is switched on; see
+    `Vehicle.setup`. Without, its own configuration is trusted as it is.
+    """
+    fences = fence_items(model, frame) if setup else None
+    return run_bridge(model, name, broker, Vehicle(url, frame, min_fix, fences=fences), sim_world, max_wall_s)

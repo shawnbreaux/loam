@@ -196,6 +196,8 @@ class Frames:
         gauge("machine_stop_latency_seconds", "Worst e-stop latency the machine has reported.",
               [({"machine": n}, m.get("stopLatencyS")) for n, m in ms.items()])
         tasks = st.get("tasks") or {}
+        gauge("machine_clock_skew_seconds", "Machine clock minus controller clock, as the controller sees it.",
+              [({"machine": n}, m.get("clock_skew_s")) for n, m in (st.get("machines") or {}).items()])
         gauge("task_passes_total", "Passes issued per task.",
               [({"task": n}, t.get("passes")) for n, t in tasks.items()], "counter")
         gauge("task_done", "1 once the task's until-condition holds.",
@@ -233,12 +235,13 @@ KEEPALIVE_S = 15.0    # a live-dashboard connection sends a comment this often, 
 
 
 def serve(model: Model, base_dir: str, broker: str, port: int, record: str | None,
-          host: str = "127.0.0.1") -> None:
+          host: str = "127.0.0.1", mcap: str | None = None) -> None:
     """Run the live dashboard until the site ends or Ctrl-C.
 
     Serves three addresses: `/` (the page), `/events` (a Server-Sent Events stream of frames) and `/metrics`
     (Prometheus). It listens on this computer only unless `host` says otherwise: the page shows where machines and
-    people are, and there is no login.
+    people are, and there is no login. `record` keeps the dashboard's frames for a replay page; `mcap` keeps
+    every Wire message as it arrived (see `loam.wirelog`).
     """
     from .runtime.bus import Bus
     site = model.site["name"]
@@ -303,14 +306,18 @@ def serve(model: Model, base_dir: str, broker: str, port: int, record: str | Non
                                                                      f"sim/{site}/end"])
     httpd: ThreadingHTTPServer | None = None
     rec = None
+    log = None
     try:
+        if mcap:
+            from .wirelog import McapLog
+            log = McapLog(mcap)
         httpd = ThreadingHTTPServer((host, port), Handler)
         threading.Thread(target=httpd.serve_forever, daemon=True).start()
         rec = open(record, "w", encoding="utf-8") if record else None  # noqa: SIM115
         print(f"loam monitor: http://{host}:{port}/  metrics: /metrics  (site {site})", flush=True)
         if rec is not None:
             rec.write(json.dumps({"site": fr.site_info}) + "\n")
-        _relay(fr, bus, site, rec, clients, lock)
+        _relay(fr, bus, site, rec, clients, lock, log)
     except KeyboardInterrupt:
         pass
     finally:
@@ -323,11 +330,15 @@ def serve(model: Model, base_dir: str, broker: str, port: int, record: str | Non
                     q.put_nowait(None)
         if rec is not None:
             rec.close()
+        if log is not None:
+            log.close()
         bus.stop()
 
 
-def _relay(fr: Frames, bus, site: str, rec, clients: list, lock: threading.Lock) -> None:
-    """Feed Wire messages into the frames and push frames to the live connections, until the site ends."""
+def _relay(fr: Frames, bus, site: str, rec, clients: list, lock: threading.Lock, log=None) -> None:
+    """Feed Wire messages into the frames (and the MCAP log, if there is one) and push frames to the live
+    connections, until the site ends.
+    """
     from .runtime.bus import tolerant
     last_push, dirty_map = 0.0, False
     while True:
@@ -336,6 +347,8 @@ def _relay(fr: Frames, bus, site: str, rec, clients: list, lock: threading.Lock)
             with tolerant(topic):
                 if topic == f"sim/{site}/end":
                     return
+                if log is not None and topic.startswith("loam/"):
+                    log.add(topic, msg)
                 k = fr.feed(topic, msg)
                 changed = changed or k is not None
                 dirty_map = dirty_map or k == "map"
