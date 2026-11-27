@@ -327,6 +327,17 @@ def add_field_commands(sub) -> None:
     p.add_argument("--reason", help="why (default: pressed, or released, by operator)")
     p.add_argument("--broker", default="localhost:1883")
     p.add_argument("--json", action="store_true")
+    p = sub.add_parser("broker", help="write a secured Mosquitto setup for the site: certificates, a password per "
+                                      "client, access rules, and an install script")
+    p.add_argument("file")
+    p.add_argument("--host", required=True, help="the name or address clients will connect to")
+    p.add_argument("--address", action="append", default=[], metavar="NAME_OR_IP",
+                   help="another name or address of the same computer (repeatable)")
+    p.add_argument("--out", default="broker", help="folder to write (default: broker); a rerun keeps its "
+                                                   "certificate authority and passwords")
+    p.add_argument("--etc", default="/etc/mosquitto", help="where install.sh puts the files (default: /etc/mosquitto)")
+    p.add_argument("--port", type=int, default=8883)
+    p.add_argument("--json", action="store_true")
     p = sub.add_parser("sense", help="site sensors as Wire messages: people from Frigate cameras, rain from rtl_433")
     p.add_argument("file")
     p.add_argument("--broker", default="localhost:1883")
@@ -739,6 +750,25 @@ def cmd_estop(model, a) -> None:
     _show({"estop": "released" if a.release else "pressed", "reason": reason}, a.json)
 
 
+def cmd_broker(model, a) -> None:
+    """`loam broker`: write the folder that sets up a secured Mosquitto for this site, and say what to do with it."""
+    from .broker import site_broker
+    r = site_broker(model, a.out, a.host, a.address, etc=a.etc, port=a.port)
+    if a.json:
+        print(json.dumps(r, indent=2))
+        return
+    kept = len(r["users"]) - len(r["new"])
+    print(f"{r['out']}/: broker files for {len(r['users'])} clients ({', '.join(r['users'])})")
+    print(f"  {'new' if r['ca_created'] else 'kept the'} certificate authority; new passwords: {len(r['new'])}, "
+          f"kept: {kept}")
+    print("on the site server:")
+    print(f"  sudo sh {r['out']}/install.sh")
+    print(f"on each client, with its copy of {r['out']}/ca.crt and of its own clients/<name>.password:")
+    print("  export LOAM_BROKER_CA=ca.crt LOAM_BROKER_PASSWORD_FILE=<name>.password")
+    print(f"  loam ... --broker mqtts://<name>@{r['host']}{'' if r['port'] == 8883 else f':{a.port}'}")
+    print(f"keep {r['out']}/ca.key and clients/ off the machines; back the folder up.")
+
+
 def cmd_sense(model, a) -> None:
     """`loam sense`: republish people seen by Frigate's cameras and rain measured by an rtl_433 gauge as Loam Wire
     detection and weather messages, until stopped.
@@ -784,7 +814,7 @@ def cmd_role(model, a) -> None:
 # traceback.
 FIELD_COMMANDS = {"run": cmd_run, "simulate-site": cmd_simulate_site, "mavlink": cmd_mavlink, "vda5050": cmd_vda5050,
                   "soil-calibrate": cmd_soil_calibrate, "opera": cmd_opera,
-                  "resume": cmd_resume, "estop": cmd_estop, "sense": cmd_sense,
+                  "resume": cmd_resume, "estop": cmd_estop, "sense": cmd_sense, "broker": cmd_broker,
                   "_role": cmd_role, "monitor": cmd_monitor,
                   "export": cmd_export, "terrain": cmd_terrain, "score": cmd_score, "nmea": cmd_nmea}
 
