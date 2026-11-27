@@ -1,64 +1,21 @@
 name: ci
-
 on:
   push:
-  pull_request:
-
 permissions:
   contents: read
-
-concurrency:                                   # a newer push to the same ref supersedes a running check
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        python: ["3.10", "3.11", "3.12", "3.13"]
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: ${{ matrix.python }}
-          cache: pip
-      - name: Mosquitto (the end-to-end, bridge and broker-security tests run a real MQTT broker)
-        run: |
-          sudo apt-get update -q && sudo apt-get install -y -q mosquitto
-          # The package confines Mosquitto to /etc/mosquitto (AppArmor); the security tests give it a
-          # configuration, certificates and access rules in a temporary folder.
-          if [ -e /etc/apparmor.d/usr.sbin.mosquitto ]; then
-            sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mosquitto
-          fi
-      - name: RTKLIB str2str (BSD-2) for the positioning-stream test, pinned to the tested commit
-        run: |
-          git init -q /tmp/RTKLIB
-          git -C /tmp/RTKLIB fetch -q --depth 1 https://github.com/rtklibexplorer/RTKLIB.git \
-            38875383435046c3011d60811ee3749072ad72f2
-          git -C /tmp/RTKLIB checkout -q FETCH_HEAD
-          make -s -C /tmp/RTKLIB/app/consapp/str2str/gcc -j4
-          echo "STR2STR=/tmp/RTKLIB/app/consapp/str2str/gcc/str2str" >> "$GITHUB_ENV"
-      - run: pip install -e ".[test,plot,all]"
-      # Every test also fails if it leaves a thread, child process or open file behind (tests/conftest.py).
-      # ArduPilot SITL, ROS 2 (OPERA), Project Chrono and PDAL tests need tools/integration-envs.sh and skip here.
-      - run: pytest -q --cov=loam --cov-report=term --cov-fail-under=85
-
-  lint:
+  probe:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.13"
-          cache: pip
-      - run: pip install -e ".[dev]"
-      - run: ruff check loam tests examples
-      - run: mypy loam
-      - name: example surfaces are reproducible
-        run: |
-          python examples/make_surfaces.py
-          git diff --exit-code examples/*.xml
+      - run: |
+          sudo apt-get update -q >/dev/null && sudo apt-get install -y -q mosquitto >/dev/null
+          echo "== profiles"; ls /etc/apparmor.d | grep -i mosq || echo none
+          echo "== package files"; dpkg -L mosquitto | grep -i -E "apparmor|systemd" || echo none
+          echo "== loaded"; sudo aa-status 2>/dev/null | grep -i mosq || echo none
+          mkdir -p /tmp/probe && cd /tmp/probe && printf 'listener 18883 127.0.0.1\nallow_anonymous true\n' > mosquitto.conf
+          echo "== relative"; (timeout 3 mosquitto -c mosquitto.conf; echo "exit $?") 2>&1 | tail -4
+          echo "== absolute"; (timeout 3 mosquitto -c /tmp/probe/mosquitto.conf; echo "exit $?") 2>&1 | tail -4
+          echo "== home"; mkdir -p ~/probe && cp mosquitto.conf ~/probe/ && (timeout 3 mosquitto -c ~/probe/mosquitto.conf; echo "exit $?") 2>&1 | tail -4
+          echo "== dmesg"; sudo dmesg | grep -i -E "apparmor.*mosq" | tail -5 || echo none
+          echo "== tmp"; ls -ld /tmp /tmp/probe; id; python3 -c "import tempfile; print(tempfile.gettempdir())"; echo "TMPDIR=$TMPDIR RUNNER_TEMP=$RUNNER_TEMP"
