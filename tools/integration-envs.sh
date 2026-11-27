@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Conda environments for the integrations pip cannot install: Project Chrono (pychrono, BSD-3) and
-# ROS 2 Jazzy (RoboStack: Nav2, ros2_control) plus a small workspace with PWRI's OPERA packages.
+# Conda environments for the integrations pip cannot install: Project Chrono (pychrono, BSD-3),
+# ROS 2 Jazzy (RoboStack: Nav2, ros2_control) plus a small workspace with PWRI's OPERA packages, and
+# PDAL (BSD-3), against which the ground filter is checked.
 # Everything here is FOSS; com3_msgs (OPERA's vessel action) carries no licence and is built for tests only.
 #
 #   tools/integration-envs.sh [PREFIX]          # default PREFIX=$HOME/loam-envs
@@ -8,7 +9,8 @@
 # Then:
 #   LOAM_CHRONO_PYTHON=$PREFIX/mm/envs/chrono/bin/python \
 #   LOAM_ROS_RUN="env MAMBA_ROOT_PREFIX=$PREFIX/mm $PREFIX/mm/bin/micromamba run -n ros" \
-#   LOAM_OPERA_WS=$PREFIX/opera_ws  pytest tests/test_chrono.py tests/test_opera.py
+#   LOAM_OPERA_WS=$PREFIX/opera_ws  PDAL=$PREFIX/mm/envs/pdal/bin/pdal \
+#   pytest tests/test_chrono.py tests/test_opera.py tests/test_integrations.py
 # Stop at the first error, on any unset variable, and on a failure anywhere in a pipeline.
 set -euo pipefail
 PREFIX=${1:-$HOME/loam-envs}
@@ -28,7 +30,9 @@ mkdir -p "$PREFIX/mm/bin" "$PREFIX/src" "$PREFIX/opera_ws/src"
     ros-jazzy-robot-state-publisher ros-jazzy-rmw-cyclonedds-cpp \
     colcon-common-extensions ros-jazzy-ament-cmake ros-jazzy-rosidl-default-generators cmake make compilers \
     numpy paho-mqtt pytest
-# Loam itself, installed in place into both, so the tests run this checkout.
+# PDAL is only run as a program, so its environment needs nothing else.
+"$MM" create -y -q -n pdal -c conda-forge pdal
+# Loam itself, installed in place into the first two, so the tests run this checkout.
 for env in chrono ros; do "$MM" run -n $env pip install -q --no-deps -e "$LOAM"; done
 
 # OPERA's machine descriptions and messages from PWRI: fetched, linked into a workspace and built.

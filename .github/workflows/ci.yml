@@ -25,9 +25,8 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
           cache: pip
-      - name: Mosquitto (the end-to-end, bridge and broker-security tests run a real MQTT broker) and PDAL
-          (BSD-3; the ground filter is checked against its SMRF filter)
-        run: sudo apt-get update -q && sudo apt-get install -y -q mosquitto pdal
+      - name: Mosquitto (the end-to-end, bridge and broker-security tests run a real MQTT broker)
+        run: sudo apt-get update -q && sudo apt-get install -y -q mosquitto
       - name: RTKLIB str2str (BSD-2) for the positioning-stream test, pinned to the tested commit
         run: |
           git init -q /tmp/RTKLIB
@@ -38,7 +37,7 @@ jobs:
           echo "STR2STR=/tmp/RTKLIB/app/consapp/str2str/gcc/str2str" >> "$GITHUB_ENV"
       - run: pip install -e ".[test,plot,all]"
       # Every test also fails if it leaves a thread, child process or open file behind (tests/conftest.py).
-      # ArduPilot SITL, ROS 2 (OPERA) and Project Chrono tests need tools/integration-envs.sh and skip here.
+      # ArduPilot SITL, ROS 2 (OPERA), Project Chrono and PDAL tests need tools/integration-envs.sh and skip here.
       - run: pytest -q --cov=loam --cov-report=term --cov-fail-under=85
 
   lint:

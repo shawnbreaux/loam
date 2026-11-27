@@ -216,9 +216,9 @@ plastic memory keeps the overshoot.
 The default soil parameters are illustrative. Measure them on site (plate-sinkage or bevameter test) for real
 work. Calibration needs pychrono; running a site from a saved table does not.
 
-## Setting up Chrono and ROS 2
+## Setting up Chrono, ROS 2 and PDAL
 
-pip cannot install pychrono or ROS 2. `tools/integration-envs.sh` builds both as conda environments with
+pip cannot install pychrono, ROS 2 or PDAL. `tools/integration-envs.sh` builds them as conda environments with
 micromamba (conda-forge, projectchrono and RoboStack channels). It also builds a workspace with OPERA's
 `zx200_description`, `ic120_description` and `com3_msgs`, and prints the environment variables the tests use.
 

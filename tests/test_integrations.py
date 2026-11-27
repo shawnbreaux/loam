@@ -106,8 +106,9 @@ def test_ground_filter_degenerate():
     np.testing.assert_array_equal(ground_surface(flat, 1.0), flat)
 
 
+# PDAL's program: named by the environment, on the PATH, or where tools/integration-envs.sh puts it.
 PDAL = os.environ.get("PDAL") or shutil.which("pdal") or next(
-    (c for c in ("/opt/mm/envs/pdal/bin/pdal",) if os.path.exists(c)), None)
+    (c for c in (os.path.expanduser("~/loam-envs/mm/envs/pdal/bin/pdal"),) if os.path.exists(c)), None)
 
 
 @pytest.mark.skipif(PDAL is None, reason="needs PDAL (PDAL=/path/to/pdal)")
