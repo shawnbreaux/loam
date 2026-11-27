@@ -3,7 +3,9 @@
 All notable changes are recorded here. The project follows [Semantic Versioning](https://semver.org/);
 before 1.0 any minor release may change the language.
 
-## [Unreleased]
+## [0.0.7] - 2026-11-27
+
+The secured broker of 0.0.6, made to work where a site server actually runs it.
 
 - **`loam broker`** writes the whole secured Mosquitto setup for a site from its program: a certificate
   authority and broker certificate, a random password per client, the access rules and an `install.sh`.

@@ -188,7 +188,7 @@ example surfaces. Contributions: see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Status and safety
 
-v0.0.6 is an early draft; the language and wire format will change. **Loam does not make a
+v0.0.7 is an early draft; the language and wire format will change. **Loam does not make a
 machine safe.** Machines directed by Loam need their own certified safety systems and a site risk
 assessment (ISO 17757). The reference simulator is a test tool, not a planner for real equipment.
 
