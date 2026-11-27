@@ -31,7 +31,8 @@ def launch(path: str, broker: str, speed: float, faults_path: str | None, model,
     site = model.site["name"]
     cleaner = Bus(broker, f"loam-site-launcher-{site}").start([])
     try:
-        for t in [f"loam/v0/{site}/status", f"sim/{site}/world/truth", f"sim/{site}/clock", f"sim/{site}/faults",
+        for t in [f"loam/v0/{site}/status", f"loam/v0/{site}/estop", f"sim/{site}/world/truth",
+                  f"sim/{site}/clock", f"sim/{site}/faults",
                   *(f"loam/v0/{site}/{n}/connection" for n in model.machines)]:
             cleaner.clear(t)                         # nothing retained from an earlier run
         time.sleep(0.3)

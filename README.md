@@ -39,9 +39,13 @@ replan drift { when deviation() > 0.15 ft }
 | Document | Contents |
 | --- | --- |
 | [SPEC.md](SPEC.md) | Language, execution semantics, Loam Wire messages, safety model |
+| [docs/RUNTIME.md](docs/RUNTIME.md) | Running a site: plan, controller, simulated site, secured broker, monitor; what the system tests showed |
+| [docs/FIELD.md](docs/FIELD.md) | Field equipment: grade control, RTK, lidar, cameras; coordinates; what cannot be connected |
+| [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) | Every integration, its licence and what it was tested against; what was left out and why |
 | [docs/SIMULATOR.md](docs/SIMULATOR.md) | Reference simulator: model, equations, invariants, limitations |
 | [results/study.md](results/study.md) | Monte Carlo study, 420 seeded runs |
 | [schemas/wire](schemas/wire) | JSON Schema for Loam Wire (controller ↔ machines ↔ probes over MQTT) |
+| [CHANGELOG.md](CHANGELOG.md) | What changed in each release |
 
 ## Quick start
 
@@ -79,20 +83,24 @@ simulator favouring feedback.
 These are results of a simplified model with assumed soil factors, not field measurements; see
 [docs/SIMULATOR.md](docs/SIMULATOR.md) for every assumption and limitation.
 
-## Field tools
+## Commands
 
-Loam works with the equipment on a real test site through files and simple streams, with no vendor SDKs:
-LandXML next-pass surfaces for **Cat Grade with 3D** (and Trimble, Topcon, Leica), `.agd` design grids for
-**OpenGrade3D**, field folders for **AgOpenGPS**, survey CSVs from **Emlid Reach**, NMEA from any RTK
-receiver, and LAS/PCD scans from a **DJI Zenmuse L2** or **Livox Mid-360**. See
-[docs/FIELD.md](docs/FIELD.md) for the commands, the coordinate setup and what cannot be connected
-(Cat Command, closed retrofit kits).
-
-```bash
-loam terrain site.loam scan.las --world-origin 600000,3812000          # grid a lidar scan
-loam export  site.loam --to landxml -o next.xml --ground scan.las --world-origin 600000,3812000
-loam score   site.loam rover.csv --zone pad --world-origin 600000,3812000
-```
+| Command | What it does |
+| --- | --- |
+| `loam check`, `explain`, `compile` | Check a program; describe it in plain English; write its execution manifest |
+| `loam sim` | The reference simulator, in one process (closed or open loop) |
+| `loam plan` | Write a site program from a grading LandXML (existing and design surfaces) |
+| `loam run` | The site controller: orders, replans and safety rules over MQTT |
+| `loam simulate-site` | A simulated site to run the controller against: world, lidar probe, one process per machine, scripted faults |
+| `loam monitor` | Live web dashboard, Prometheus metrics, replay pages, MCAP recording |
+| `loam mavlink`, `vda5050`, `opera` | Drive a real vehicle as a Loam machine: ArduPilot Rover, VDA 5050 robots, OPERA machines on ROS 2 |
+| `loam nmea` | Publish an RTK receiver's position as a machine's state |
+| `loam terrain` | Grid a lidar scan onto the site; publish scans as they are written (`--watch`) |
+| `loam sense` | People from Frigate cameras and rain from an rtl_433 gauge, as Wire messages |
+| `loam estop`, `resume` | Press or release the site e-stop; restart machines after a stop |
+| `loam broker` | Write a secured Mosquitto setup for the site, with its install script |
+| `loam export`, `score` | Next-pass surfaces and field files for grade control; score a survey against the design |
+| `loam soil-calibrate` | Roller compaction curves from Project Chrono's soil model |
 
 ## From a grading file to a running site
 
@@ -105,7 +113,7 @@ a lidar probe and one process per machine to test it against, with scripted faul
 ```bash
 pip install -e ".[run]"   &&   mosquitto -p 1883 &
 loam plan job.xml -o job.loam
-loam simulate-site job.loam --speed 300 &
+loam simulate-site job.loam --speed 60 &
 loam monitor job.loam --port 8080 &        # http://127.0.0.1:8080/
 loam run job.loam
 ```
@@ -114,35 +122,94 @@ In end-to-end runs on real design surfaces, with a person near a machine, a lida
 float, a lost radio, a site e-stop and a crashed dozer, every fault was handled and the jobs finished
 with 95.8–97.6 % of cells in tolerance on the simulated true ground.
 
+## On a real site
+
+The same controller runs real machines. What a first field test needs, in the order it is set up:
+
+```bash
+# 1. The broker: encrypted, a name and password per client, each machine limited to its own topics
+loam broker job.loam --host site-server --address 192.168.1.10 && sudo sh broker/install.sh
+
+# 2. Positions and vehicles (each on its machine's computer, with its own password file)
+loam mavlink job.loam --machine dz1 --vehicle udp:127.0.0.1:14550 --broker mqtts://dz1@site-server
+
+# 3. Ground, people, rain
+loam terrain job.loam scans/ --watch --ground-filter --broker mqtts://sensors@site-server
+loam sense   job.loam --areas cameras.json --rain   --broker mqtts://sensors@site-server
+
+# 4. The controller, the dashboard with a recording of every message, and the e-stop
+loam run     job.loam --real-time --broker mqtts://controller@site-server
+loam monitor job.loam --mcap run.mcap            --broker mqtts://supervisor@site-server
+loam estop   job.loam                            --broker mqtts://supervisor@site-server
+```
+
+- **Machines protect themselves.** `loam mavlink` uploads the site boundary and exclusion zones to the vehicle
+  as fences and switches on its failsafe, so it holds if Loam or the radio dies. `loam opera` reports stops by
+  Nav2's Collision Monitor and carries on when the way is clear.
+- **What cannot be seen is unsafe.** A blind camera, a silent camera system or a stopped sensor program counts
+  as a person there. A machine whose clock is more than 2 s off gets no orders. Stale survey data holds
+  every machine.
+- **Nothing depends on one message.** A machine announces itself again after every reconnect, sensors repeat
+  what they see, and the e-stop is retained, so a dropped radio link or a restarted broker heals by itself.
+
+Loam works with the equipment through files and simple streams, with no vendor SDKs: LandXML next-pass
+surfaces for **Cat Grade with 3D** (and Trimble, Topcon, Leica), `.agd` design grids for **OpenGrade3D**,
+field folders for **AgOpenGPS**, survey points from **Emlid Reach**, **QField** and **QGIS**, NMEA from any
+RTK receiver, and LAS/PCD scans from a **DJI Zenmuse L2** or **Livox Mid-360**. See
+[docs/FIELD.md](docs/FIELD.md) for the commands, the coordinate setup and what cannot be connected
+(Cat Command, closed retrofit kits).
+
+```bash
+loam terrain site.loam scan.las --world-origin 600000,3812000          # grid a lidar scan
+loam export  site.loam --to landxml -o next.xml --ground scan.las --world-origin 600000,3812000
+loam score   site.loam rover.csv --zone pad --world-origin 600000,3812000
+```
+
+## Tested as a whole system
+
+`tools/site_soak.py` runs a complete job on the example site the way a real one runs: a broker, the
+controller, the dashboard and one process per machine, with a person near a machine, a lidar outage, rain,
+GNSS float, a lost radio and an e-stop along the way. It samples every process and validates every recorded
+message. The last run, 35 minutes at 6× real time:
+
+| Checked | Result |
+| --- | --- |
+| The job | finished in 209 site minutes with 6 replans; 97.4 % of the pad within ±0.1 ft on the true ground; soil factors learned as 1.300 and 0.708 (true: 1.3 and 0.7) |
+| Errors | none logged by any of the nine processes; all exited cleanly; none left running |
+| Messages | 24,819 recorded, all valid against the Wire schema |
+| Memory | no leak found: Python-level allocations flat in every process; controller level at 48 MB after 10 minutes; each machine process 40.3 to 40.9 MB over the run, still creeping by 2 to 6 kB a minute at the end |
+| Message transport | 490,120 messages (27 machine-hours of state) in 150 s: all delivered, memory flat |
+| Broker restarted mid-job | every process reconnected; job finished, 98.5 % in tolerance |
+| Controller killed mid-job | restarted 8 s later and finished the job, 97.8 % in tolerance |
+
+The first run of this test was not that clean. It found that a machine stayed written off after any reconnect,
+that a restarted controller reused its order ids, that one lost message could hold the site for good, that late
+surveys upset the soil estimates, and that the published schema did not match the messages. All are fixed;
+[docs/RUNTIME.md](docs/RUNTIME.md) has the details, and [CHANGELOG.md](CHANGELOG.md) the list.
+
 ## Integrations
 
 Every integration is an optional, FOSS extra (`pip install "loam-lang[all]"`); the core needs numpy only.
-See [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
+[docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) lists each one with its licence and what it was tested against.
 
-- **Vehicles:** `loam mavlink` drives ArduPilot Rover and other MAVLink ground vehicles as Loam
-  machines; `loam vda5050` does the same for VDA 5050 3.0 robots; `loam opera` drives PWRI's OPERA
-  machines on ROS 2: IC120 carriers through Nav2, and the ZX200's arm cutting to grade. Tested against
-  ArduPilot SITL, the official VDA 5050 schemas, Nav2 and ros2_control.
-- **Soil physics:** `loam soil-calibrate` derives roller compaction per pass from Project Chrono's SCM
-  soil model; `simulate-site --soil-table` uses it.
-- **Vehicles that protect themselves:** `loam mavlink` uploads the site boundary and exclusion zones to the
-  vehicle as fences and switches on its failsafe, so it holds if Loam or the radio dies; `loam opera`
-  reports stops by Nav2's Collision Monitor.
-- **Site sensors:** `loam sense` turns people seen by Frigate's cameras and rain from an rtl_433 gauge
-  into Wire messages; a camera or a sensor program that stops counts as a person everywhere.
-  `loam terrain --watch` publishes scans as they are written, and `loam estop` is the site e-stop from a
-  keyboard.
-- **Broker security:** `loam broker` writes a secured Mosquitto setup for the site (certificates, a password
-  per client, per-machine access rules, an install script); clients connect with `mqtts://`.
-- **Positioning:** `loam nmea tcp://…` reads RTKLIB, RTKBase or a receiver directly and publishes to MQTT.
-  The controller refuses orders to a machine whose clock is off.
+- **Vehicles:** ArduPilot Rover and other MAVLink ground vehicles (`loam mavlink`), VDA 5050 3.0 robots
+  (`loam vda5050`), and PWRI's OPERA machines on ROS 2 (`loam opera`: IC120 carriers through Nav2, the ZX200's
+  arm cutting to grade). Tested against ArduPilot SITL, the official VDA 5050 schemas, Nav2 and ros2_control.
+- **Site sensors:** people from Frigate's cameras and rain from an rtl_433 gauge (`loam sense`); lidar scans as
+  they are written (`loam terrain --watch`).
+- **Broker:** Mosquitto with TLS, set up by `loam broker`; tested in CI on Ubuntu's packaged, AppArmor-confined
+  service.
+- **Positioning:** `loam nmea tcp://…` reads RTKLIB, RTKBase or a receiver directly; chrony and gpsd keep the
+  site's clocks together.
 - **Survey data:** OpenDroneMap project folders, LAZ with a ground filter that removes machines, people
   and brush (checked against PDAL's SMRF), GeoTIFF DEMs, QField and QGIS survey points, and real CRSs
   through pyproj.
 - **Design data:** IFC 4.3 surfaces through IfcOpenShell; GeoTIFF surfaces; GeoJSON areas from QGIS;
   `export --to geotiff | geojson`.
-- **Operations:** `loam monitor` serves Prometheus `/metrics` for Grafana and records every Wire message
-  to MCAP (`--mcap`) for Lichtblick or PlotJuggler.
+- **Soil physics:** `loam soil-calibrate` derives roller compaction per pass from Project Chrono's SCM
+  soil model; `simulate-site --soil-table` uses it.
+- **Operations:** Prometheus `/metrics` for Grafana, and every Wire message recorded to MCAP for Lichtblick
+  or PlotJuggler (`loam monitor --mcap`).
 
 ## Repository layout
 
@@ -167,24 +234,26 @@ See [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
 | `loam/wirelog.py` | MCAP recorder for Wire messages |
 | `loam/broker.py` | `loam broker`: certificates, passwords, access rules and install script for the site's Mosquitto |
 | `loam/runtime/chrono_soil.py` | Roller compaction curves from Project Chrono's SCM soil model |
-| `tools/integration-envs.sh` | Conda environments for Chrono and ROS 2 (OPERA), for the integration tests |
+| `tools/integration-envs.sh` | Conda environments for Chrono, ROS 2 (OPERA) and PDAL, for the integration tests |
+| `tools/site_soak.py` | Runs a whole simulated site and reports each process's memory, files and threads; can restart the broker or the controller mid-job |
 | `loam/monitor.py`, `loam/monitor.html` | Live dashboard and replay pages |
 | `loam/target.py`, `loam/export.py` | Next-pass surface; LandXML (Cat Grade 3D), OpenGrade3D `.agd`, AgOpenGPS field folder |
 | `examples/` | Example program and surfaces, comparison plot, Monte Carlo study |
-| `tests/` | 199 tests: language, I/O, simulator invariants, field adapters, planner, controller loopback, a full multi-process MQTT run with faults, vehicle bridges (ArduPilot SITL and a fake ArduPilot, VDA 5050, RTKLIB, OPERA on Nav2 and ros2_control, ArduPilot fences and failsafe, Nav2's Collision Monitor), e-stop and SIGTERM safety, a TLS broker with access rules (also on a system-installed Mosquitto), site sensors (a stand-in Frigate, rtl_433 on recorded gauges), Chrono soil, integrations (PDAL cross-check included), parser fuzzing; every test also fails on a leaked thread, process or file |
+| `tests/` | 203 tests: language, I/O, simulator invariants, field adapters, planner, controller loopback, a full multi-process MQTT run with faults in which every message is validated against the schema, reconnects and restarts, vehicle bridges (ArduPilot SITL and a fake ArduPilot, VDA 5050, RTKLIB, OPERA on Nav2 and ros2_control, ArduPilot fences and failsafe, Nav2's Collision Monitor), e-stop and SIGTERM safety, a TLS broker with access rules (also on a system-installed Mosquitto), site sensors (a stand-in Frigate, rtl_433 on recorded gauges), Chrono soil, integrations (PDAL cross-check included), parser fuzzing; every test also fails on a leaked thread, process or file |
 
 ## Development
 
 ```bash
 pip install -e ".[dev]"
-pytest -q --cov=loam          # 199 tests, about 6 min; the MQTT tests need mosquitto
+pytest -q --cov=loam          # 203 tests, about 6 min; the MQTT tests need mosquitto
+python tools/site_soak.py out/ --speed 60     # a whole simulated site, watched; about 4 min
 ruff check loam tests examples
 mypy loam
 python examples/study.py      # about 1 min on 2 cores; rewrites results/
 ```
 
-CI runs the tests on Python 3.10 to 3.13, plus lint, type checks and a reproducibility check of the
-example surfaces. Contributions: see [CONTRIBUTING.md](CONTRIBUTING.md).
+CI runs the tests on Python 3.10 to 3.13, sets up the secured broker on Ubuntu's packaged Mosquitto and
+tests against it, and runs lint, type checks and a reproducibility check of the example surfaces. Contributions: see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Status and safety
 

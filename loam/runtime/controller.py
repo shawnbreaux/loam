@@ -37,6 +37,11 @@ HELD_PASS_MIN = 30.0      # a pass whose machine has not been in a safe, working
 MAX_CLOCK_SKEW_S = 2.0
 
 
+def _r3(t: float | None) -> float | None:
+    """A site time in minutes rounded to the millisecond-ish precision worth sending, or None."""
+    return None if t is None else round(t, 3)
+
+
 class Controller(Sim):
     """The planner connected to a live site.
 
@@ -72,14 +77,19 @@ class Controller(Sim):
                                                       "ts": -1e9, "finished": None}
                                                   for n in self.machines}
         self.terrain_since = 0.0
-        # Passes landed recently: (finish time, cells, change to pred, change to p_loose, flags). A survey
-        # taken before a pass finished must not see that pass in the plan, or the pass counts twice.
-        self.recent: list[tuple[float, np.ndarray, np.ndarray, np.ndarray]] = []
+        # Passes landed recently: (finish time, cells, what the pass added to each of the planner's four
+        # per-cell books, which of the three "touched" flags it set). A survey taken before a pass finished
+        # must not see that pass in the plan, or the pass counts twice.
+        self.recent: list[tuple[float, np.ndarray, list[np.ndarray], list[np.ndarray]]] = []
         self.order_of: dict[str, str] = {}
         self.terrain: dict | None = None
         self.people: dict[str, tuple[float, float, float]] = {}   # per sensor: x, y and how well they are known
         self.rain = 0.0
         self.estop = False
+        # Order ids must not repeat when the controller is restarted in the middle of a job: a machine (or the
+        # simulated world) that has already done "strip_A-5" would take a new order of that name for the old one
+        # and report it finished without working. So every run of the controller tags its ids with its start time.
+        self.order_tag = np.base_repr(int(time.time()), 36).lower() + "-"
         self.abandoned = 0
         self.status_seq = 0
         self.t = clock.minutes()
@@ -97,7 +107,7 @@ class Controller(Sim):
         """
         super()._issue(m, name, op, w, parts, speed, dist, limits, deposit_msg, target)
         m.busy_until = math.inf                     # lands when the machine says so
-        self.order_of[m.name] = f"{name}-{self.order_seq}"
+        self.order_of[m.name] = self.order_id(name)
 
     # -- incoming -------------------------------------------------------------------------
     def handle(self, topic: str, msg: dict) -> None:
@@ -185,6 +195,16 @@ class Controller(Sim):
         self.abandoned += 1
         self.log(f"{n}: pass {self.order_of.get(n)} abandoned ({why}); the next survey shows what was done")
 
+    def _books(self) -> list[np.ndarray]:
+        """The planner's four per-cell books as flat views: predicted height, predicted loose fill, and the fill
+        and the rolling expected since the last survey (what the soil factors are learned from).
+        """
+        return [a.ravel() for a in (self.pred, self.p_loose, self.dep_pred, self.loose_rolled_pred)]
+
+    def _flags(self) -> list[np.ndarray]:
+        """Flat views of the three flags that say what kind of work touched each cell since the last survey."""
+        return [a.ravel() for a in (self.touched_dep, self.touched_comp, self.touched_other)]
+
     def _minutes(self, stamp: str) -> float:
         """A wire timestamp as site minutes since the start of the job."""
         return (wire.parse_ts(stamp) - self.clock.epoch) / 60.0
@@ -194,11 +214,18 @@ class Controller(Sim):
         arrives afterwards.
         """
         u = np.unique(ps.idx)
-        pred, pl = self.pred.ravel(), self.p_loose.ravel()
-        b_pred, b_pl = pred[u].copy(), pl[u].copy()
+        books, flags = self._books(), self._flags()
+        before = [b[u].copy() for b in books]
+        was = [f[u].copy() for f in flags]
+        for f in flags:                                   # cleared for a moment, to see which ones this pass sets
+            f[u] = False
         super().land(ps)
+        own = [f[u].copy() for f in flags]
+        for f, w in zip(flags, was, strict=True):
+            f[u] |= w
         fin = self.mstate[ps.machine]["finished"]
-        self.recent.append((self.t if fin is None else fin, u, pred[u] - b_pred, pl[u] - b_pl))
+        self.recent.append((self.t if fin is None else fin, u, [b[u] - b0 for b, b0 in zip(books, before, strict=True)],
+                            own))
         # Bounded memory: an hour of passes, and never more than 256.
         self.recent = [r for r in self.recent if r[0] > self.t - 60.0][-256:]
 
@@ -233,21 +260,23 @@ class Controller(Sim):
             return
         self.terrain = None
         late = [r for r in self.recent if r[0] > scan_t]          # in the plan, not yet in the scan
-        pred, pl = self.pred.ravel(), self.p_loose.ravel()
-        flags = (self.touched_dep, self.touched_comp, self.touched_other)
-        saved = []
-        for _, u, dp, dl in late:
-            pred[u] -= dp
-            pl[u] -= dl
-            saved.append([f.ravel()[u].copy() for f in flags])
-            for f in flags:
-                f.ravel()[u] = False
+        books, flags = self._books(), self._flags()
+        for _, u, deltas, _ in late:
+            for b, d in zip(books, deltas, strict=True):
+                b[u] -= d
+            for f in flags:                               # their cells are left out of this comparison
+                f[u] = False
         self.ingest_survey(wire.decode_heights(msg["data"], (self.ny, self.nx)).astype(float), msg["probe"])
-        for (_, u, dp, dl), fl in zip(late, saved, strict=True):
-            pred[u] += dp
-            pl[u] += dl
-            for f, v in zip(flags, fl, strict=True):
-                f.ravel()[u] |= v
+        # The survey closed the books on everything it saw. The late passes are still to be seen: put back what
+        # each predicted, the expected fill and rolling included, or the next survey would find their effect on
+        # the ground with nothing expected there and blame the soil factors.
+        for _, u, deltas, own in late:
+            for b, d in zip(books[:2], deltas[:2], strict=True):
+                b[u] += d
+            for b, d in zip(books[2:], deltas[2:], strict=True):
+                b[u] = np.maximum(b[u] + d, 0.0)          # the survey zeroed these two; never leave one negative
+            for f, v in zip(flags, own, strict=True):
+                f[u] |= v
 
     def proximity(self, a: str, b: str) -> float:
         """The smallest distance between any detected person and any machine, in metres (infinite when nobody is
@@ -287,7 +316,7 @@ class Controller(Sim):
         """
         return {
             "t": round(self.t, 3),
-            "tasks": {n: {"started": self.started[n], "done": self.done_at[n], "passes": self.task_passes[n]}
+            "tasks": {n: {"started": _r3(self.started[n]), "done": _r3(self.done_at[n]), "passes": self.task_passes[n]}
                       for n in self.m.tasks},
             "machines": {n: {"conn": s["conn"], "safety": s["safety"], "ready": self.machine_ready(n),
                              "clock_skew_s": round(s.get("skew", 0.0), 2),

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import IO, Any
@@ -56,6 +57,9 @@ class Beliefs:
     """What the planner assumes before it has measured anything."""
     swell: float = 1.25
     keep: float = 0.80
+
+
+RULE_LOG_MAX = 2000          # rule changes kept for the report
 
 
 @dataclass(frozen=True)
@@ -195,12 +199,15 @@ class Sim(Context):
         self.task_passes = dict.fromkeys(model.tasks, 0)
         self.active_rules = dict.fromkeys(model.rules, False)
         self.builtin_stale = False
-        self.rule_log: list[tuple[float, str, bool]] = []
+        # The latest rule changes, for the report. Bounded: a condition hovering at its threshold can change often.
+        self.rule_log: deque[tuple[float, str, bool]] = deque(maxlen=RULE_LOG_MAX)
+        self.idle_note: tuple | None = None          # what the site was last reported to be waiting for
         self.replans: list[float] = []
         self.ledger = 0.0                # booked change of true ground volume, site units^3
         self.windrow = 0.0               # bank volume cut by finishing passes, not yet reused
         self.cut_bank = self.import_bank = self.export_bank = 0.0
         self.probe_count = self.order_seq = 0
+        self.order_tag = ""                          # set by a live controller: makes its order ids its own
 
     # -- setup -----------------------------------------------------------
     def _exclusion(self) -> Mask:
@@ -209,9 +216,16 @@ class Sim(Context):
 
     # -- small helpers ---------------------------------------------------
     def log(self, msg: str) -> None:
-        """Log a line stamped with the site time as [hours:minutes]."""
-        h, mm = divmod(self.t, 60)
-        self.log_fn(f"[{int(h):02d}:{mm:04.1f}] {msg}")
+        """Log a line stamped with the site time as [hours:minutes]; before the start of the job as [-hours:minutes]."""
+        tenths = round(abs(self.t) * 10)                 # in tenths of a minute, so 59.96 does not print as 60.0
+        h, mm = divmod(tenths, 600)
+        self.log_fn(f"[{'-' if self.t < 0 and tenths else ''}{h:02d}:{mm / 10:04.1f}] {msg}")
+
+    def order_id(self, task: str) -> str:
+        """The id of the order numbered last: the task, the controller's own tag if it has one, and a running number
+        ("strip_A-12", or "strip_A-wf2k1z-12" from a live controller).
+        """
+        return f"{task}-{self.order_tag}{self.order_seq}"
 
     def emit(self, topic: str, msg: dict) -> None:
         """Record a Loam Wire message, if a wire log is being written (see `run`)."""
@@ -682,7 +696,7 @@ class Sim(Context):
         self.order_seq += 1
         limits["maxSpeed"] = round(speed * self.u / 60, 3)
         self.emit(wire.topic(self.site_name, m.name, "order"),
-                  wire.order(self.site_name, m.name, self.seq(), f"{name}-{self.order_seq}", 0, name, op,
+                  wire.order(self.site_name, m.name, self.seq(), self.order_id(name), 0, name, op,
                              self._window_poly(w) if w is not None else None,
                              target or {"surface": "design"},
                              limits, deposit_msg, ts=self.ts()))
@@ -784,11 +798,25 @@ class Sim(Context):
         if all(v is not None for v in self.done_at.values()):
             return True
         # Built-in stall rule (spec): an eligible, unfinished task with no work in the plan forces
-        # a rebase on the latest survey.
-        if not (self.inflight or eff["stop"] or eff["hold"] or self.open_loop) \
-                and self.last_probe > self.last_rebase:
+        # a rebase on the latest survey. That covers three situations, and the log says which.
+        if not (self.inflight or eff["stop"] or eff["hold"] or self.open_loop) and self.last_probe > self.last_rebase:
             pending = [n for n in self.m.tasks if self.done_at[n] is None and self.eligible(n, eff["paused"])]
-            if pending:
+            held_up = sorted(n for n in eff["paused"] if self.done_at[n] is None)
+            if not held_up:
+                self.idle_note = None
+            if pending and all(self.started[n] is None for n in pending):
+                # The tasks before these have just finished: plan them from the ground as it now is.
+                self.replan(reason=f"{', '.join(pending)} can start: planning from the latest survey")
+            elif pending and held_up:
+                # Nothing is wrong: the remaining work belongs to a task a rule has paused (rolling in the rain).
+                # Say so once, and keep the prediction on the latest survey without counting a replan each time.
+                if self.idle_note != (tuple(pending), tuple(held_up)):
+                    self.idle_note = (tuple(pending), tuple(held_up))
+                    self.log(f"waiting: no work left for {', '.join(pending)} while {', '.join(held_up)} "
+                             f"{'is' if len(held_up) == 1 else 'are'} paused")
+                self.pred[:] = self.meas
+                self.last_rebase = self.last_probe
+            elif pending:
                 self.replan(reason=f"stalled: {', '.join(pending)} not done but nothing left in the plan")
         return False
 
@@ -829,7 +857,7 @@ class Sim(Context):
             "replans": len(self.replans),
             "material_estimates": {"swell": round(self.est_swell, 4), "keep": round(self.est_keep, 4),
                                    "true_swell": self.soil.swell, "true_keep": self.soil.keep},
-            "rule_events": [{"min": t, "rule": n, "active": on} for t, n, on in self.rule_log],
+            "rule_events": [{"min": round(t, 3), "rule": n, "active": on} for t, n, on in self.rule_log],
             "zone": zone, "tolerance": tol, "units": self.unit,
             "true_ground": stats(true_r),
             "as_seen_by_program": stats(seen_r),

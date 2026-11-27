@@ -12,10 +12,11 @@ import socket
 import subprocess
 import sys
 import time
+from collections import Counter
 
 import numpy as np
 import pytest
-from conftest import EXAMPLE, EXAMPLES
+from conftest import EXAMPLE, EXAMPLES, wire_valid
 
 from loam import wire
 from loam.cli import load, main
@@ -25,7 +26,7 @@ from loam.sim import Events, Sim
 
 pytest.importorskip("paho.mqtt")
 from loam.monitor import Frames, replay_html
-from loam.runtime.bus import Clock
+from loam.runtime.bus import Bus, Clock
 from loam.runtime.controller import Controller
 from loam.runtime.world import World
 
@@ -162,8 +163,9 @@ def loopback(path, base, pass_min=3.0, scan_lag=0.0, max_min=1500.0):
     """Run the real controller against the real world physics in one process, stepping time by hand.
 
     Every pass takes `pass_min` site minutes, after which the world moves the earth and the machine reports done.
-    The probe scans at the program's rate with its stated accuracy; `scan_lag` stamps each scan that many minutes
-    in the past. Returns the controller, the world, the log lines and whether the job finished.
+    The probe scans at the program's rate with its stated accuracy; with `scan_lag` each scan reaches the controller
+    that many minutes after it was taken (stamped with the time it was taken), as when a scan takes a while to
+    process. Returns the controller, the world, the log lines and whether the job finished.
     """
     m = load(path)
     bus, clock, logs = _FakeBus(), Clock(0, 60, 1796108400.0), []
@@ -174,6 +176,7 @@ def loopback(path, base, pass_min=3.0, scan_lag=0.0, max_min=1500.0):
     rate, sigma = p["rate"].to("min"), p["accuracy"].to(c.unit) / 2
     rng = np.random.default_rng(1)
     work: dict = {}
+    scans: list = []                                              # taken, not yet delivered: (time, heights)
     for n in c.machines:
         c.handle(f"loam/v0/s/{n}/connection", {"machine": n, "connectionState": "online"})
     done = False
@@ -195,9 +198,11 @@ def loopback(path, base, pass_min=3.0, scan_lag=0.0, max_min=1500.0):
             c.mstate[n]["seen"] = time.time()
         if c.t - last_scan >= rate:
             last_scan = c.t
-            z = w.z + rng.normal(0, sigma, w.z.shape)
+            scans.append((c.t, w.z + rng.normal(0, sigma, w.z.shape)))
+        while scans and c.t >= scans[0][0] + scan_lag:
+            taken, z = scans.pop(0)
             c.handle("loam/v0/s/terrain", wire.terrain("s", "p", seq, (c.x0, c.y0), c.cell, (c.ny, c.nx),
-                                                       data=wire.encode_heights(z), ts=clock.ts(c.t - scan_lag)))
+                                                       data=wire.encode_heights(z), ts=clock.ts(taken)))
         done = c.step()
         c.t += 0.25
     return c, w, logs, done
@@ -213,6 +218,55 @@ def test_controller_closes_the_loop_against_the_world():
     assert t["zones"]["pad"]["within_tolerance_pct"] >= 95
     assert abs(c.est_keep - 0.70) < 0.08                         # learned compaction from surveys
     assert c.report()["finished"] and "true_ground" not in c.report()
+
+
+def test_late_surveys_do_not_confuse_the_soil_estimates():
+    """A survey that arrives two minutes after it was taken does not show the passes finished in between. Those
+    passes stay in the plan, and so does the fill and rolling they are expected to show at the next survey:
+    otherwise their effect would be found on the ground with nothing expected there, and blamed on the soil.
+    The estimates must stay as steady as with prompt surveys, and the job must not need many more replans.
+    """
+    import re
+    prompt, _, _, done0 = loopback(EXAMPLE, EXAMPLES)
+    c, w, logs, done = loopback(EXAMPLE, EXAMPLES, scan_lag=2.0)
+    assert done0 and done
+    keep = [float(x) for line in logs for x in re.findall(r"keep now ([0-9.]+)", line)]
+    assert keep and max(keep) - min(keep) < 0.1 and not {0.5, 1.0} & set(keep)     # was 0.50 to 0.85 before the fix
+    assert abs(c.est_keep - 0.70) < 0.05 and abs(c.est_swell - 1.30) < 0.1
+    assert len(c.replans) <= len(prompt.replans) + 3                              # was 13 against 6
+    assert w.truth()["zones"]["pad"]["within_tolerance_pct"] >= 95
+
+
+def test_idle_while_a_task_is_paused_is_not_a_stall():
+    """When the only work left belongs to a task a rule has paused (rolling, in the rain), the controller says once
+    what it is waiting for and does not count a replan at every survey. A task that can start because the one
+    before it finished is planned from the latest survey, and that is not called a stall either.
+    """
+    c, _, logs, done = loopback(EXAMPLE, EXAMPLES)
+    assert done
+    assert [line for line in logs if "finish_pad can start: planning from the latest survey" in line]
+    assert not [line for line in logs if "stalled" in line and "finish_pad" in line]
+    m = load(EXAMPLE)
+    c = Controller(m, EXAMPLES, _FakeBus(), Clock(0, 60, 1796108400.0), log=logs.append)
+    c.t, c.has_survey, c.last_probe, c.last_rebase = 10.0, True, 10.0, 5.0
+    c.meas, c.pred = c.design.copy(), c.design.copy() + 1.0       # nothing left to move, on the measured ground
+    c.loose[c.masks["C"]] = c.p_loose[c.masks["C"]] = 0.2         # but the fill in C is still to be rolled
+    c.started = dict.fromkeys(c.started, 0.0)
+    c.done_at.update(strip_A=5.0)
+    c.rain = 1.0                                                  # the example pauses compact_C in the rain
+    for n in c.machines:
+        c.handle(f"loam/v0/s/{n}/connection", {"machine": n, "connectionState": "online"})
+        c.handle(f"loam/v0/s/{n}/state", wire.state("s", n, 1, None, 0, 0, 0, False, 0, ts=1796108400.0 + 600))
+        c.mstate[n]["seen"] = time.time()
+    del logs[:]
+    for k in range(3):                                            # three surveys go by
+        c.last_probe = c.t = 10.0 + 5 * k + 5
+        for n in c.machines:
+            c.mstate[n]["seen"] = time.time()
+        c.step()
+    waiting = [line for line in logs if "waiting:" in line]
+    assert len(waiting) == 1 and "compact_C is paused" in waiting[0], logs
+    assert not c.replans and np.array_equal(c.pred, c.meas)       # kept on the survey, without counting replans
 
 
 def test_controller_withdraws_a_pass_the_machine_cannot_run():
@@ -248,6 +302,30 @@ def test_controller_withdraws_a_pass_the_machine_cannot_run():
     assert c.machine_ready(n)
     c.step()
     assert n in c.inflight and c.order_of[n] != oid               # then a fresh order
+
+
+def test_a_restarted_controller_does_not_reuse_order_ids(monkeypatch):
+    """Two runs of the controller on the same job give their orders different ids. With the same ids, a machine
+    that had already done "strip_A-1" would report the restarted controller's "strip_A-1" finished without doing
+    it. (Found by restarting the controller in the middle of a simulated job: the world ignored 56 passes.)
+    """
+    import loam.runtime.controller as rc
+    ids = []
+    for start in (1796108400.0, 1796108460.0):                    # the second run starts a minute later
+        monkeypatch.setattr(rc.time, "time", lambda start=start: start)
+        bus = _FakeBus()
+        c = Controller(load(EXAMPLE), EXAMPLES, bus, Clock(0, 60, 1796108400.0), log=lambda x: None)
+        for n in c.machines:
+            c.handle(f"loam/v0/s/{n}/connection", {"machine": n, "connectionState": "online"})
+            c.handle(f"loam/v0/s/{n}/state", wire.state("s", n, 1, None, 0, 0, 0, False, 0, ts=1796108400.0))
+        c.handle("loam/v0/s/terrain", wire.terrain("s", "p", 1, (c.x0, c.y0), c.cell, (c.ny, c.nx),
+                                                   data=wire.encode_heights(c.z), ts=1796108400.0))
+        c.t = 0.1
+        c.step()
+        sent = [m["orderId"] for t, m in bus.out if t.endswith("/order")]
+        assert sent and set(sent) == set(c.order_of.values())    # what was sent is what is being waited for
+        ids.append(set(sent))
+    assert not ids[0] & ids[1]
 
 
 def test_controller_withdraws_a_pass_from_a_lost_machine():
@@ -351,7 +429,8 @@ def test_site_over_mqtt_with_faults(tmp_path):
 
     The fault script has a person walk up to a machine, a machine lose RTK, a link drop, the e-stop pressed and
     released, and a machine's computer die. The job must still finish within tolerance, with every event in the log
-    and no machine moving between e-stop release and the supervisor's resume.
+    and no machine moving between e-stop release and the supervisor's resume. Every message any of them sent on
+    the Wire topics must be valid against the published schema.
     """
     port = _free_port()
     broker = subprocess.Popen([shutil.which("mosquitto") or "/usr/sbin/mosquitto", "-p", str(port)],
@@ -363,8 +442,10 @@ def test_site_over_mqtt_with_faults(tmp_path):
               "crash": [{"machine": "dz2", "at": 90}]}
     (tmp_path / "faults.json").write_text(json.dumps(faults))
     b = f"127.0.0.1:{port}"
+    listen = None
     try:
         time.sleep(0.5)
+        listen = Bus(b, "wire-check").start(["loam/v0/#"])
         site = subprocess.Popen([sys.executable, "-m", "loam.cli", "simulate-site", EXAMPLE, "--broker", b,
                                  "--speed", "300", "--faults", str(tmp_path / "faults.json"), "--quiet"],
                                 stdout=subprocess.PIPE, text=True)
@@ -372,9 +453,16 @@ def test_site_over_mqtt_with_faults(tmp_path):
         ctl = subprocess.run([sys.executable, "-m", "loam.cli", "run", EXAMPLE, "--broker", b, "--json"],
                              capture_output=True, text=True, timeout=600)
         out, _ = site.communicate(timeout=120)
+        sent = listen.drain(0.5)
     finally:
+        if listen is not None:
+            listen.stop()
         broker.terminate()
         broker.wait(10)
+    kinds = Counter(topic.rsplit("/", 1)[-1] for topic, _ in sent)
+    assert kinds["state"] > 100 and kinds["order"] > 50 and kinds["status"] > 10 and kinds["estop"] == 2, kinds
+    for topic, msg in sent:
+        wire_valid(topic.rsplit("/", 1)[-1], msg)
     log = ctl.stdout[:ctl.stdout.index("{\n")]
     # releasing the e-stop (minute 72) restarts nothing; machines work again only after the resume (minute 73)
     lines = log.splitlines()
@@ -391,6 +479,56 @@ def test_site_over_mqtt_with_faults(tmp_path):
     for expect in ("rule people_near_machines: ACTIVE", "dz2: safety degraded (gnssQuality)",
                    "dz1: connectionBroken", "SITE E-STOP pressed", "dz2: connectionBroken"):
         assert expect in log, expect
+
+
+@pytest.mark.skipif(shutil.which("mosquitto") is None and not os.path.exists("/usr/sbin/mosquitto"),
+                    reason="needs the mosquitto broker")
+def test_machine_is_back_online_after_the_broker_restarts():
+    """A machine that loses its connection (a radio drop, a restarted broker) is reported as gone by the broker.
+    When it reconnects it must say `online` again, or the controller never gives it another order; and whoever was
+    listening must be subscribed again without being told.
+    """
+    from loam.runtime.machine import MachineSim
+    exe, port = shutil.which("mosquitto") or "/usr/sbin/mosquitto", _free_port()
+
+    def start():
+        """Start the broker and wait until it listens."""
+        p = subprocess.Popen([exe, "-p", str(port)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        for _ in range(100):
+            with socket.socket() as s:
+                if s.connect_ex(("127.0.0.1", port)) == 0:
+                    return p
+            time.sleep(0.05)
+        raise AssertionError("the broker did not start")
+
+    def states(bus, wait):
+        """The connection states that arrive within `wait` seconds, in order."""
+        end, out = time.time() + wait, []
+        while time.time() < end and "online" not in out:
+            out += [m["connectionState"] for _, m in bus.drain(0.1)]
+        return out
+
+    broker = start()
+    b = f"127.0.0.1:{port}"
+    listen = machine = None
+    try:
+        listen = Bus(b, "listener").start([wire.topic("pad_north", "dz1", "connection")])
+        ms = MachineSim(load(EXAMPLE), "dz1", b, (10.0, 10.0))
+        machine = ms.connect()
+        assert states(listen, 5.0) == ["online"]
+        broker.terminate()
+        broker.wait(10)
+        time.sleep(1.0)
+        broker = start()
+        back = states(listen, 15.0)                               # both reconnect by themselves
+        assert back and back[-1] == "online", back
+        assert machine.connects == 2 and listen.connects == 2
+    finally:
+        for bus in (machine, listen):
+            if bus is not None:
+                bus.stop()
+        broker.terminate()
+        broker.wait(10)
 
 
 def test_physics_dozer_follows_its_path():

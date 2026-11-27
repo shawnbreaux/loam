@@ -245,6 +245,9 @@ and each zone drawn in its picture, on the site as a circle, in site units:
   circle `unknown`. If Frigate goes silent for 6 s or reports itself offline, or `loam sense` stops for any
   reason, the whole site is `unknown` (a retained last will). A rule such as
   `when proximity(person, machine) < 50 ft do stop all` then holds the machines until the cameras watch again.
+- Everything is stated again every 5 s and after every reconnect, the `clear` of each camera and zone included.
+  A controller that missed a message, or a detection left over from a run that died while someone was in view,
+  is put right within seconds.
 - Frigate reports a camera's frame rate in its stats message, every 60 s by default. Set `mqtt: stats_interval: 15`
   (the lowest it accepts) so that a dead camera is noticed sooner.
 - Cameras miss people in dust, glare and darkness. This is supervision, not a safety function (ISO 13849). The

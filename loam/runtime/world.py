@@ -28,6 +28,8 @@ from ..sim import Soil
 from .bus import Bus, Clock, tolerant
 
 # Site minutes. Machines read their own entries; the world runs the site-level ones.
+SENSOR_REPEAT_S = 5.0        # a simulated sensor repeats an unchanged "clear" this often (wall seconds)
+
 DEFAULT_FAULTS: dict[str, Any] = {
     "person": [{"from": 42, "to": 45, "near": "dz1", "distance_m": 9.0}],
     "probe_outage": [{"from": 95, "to": 118}],
@@ -276,9 +278,12 @@ def run_world(model: Model, base_dir: str, broker: str, speed: float, faults: di
     bus.pub(f"sim/{site}/clock", clock.msg(), retain=True, qos=1)
     bus.pub(f"sim/{site}/faults", faults, retain=True, qos=1)
     poses: dict[str, tuple[float, float]] = {}
-    seq, last_truth, person_on, rain_on, estop_on = 0, -1e9, False, False, False
+    seq, last_truth, estop_on = 0, -1e9, False
     resumed: set[int] = set()
-    last_seen = 0.0                                          # sensors report at most twice a second (wall)
+    person_out: str | None = None                            # what the camera last reported: "person" or "clear"
+    person_sent = 0.0                                        # wall time of that report
+    rain_out: float | None = None                            # the rain rate the gauge last reported
+    rain_sent = -1e9                                         # site minute of that report
     try:
         while clock.minutes() < stop_after_min:
             t = clock.minutes()
@@ -295,36 +300,40 @@ def run_world(model: Model, base_dir: str, broker: str, speed: float, faults: di
                     elif topic == f"sim/{site}/world/scan":
                         bus.pub(f"sim/{site}/world/scan/{msg['probe']}",
                                 {"data": wire.encode_heights(w.z), "shape": list(w.g.shape), "t": t}, qos=1)
-            # site sensors: a person detected near a machine; a rain gauge; an e-stop button
-            p = active(faults.get("person", []), t)
-            if p and p.get("near") in poses and time.time() - last_seen >= 0.5:
-                last_seen = time.time()
+            # Site sensors: a camera that sees a person near a machine, a rain gauge, an e-stop button. Each
+            # reports a change at once and then keeps repeating what it sees, as a real sensor must: a message can
+            # be lost (the broker restarts, the controller connects a moment after it was sent), and a lost
+            # "clear" or "the rain has stopped" would hold the site for good.
+            now = time.time()
+            p = active(faults.get("person", []), t) or {}
+            seen = p.get("near") in poses
+            if seen and now - person_sent >= 0.5:            # while in view: twice a second (wall)
+                person_sent, person_out = now, "person"
                 seq += 1
                 x, y = poses[p["near"]]
                 d = p.get("distance_m", 9.0) / w.u
                 bus.pub(f"loam/v0/{site}/detection",
-                        wire.detection(site, "camera1", seq, "person", x + d, y, ts=clock.ts(t)))
-            elif person_on and not p:
-                last_seen = 0.0
+                        wire.detection(site, "camera1", seq, "person", x + d, y, ts=clock.ts(t)), qos=1)
+            elif not seen and (person_out == "person"
+                               or (person_out == "clear" and now - person_sent >= SENSOR_REPEAT_S)):
+                person_sent, person_out = now, "clear"       # gone: at once, then every few seconds
                 seq += 1
                 bus.pub(f"loam/v0/{site}/detection",
-                        wire.detection(site, "camera1", seq, "clear", 0, 0, ts=clock.ts(t)))
-            # A person counts as present only once a detection has actually been sent, so that exactly one "clear"
-            # follows.
-            person_on = bool(p) and (person_on or last_seen > 0)
+                        wire.detection(site, "camera1", seq, "clear", 0, 0, ts=clock.ts(t)), qos=1)
             r = active(faults.get("rain", []), t)
-            # The gauge reports when rain starts or stops, and about every 5 site minutes while it rains.
-            if bool(r) != rain_on or (r and int(t * 4) % 20 == 0):
+            rate = (r or {}).get("rate_m_per_s", 0.0) if r else 0.0
+            # The gauge reports when the rain rate changes, and every 5 site minutes, rain or none.
+            if rate != rain_out or t - rain_sent >= 5.0:
+                rain_out, rain_sent = rate, t
                 seq += 1
                 bus.pub(f"loam/v0/{site}/weather",
-                        wire.weather(site, "gauge1", seq, rain_m_per_s=(r or {}).get("rate_m_per_s", 0.0),
-                                     ts=clock.ts(t)))
-            rain_on = bool(r)
+                        wire.weather(site, "gauge1", seq, rain_m_per_s=rate, ts=clock.ts(t)), qos=1)
             e = next((s for s in faults.get("estop", []) if s["at"] <= t < s["at"] + s["for_min"]), None)
             if bool(e) != estop_on:
                 seq += 1
+                # Retained, like `loam estop`: a machine that connects during an e-stop must learn of it.
                 bus.pub(f"loam/v0/{site}/estop", {"site": site, "pressed": bool(e), "ts": clock.ts(t),
-                                                  "wall": time.time()}, qos=1)
+                                                  "wall": time.time()}, qos=1, retain=True)
                 estop_on = bool(e)
             # releasing the e-stop restarts nothing (ISO 13850): the site supervisor resumes the machines
             r = next((s for s in faults.get("estop", []) if s.get("resume_after_min") is not None

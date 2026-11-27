@@ -30,7 +30,7 @@ import ssl
 import sys
 import threading
 import time
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from typing import Any, NamedTuple
 
 try:
@@ -38,6 +38,8 @@ try:
 except ImportError as e:  # pragma: no cover
     raise SystemExit("the Loam runtime needs paho-mqtt: pip install 'loam[run]'") from e
 
+
+MAX_QUEUED = 2000            # QoS 1 messages kept for sending while the broker is unreachable
 
 class Broker(NamedTuple):
     """Where the broker is and how to reach it: host, port, whether to use TLS, and the user name (or None)."""
@@ -91,21 +93,30 @@ class Bus:
     """One MQTT connection with a receive queue, JSON publishing and an optional last will."""
 
     def __init__(self, broker: str, client_id: str, will: tuple[str, dict] | None = None, raw: bool = False,
-                 env: Mapping[str, str] | None = None):
+                 env: Mapping[str, str] | None = None, birth: Callable[[], tuple[str, dict]] | None = None):
         """Prepare a connection (it is opened by `start`).
 
         `client_id` must be unique on the broker. `will` is a (topic, message) pair the broker publishes for us,
         retained, if this client vanishes without saying goodbye: how a machine that loses its radio link gets
-        reported. With `raw`, payloads that are not JSON objects are delivered too, as text: other programs'
-        status topics ("online", "offline") are like that. `env` supplies the credentials (see the module
-        docstring); it defaults to the process environment.
+        reported. `birth` is the will's counterpart: it returns a (topic, message) pair that is published,
+        retained, on every connect and reconnect. After a radio drop the broker has told everyone the client is
+        gone; without a birth message nobody would learn that it is back. With `raw`, payloads that are not JSON
+        objects are delivered too, as text: other programs' status topics ("online", "offline") are like that.
+        `env` supplies the credentials (see the module docstring); it defaults to the process environment.
         """
         if env is None:
             env = os.environ
         self.host, self.port, tls, user = parse_broker(broker)
         self.raw = raw
+        self.birth = birth
+        self.connects = 0                             # connects so far; more than one means the link dropped
         self.refused: str | None = None               # why the broker turned us away, if it did
         self.c = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=client_id, clean_session=True)
+        # While the broker cannot be reached, QoS 1 messages wait in memory to be sent later (QoS 0 ones are
+        # dropped). Without a limit a client that keeps publishing through a long outage grows until it is killed.
+        # Past the limit new messages are dropped; nothing depends on them, because everything that matters is
+        # repeated or retained and so is put right after the reconnect.
+        self.c.max_queued_messages_set(MAX_QUEUED)
         user = user or env.get("LOAM_BROKER_USER")
         if user:
             self.c.username_pw_set(user, _password(env))
@@ -141,6 +152,10 @@ class Bus:
             return
         for t in self.subs:
             client.subscribe(t, qos=1)
+        if self.birth is not None:
+            topic, payload = self.birth()
+            client.publish(topic, json.dumps(payload, separators=(",", ":")), qos=1, retain=True)
+        self.connects += 1
         self.connected.set()
 
     def _on_message(self, client, userdata, msg) -> None:

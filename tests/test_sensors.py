@@ -184,8 +184,9 @@ class _Frigate:
 def test_sense_republishes_frigate_and_fails_safe(mqtt_broker, monkeypatch):
     """`loam sense` against a stand-in Frigate, end to end over a real broker.
 
-    In order: until Frigate is known to be up, the whole site counts as unwatched; a person already in view when
-    the program starts is found; moving between zones moves the detection; leaving clears it; a camera that stops
+    In order: until Frigate is known to be up, the whole site counts as unwatched, and whatever an earlier run of
+    the program last said about any camera or zone is withdrawn; a person already in view when the program starts
+    is found; moving between zones moves the detection; leaving clears it; a camera that stops
     delivering pictures makes its area unknown; Frigate falling silent or going offline makes the site unwatched
     again; and so does stopping the program, with a retained message.
     """
@@ -223,6 +224,13 @@ def test_sense_republishes_frigate_and_fails_safe(mqtt_broker, monkeypatch):
         t.start()
         unwatched = {"sense": ("unknown", Area(0.0, 0.0, wire.EVERYWHERE))}
         assert current(unwatched) == unwatched                # Frigate has not said it is up
+        # A run that died while a person was in view left that detection with the controller. Starting again
+        # (or reconnecting) withdraws every one, so none can outlive the person.
+        every = {"sense/yard", "sense/yard/gate", "sense/yard/dock", "sense/ramp"}
+        end = time.time() + 5.0
+        while time.time() < end and not {m["sensor"] for m in seen if m["kind"] == "clear"} >= every:
+            seen.extend(m for _, m in listen.drain(0.1))
+        assert {m["sensor"] for m in seen if m["kind"] == "clear"} >= every
         assert fr.asked == 0                                  # and is not asked until it has
         fr.available("online")
         at_gate = {"sense/yard/gate": ("person", yard.zones["gate"])}

@@ -78,7 +78,7 @@ Two details matter on a real network.
 
 ```bash
 mosquitto -p 1883 &
-loam simulate-site job.loam --speed 300 --faults faults.json &
+loam simulate-site job.loam --speed 60 --faults faults.json &
 loam monitor job.loam --port 8080 --record run.jsonl &     # open http://127.0.0.1:8080/
 loam run job.loam
 ```
@@ -255,6 +255,81 @@ out at the end cluster along the job's edge, where the design ties into existing
    many site minutes and planning degrades. The tests use 300×. With `--physics` at 300×, the
    machines' heartbeats went stale and every machine stopped itself, which is the correct fail-safe
    behaviour.
+
+## 6. A long run, restarts and memory
+
+`tools/site_soak.py` runs the example job as on a site (broker, controller, monitor with MCAP recording, world,
+probe, one process per machine, the default fault script) and samples every process every two seconds. Slower
+is the harder test: messages go out at wall-clock rates, so a run at 6× sends a hundred times as many per site
+minute as one at 600×.
+
+```bash
+python tools/site_soak.py out/ --speed 6                              # 35 minutes
+python tools/site_soak.py out/ --speed 60 --event broker-restart@45   # restart the broker 45 s in
+python tools/site_soak.py out/ --speed 60 --event controller-kill@60  # kill -9 the controller, start it again
+```
+
+**The job** (35 minutes at 6×): finished in 209 site minutes with 6 replans, 97.4 % of the pad in tolerance on
+the true ground, soil factors learned as 1.300 and 0.708 (true 1.3 and 0.7), volume ledger closed to 2e-12.
+No process logged a warning or an error, all exited with code 0, and all 24,819 recorded messages were valid
+against the Wire schema.
+
+**Memory.** No leak was found.
+
+| Process | MB at 2 min | at 10 min | at 35 min | Growth over the last 15 min |
+| --- | --- | --- | --- | --- |
+| controller (`loam run`) | 45.7 | 47.7 | 48.0 | 7 kB/min |
+| each machine | 40.2–40.3 | 40.3–40.6 | 40.6–40.9 | 2–6 kB/min |
+| world, probe, broker | 46.4, 43.5, 7.7 | same | same | under 1 kB/min |
+| monitor, recording MCAP | 45.2 | 47.9 | 49.7 | 59 kB/min (the recording's index, see below) |
+
+- **Python-level allocations** were traced in all eight processes over an 18-minute job (`tracemalloc`): flat in
+  each, with the number of live objects constant to 0.2 %.
+- **The message transport** carried 490,120 messages in 150 s, 27 machine-hours of state: every one delivered,
+  memory 37.84 to 37.88 MB, open files constant.
+- **The monitor** is flat without `--mcap` (replaying eight jobs' messages into it: 42.3 to 42.5 MB) and
+  when serving requests (16,000 requests: 41.5 MB throughout). With `--mcap` it holds the recording's index
+  until the file is closed: about 10 MB in the first minutes, then about 1 byte per message (1.5 MB over 1.36
+  million messages, a 213 MB file, 35 hours of traffic). Start a new recording each day.
+- **The machine processes** were still creeping by a few kB a minute at the end of the 35 minutes, slower than
+  at the start. Nothing at Python level grows, and the transport does not. A run of several hours would settle
+  whether it levels off completely.
+- **A broker outage** used to grow a publishing client without limit, 37 MB to 69 MB in the equivalent of five
+  hours. Waiting messages are now capped at 2,000 (41 MB).
+
+**Restarts in the middle of the job.**
+
+| Event | Before the fixes | Now |
+| --- | --- | --- |
+| Broker stopped for 4 s while a person was near a machine | the job never finished | finished, 214 site minutes, 98.5 % in tolerance |
+| Controller stopped and started again | finished in 251 site minutes; the world ignored 56 passes as repeats | killed with `kill -9`, back after 8 s: finished in 220 site minutes, no repeats, 97.8 % in tolerance |
+
+### Bugs this run found and fixed
+
+1. **A machine stayed written off after a reconnect.** The broker reports a dropped machine as
+   `connectionBroken`. When the machine reconnected nothing said `online` again, so it never got another
+   order. On a real site the first radio drop longer than the keepalive would have cost the machine for the
+   rest of the job. Machines now announce themselves on every connect.
+2. **A restarted controller reused its order ids.** Machines never execute an id twice, so they reported the
+   new orders finished without doing them. Each run of the controller now puts its start time into its ids.
+3. **One lost message could hold the site for good.** MQTT does not deliver what is published while a
+   subscriber is reconnecting. A lost `clear`, "rain stopped" or e-stop release left the controller waiting
+   for ever. Sensors now repeat everything they see every 5 s, `clear` included, and `loam sense` withdraws
+   every stale detection when it starts or reconnects.
+4. **Late surveys upset the soil estimates.** A pass that finished after a survey was taken kept its place in
+   the plan but lost the fill and rolling it was expected to show. The next survey found its effect with
+   nothing expected, and blamed the soil: compaction estimates of 0.50 and 1.00, their limits, in successive
+   replans. With surveys arriving two minutes late, replans fell from 12 to 5 and no estimate reached a limit.
+5. **The schema did not match the messages.** 405 of 6,116 recorded messages were invalid: the schema listed
+   safety states nobody sends, lacked `degraded` and `stopLatencyS`, and had no definition for `status`. The
+   end-to-end test now validates every message it sees.
+6. **Smaller things.** "Stalled" in the log for things that are not stalls; a replan counted at every survey
+   while rain paused the roller; bursts of hundreds of weather messages from the simulated gauge at low
+   speeds; log times before the start of a job that read as minus one hour.
+
+Above about 100× the simulation itself gets in the way: a message's delay becomes minutes of site time, the
+soil estimates swing and the job takes longer (236 site minutes at 300× against 209 at 6×). Use high speeds
+to see a job through quickly and 60× or less to judge it. `simulate-site` now defaults to 60×.
 
 ### Limits
 

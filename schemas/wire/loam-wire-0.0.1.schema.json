@@ -319,13 +319,17 @@
           "maximum": 1
         },
         "safetyState": {
+          "description": "ok: may work. degraded: something accurate work needs is missing (an RTK fix); the controller sends no orders. stopped: at a standstill for a safety reason, named in errors.",
           "enum": [
             "ok",
-            "stopped",
-            "held",
-            "estop",
-            "fault"
+            "degraded",
+            "stopped"
           ]
+        },
+        "stopLatencyS": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Seconds from a stop command (site stop, e-stop, lost heartbeat) to standstill; the slowest so far"
         },
         "tool": {
           "type": "object",
@@ -633,6 +637,156 @@
       "required": [
         "pressed"
       ]
-    }
+    },
+      "status": {
+        "type": "object",
+        "description": "loam/v0/<site>/status \u2014 the controller's summary for monitors (retained). Fields may be added.",
+        "properties": {
+          "version": {
+            "type": "string",
+            "const": "0.0.1"
+          },
+          "headerId": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "site": {
+            "type": "string"
+          },
+          "t": {
+            "type": "number",
+            "description": "Site time in minutes"
+          },
+          "tasks": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "started": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "done": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "passes": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "started",
+                "done",
+                "passes"
+              ]
+            }
+          },
+          "machines": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "conn": {
+                  "type": "string"
+                },
+                "safety": {
+                  "type": "string"
+                },
+                "ready": {
+                  "type": "boolean"
+                },
+                "clock_skew_s": {
+                  "type": "number"
+                },
+                "order": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "conn",
+                "safety",
+                "ready"
+              ]
+            }
+          },
+          "rules": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Rules and built-in holds in force"
+          },
+          "estop": {
+            "type": "boolean"
+          },
+          "replans": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "surveys": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "probe_age_min": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "abandoned": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "soil": {
+            "type": "object",
+            "properties": {
+              "swell": {
+                "type": "number"
+              },
+              "keep": {
+                "type": "number"
+              }
+            }
+          },
+          "measured": {
+            "type": "object",
+            "additionalProperties": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "description": "Per finish zone: percent of measured cells within tolerance"
+          },
+          "done": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "version",
+          "headerId",
+          "timestamp",
+          "site",
+          "t",
+          "tasks",
+          "machines",
+          "rules",
+          "estop",
+          "done"
+        ],
+        "additionalProperties": true
+      }
   }
 }

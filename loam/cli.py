@@ -289,7 +289,9 @@ def add_field_commands(sub) -> None:
     p = sub.add_parser("simulate-site", help="start a simulated world, probe and machines as separate processes")
     p.add_argument("file")
     p.add_argument("--broker", default="localhost:1883")
-    p.add_argument("--speed", type=float, default=600.0, help="site minutes per wall minute (default 600)")
+    p.add_argument("--speed", type=float, default=60.0,
+                   help="site minutes per wall minute (default 60; above about 100 the messages' own delays, "
+                        "minutes of site time by then, distort the job)")
     p.add_argument("--faults", help="JSON fault script (default: person, outage, rain, GNSS, link loss, e-stop)")
     p.add_argument("--quiet", action="store_true")
     p.add_argument("--physics", action="store_true", help="drive machines as PyBullet bodies (try --speed 60)")

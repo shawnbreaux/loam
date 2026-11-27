@@ -106,6 +106,10 @@ class People:
         """Take in Frigate's statistics message, for each camera's picture rate."""
         self.fps = {n: float(c.get("camera_fps", 0.0)) for n, c in msg["cameras"].items()}
 
+    def names(self) -> list[str]:
+        """Every name a detection can carry: each camera, and each of its mapped zones as "camera/zone"."""
+        return [n for cam, c in self.cameras.items() for n in (cam, *(f"{cam}/{z}" for z in c.zones))]
+
     def detections(self) -> dict[str, tuple[str, Area]]:
         """The detections the latest picture calls for, by name ("camera" or "camera/zone"): each a kind and an area.
 
@@ -206,16 +210,23 @@ def run_sense(model: Model, broker: str, cameras: dict[str, Camera] | None = Non
     will = (topic, detection(name, "unknown", everywhere, 0.0)) if people else None
     bus = Bus(broker, f"loam-sense-{site}-{os.getpid()}", will=will, raw=True).start(subs)
     sent = {"detection": 0, "weather": 0}
-    # What is out now, by sensor name. `name` itself stands for "not watching". It starts there, so that the
-    # first moment of watching sends a "clear" for it: a controller may still hold the retained one an earlier
-    # run left behind.
-    published: dict[str, tuple[str, Area]] = {name: ("unknown", everywhere)} if people else {}
+    # What is out now, by sensor name. `name` itself stands for "not watching".
+    published: dict[str, tuple[str, Area] | None] = {}
     frigate_up, asked_at, answered_at, repeated_at, rain_sent = False, 0.0, 0.0, 0.0, (0.0, -1.0)
     end = time.time() + max_wall_s if max_wall_s else math.inf
+    connects = 0
+    everything = {name, *(f"{name}/{k}" for k in people.names())} if people else set()    # every sensor name we use
     try:
-        if people:
-            bus.clear(topic)                   # the retained "not watching" of an earlier run
         while time.time() < end:
+            if people and bus.connects != connects:
+                # Just connected, or connected again after the link dropped. The broker may hold a retained "not
+                # watching" (from an earlier run, or published as our last will a moment ago): delete it. And
+                # nothing a controller knows from before can be trusted to be current, so everything is sent
+                # afresh: `published` starts as "not watching" plus every camera and zone with nothing known,
+                # and the loop below sends a "clear" for each one that is not in what the cameras show now.
+                connects = bus.connects
+                bus.clear(topic)
+                published = {**dict.fromkeys(everything), name: ("unknown", everywhere)}
             for t, msg in bus.drain(0.2):
                 with tolerant(t):
                     now = time.time()
@@ -243,7 +254,9 @@ def run_sense(model: Model, broker: str, cameras: dict[str, Camera] | None = Non
             want = ({f"{name}/{k}": v for k, v in people.detections().items()} if watching
                     else {name: ("unknown", everywhere)})
             repeat = now - repeated_at >= REPEAT_S
-            for sensor in sorted(set(want) | set(published)):
+            # A repeat states everything again, the "clear" of every camera and zone that shows nobody included:
+            # a controller that missed one message (it reconnected a moment late) is put right within seconds.
+            for sensor in sorted(set(want) | set(published) | (everything if repeat else set())):
                 if sensor not in want:
                     seq += 1
                     bus.pub(topic, wire.detection(site, sensor, seq, "clear", 0.0, 0.0, ts=now), qos=1)
@@ -253,7 +266,7 @@ def run_sense(model: Model, broker: str, cameras: dict[str, Camera] | None = Non
                 else:
                     continue
                 sent["detection"] += 1
-            published = want
+            published = dict(want)
             if repeat:
                 repeated_at = now
     finally:

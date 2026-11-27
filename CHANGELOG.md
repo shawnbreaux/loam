@@ -3,6 +3,47 @@
 All notable changes are recorded here. The project follows [Semantic Versioning](https://semver.org/);
 before 1.0 any minor release may change the language.
 
+## [Unreleased]
+
+Found by running a complete job on the example site as separate processes over a broker, for up to
+36 minutes at a time, while sampling every process, restarting the broker and the controller in the
+middle, and checking every recorded message against the schema. See docs/RUNTIME.md, section 6.
+
+Fixed
+- **A machine stayed written off after a reconnect.** When its link dropped, the broker reported it as
+  `connectionBroken`; when it reconnected, nothing said `online` again, so the controller never gave it
+  another order. After a broker restart no machine came back and the job never finished. Machines now
+  announce themselves on every connect.
+- **A restarted controller reused its order ids.** Machines, which never execute an id twice, reported the
+  new orders finished without doing them (56 passes in one run). Every run of the controller now tags its
+  ids with its start time.
+- **A lost "clear" held the site for good.** A detection, a "rain stopped" or an e-stop release published
+  while a subscriber was reconnecting never reached it. `loam sense` now repeats everything it sees every
+  5 s, `clear` included, and withdraws every stale detection when it starts or reconnects; the simulated
+  sensors do the same, and the simulated e-stop is retained.
+- **Soil factors swung to their limits when surveys arrived late.** A pass that finished after a survey
+  was taken kept its place in the plan but lost the fill and rolling it was expected to show, so the next
+  survey blamed the soil. With surveys two minutes late: 12 replans down to 5, and no estimate at a limit
+  (was 6 of 26).
+- **The Wire schema did not match the messages.** It listed five safety states of which only two are
+  used, lacked `degraded` and `stopLatencyS`, and had no definition for `status`: 405 of 6,116 recorded
+  messages were invalid. The schema is corrected, and the end-to-end test now validates every message.
+- **Unbounded memory while the broker is unreachable.** Messages waiting to be sent grew without limit
+  (37 MB to 69 MB in a simulated five-hour outage, and rising). Now capped at 2,000 messages.
+- "Stalled" in the log for two things that are not stalls: a task that can start because the one before it
+  finished (now "can start: planning from the latest survey"), and waiting for a task a rule has paused
+  (now one "waiting" line, and no replan counted at each survey).
+- The simulated rain gauge sent bursts of hundreds of messages every 5 site minutes at low speeds.
+- Log times before the start of a job read `[-1:44.6]` for minus 15 minutes; now `[-00:15.4]`.
+- The list of rule changes kept for the report is bounded.
+- `simulate-site` defaults to 60× (was 600×): above about 100× the messages' own delays distort the job.
+
+Added
+- `tools/site_soak.py`: runs the whole simulated site, samples every process's memory, files and threads,
+  can restart the broker or kill the controller mid-job, and validates the recorded messages.
+- `Bus(birth=...)`: a message published on every connect, the counterpart of the last will.
+- The Wire schema defines `status`.
+
 ## [0.0.7] - 2026-11-27
 
 The secured broker of 0.0.6, made to work where a site server actually runs it.

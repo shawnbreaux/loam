@@ -78,15 +78,22 @@ class MachineSim:
 
     def connect(self) -> Bus:
         """Connect to the broker, subscribe to everything a machine listens to, and announce the machine online. Its
-        last will says `connectionBroken`, so the controller learns of a dropped link from the broker.
+        last will says `connectionBroken`, so the controller learns of a dropped link from the broker. `online` is
+        announced again after every reconnect: otherwise a machine whose radio dropped for a few seconds would
+        stay written off for the rest of the job.
         """
         will = (self.topic("connection"), wire.connection(self.site, self.name, 0, "connectionBroken"))
-        bus = Bus(self.broker, f"loam-machine-{self.site}-{self.name}-{os.getpid()}-{time.time():.3f}", will)
+
+        def online() -> tuple[str, dict]:
+            """The machine's `online` message, numbered and stamped when it is sent."""
+            self.seq += 1
+            return self.topic("connection"), wire.connection(self.site, self.name, self.seq, "online")
+
+        bus = Bus(self.broker, f"loam-machine-{self.site}-{self.name}-{os.getpid()}-{time.time():.3f}", will,
+                  birth=online)
         bus.start([self.topic("order"), self.topic("instantAction"), wire.topic(self.site, None, "safety"),
                    wire.topic(self.site, None, "estop"), f"sim/{self.site}/clock", f"sim/{self.site}/faults",
                    f"sim/{self.site}/world/applied/{self.name}", f"sim/{self.site}/end"])
-        self.seq += 1
-        bus.pub(self.topic("connection"), wire.connection(self.site, self.name, self.seq, "online"), retain=True, qos=1)
         self.last_hb = time.time()
         return bus
 

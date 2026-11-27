@@ -5,6 +5,7 @@ installed (Mosquitto, ArduPilot, ROS 2, Project Chrono, RTKLIB) skip themselves 
 say what they need.
 """
 import contextlib
+import functools
 import gc
 import json
 import os
@@ -63,12 +64,19 @@ def example_model(example_src):
 MOSQUITTO = shutil.which("mosquitto") or ("/usr/sbin/mosquitto" if os.path.exists("/usr/sbin/mosquitto") else None)
 
 
-def wire_valid(kind: str, payload: dict) -> None:
-    """Check a message against one definition in the published Loam Wire JSON Schema; raises if it does not fit."""
+@functools.cache
+def _wire_validator(kind: str):
+    """A validator for one message kind of the published Loam Wire JSON Schema (read once per kind)."""
     jsonschema = pytest.importorskip("jsonschema")
     with open(os.path.join(ROOT, "schemas", "wire", "loam-wire-0.0.1.schema.json"), encoding="utf-8") as f:
         defs = json.load(f)["$defs"]
-    jsonschema.validate(payload, {"$defs": defs, "$ref": f"#/$defs/{kind}"})
+    assert kind in defs, f"the Wire schema does not define {kind!r}"
+    return jsonschema.Draft202012Validator({"$defs": defs, "$ref": f"#/$defs/{kind}"})
+
+
+def wire_valid(kind: str, payload: dict) -> None:
+    """Check a message against one definition in the published Loam Wire JSON Schema; raises if it does not fit."""
+    _wire_validator(kind).validate(payload)
 
 
 @pytest.fixture
