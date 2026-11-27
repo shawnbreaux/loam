@@ -3,6 +3,20 @@
 All notable changes are recorded here. The project follows [Semantic Versioning](https://semver.org/);
 before 1.0 any minor release may change the language.
 
+## [Unreleased]
+
+- **`loam broker`** writes the whole secured Mosquitto setup for a site from its program: a certificate
+  authority and broker certificate, a random password per client, the access rules and an `install.sh`.
+  It replaces the hand-run `openssl` and `mosquitto_passwd` steps and `examples/broker/`.
+- **Works on Ubuntu's confined Mosquitto.** The packaged broker may read only `/etc/mosquitto` (AppArmor)
+  and reported the 0.0.6 example, run from any other folder, as "Unable to open config file".
+  `install.sh` puts each file where the profile allows, owned as Mosquitto requires. CI now sets up the
+  packaged, confined service this way and runs the security tests against it.
+- **Tighter access rules.** Each machine gets its own rules. Before, the machine rules were a pattern for
+  every user, so the camera system's account could have reported as a machine of its own name.
+- Passwords are hashed in Mosquitto's format by Loam, so none appears on a command line.
+- A pressed e-stop survives a restart of the packaged broker (tested).
+
 ## [0.0.6] - 2026-11-26
 
 What a first field test needs beyond the vehicle bridges: machines that protect themselves, real

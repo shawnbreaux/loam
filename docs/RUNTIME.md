@@ -120,43 +120,53 @@ e-stop is released. Leave it out and the site stays stopped, as a real one would
 
 ## Securing the broker
 
-On a real site, anyone who can reach an open broker can publish an order. Run the broker encrypted, with a
-name and password for every client and with access rules. `examples/broker/` holds a Mosquitto configuration
-and the rules:
+On a real site, anyone who can reach an open broker can publish an order. `loam broker` writes everything a
+Mosquitto broker needs to serve the site encrypted, with a name and password for every client and with access
+rules:
+
+```bash
+loam broker job.loam --host site-server --address 192.168.1.10     # writes the folder broker/
+sudo sh broker/install.sh                                          # on the site server
+```
 
 | User | May |
 | --- | --- |
 | `controller` | read and write everything under `loam/v0/` |
 | `supervisor` | read everything; publish the site stop, `resume` and the e-stop |
 | `sensors` | publish detections, weather, terrain and the e-stop; read the camera system's and the rain gauge's topics |
+| `frigate`, `rtl433` | their own topics only |
 | a machine, logged in under its machine name | read its own orders and the site's safety topics; publish its own state |
 
-A machine cannot publish an order, not even to itself, and cannot speak for another machine.
+A machine cannot publish an order, not even to itself, and cannot speak for another machine. Whatever the rules
+do not allow is refused.
 
-Create the site's certificate authority and the broker's certificate once. Current TLS libraries refuse a
-certificate authority without the key-usage extension, so keep the `-addext` lines:
+The folder holds:
+
+| File | What it is | Goes to |
+| --- | --- | --- |
+| `ca.crt` | the site's certificate authority | every client |
+| `clients/<name>.password` | one random password per client | that client only |
+| `server.crt`, `server.key`, `passwords`, `acl`, `loam.conf` | the broker's certificate, the password list (hashed) and the rules | the site server, by `install.sh` |
+| `ca.key` | signs broker certificates | nowhere; keep it, and the folder, off the machines and backed up |
+
+- **`--host` and `--address`** are the names and addresses clients will connect to. A client refuses a broker
+  whose certificate does not name the address it dialled.
+- **Rerun it** after adding a machine to the program, or to renew the broker's certificate (valid 825 days; the
+  authority 10 years). The authority and the passwords already handed out are kept, so the other clients go on
+  working. Then run `install.sh` again.
+- **Where the files go is fixed.** On Ubuntu, Mosquitto is confined by AppArmor to `/etc/mosquitto` (its top
+  level, `conf.d/`, `certs/` and `ca_certificates/`) and reports a file anywhere else as "Unable to open config
+  file". It reads the key, the passwords and the rules after giving up root, so they must belong to the user
+  `mosquitto` and be closed to everyone else. `install.sh` does both, and restarts the service.
+- **Nothing is served without TLS afterwards.** The listener on port 8883 replaces the package's default one on
+  1883, so Frigate and rtl_433 must use it too (Frigate: `mqtt: port: 8883`, `user: frigate`, `tls_ca_certs`;
+  rtl_433: `-F "mqtts://site-server:8883,user=rtl433,pass=…"`).
+- **Retained messages survive a restart** of the packaged broker, a pressed e-stop among them.
+
+Every client gets `ca.crt` and its own password file, and connects with `mqtts://`:
 
 ```bash
-openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -subj "/CN=Loam site CA" \
-  -addext "basicConstraints=critical,CA:TRUE" -addext "keyUsage=critical,keyCertSign,cRLSign" \
-  -keyout ca.key -out ca.crt
-openssl req -newkey rsa:2048 -nodes -subj "/CN=site-server" -keyout server.key -out server.csr
-printf "subjectAltName=DNS:site-server,IP:192.168.1.10\nkeyUsage=digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\nsubjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid\n" > san.cnf
-openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial -days 825 -extfile san.cnf -out server.crt
-mosquitto_passwd -c passwords controller      # then, without -c: supervisor, sensors, dz1, ...
-chmod 600 server.key passwords acl
-mosquitto -c mosquitto.conf
-```
-
-On Ubuntu the packaged Mosquitto is confined by AppArmor and reads files only under `/etc/mosquitto`:
-put the configuration in `/etc/mosquitto/conf.d/`, the other files beside it, and name them by their full paths.
-
-`subjectAltName` must hold the name or address the clients connect to. Keep `ca.key` off the site server. Every
-client gets a copy of `ca.crt` and connects with `mqtts://`:
-
-```bash
-export LOAM_BROKER_CA=ca.crt LOAM_BROKER_PASSWORD_FILE=/etc/loam/password
-loam run job.loam --broker mqtts://controller@site-server
+export LOAM_BROKER_CA=ca.crt LOAM_BROKER_PASSWORD_FILE=dz1.password
 loam mavlink job.loam --machine dz1 --vehicle … --broker mqtts://dz1@site-server
 ```
 
@@ -167,8 +177,10 @@ loam mavlink job.loam --machine dz1 --vehicle … --broker mqtts://dz1@site-serv
 - TLS 1.2 or later, and the broker's certificate and host name are always checked.
 - A wrong password or a certificate that does not match is reported in words, not as a timeout.
 
-Tested against Mosquitto with exactly these files (`tests/test_security.py`): a machine reads only its own
-orders, and an order it tries to publish is not delivered.
+Tested twice (`tests/test_security.py`): on a Mosquitto started for the test with the installed files, and in CI
+on Ubuntu's packaged, AppArmor-confined Mosquitto service after `sudo sh broker/install.sh`. In both a machine
+reads only its own orders, an order it tries to publish is not delivered, and a wrong password is refused; on
+the packaged service a pressed e-stop is still there after a restart.
 
 ## 4. Monitor: `loam monitor`
 

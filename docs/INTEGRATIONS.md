@@ -21,7 +21,7 @@ never links them.
 | QField / QGIS surveys | `--ground points.geojson`, `loam score points.geojson` | core | GPL (files only) | GeoJSON points |
 | Frigate | `loam sense --areas`: people seen by site cameras become `detection` messages | `.[run]` | MIT (Frigate, MQTT only) | Frigate's MQTT messages (source, v0.19-dev) |
 | rtl_433 | `loam sense --rain`: a wireless rain gauge becomes `weather` messages | `.[run]` | GPL-2.0 (rtl_433, MQTT only) | rtl_433 decoding recorded gauges |
-| Mosquitto with TLS | `--broker mqtts://user@host`: encrypted, named clients, per-machine access rules | `.[run]` | EPL-2.0 / EDL-1.0 | Mosquitto with `examples/broker/` |
+| Mosquitto with TLS | `loam broker` sets it up; `--broker mqtts://user@host`: encrypted, named clients, per-machine access rules | `.[run]`, openssl | EPL-2.0 / EDL-1.0 | Mosquitto 2.0, and Ubuntu's AppArmor-confined service in CI |
 | MCAP / Lichtblick | `loam monitor --mcap`: every Wire message in one log file | `.[mcap]` | MIT (Lichtblick MPL-2.0) | mcap's reader |
 | pyproj | `--crs` / `--source-crs`: real projections and reprojection | `.[crs]` | MIT | UTM ↔ Alabama East |
 | GDAL / rasterio | GeoTIFF surfaces and ground; `export --to geotiff` | `.[raster]` | BSD-3 (GDAL MIT) | write → read back |

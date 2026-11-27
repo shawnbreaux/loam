@@ -132,7 +132,8 @@ See [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
   into Wire messages; a camera or a sensor program that stops counts as a person everywhere.
   `loam terrain --watch` publishes scans as they are written, and `loam estop` is the site e-stop from a
   keyboard.
-- **Broker security:** `mqtts://` with named clients and per-machine access rules (`examples/broker/`).
+- **Broker security:** `loam broker` writes a secured Mosquitto setup for the site (certificates, a password
+  per client, per-machine access rules, an install script); clients connect with `mqtts://`.
 - **Positioning:** `loam nmea tcp://…` reads RTKLIB, RTKBase or a receiver directly and publishes to MQTT.
   The controller refuses orders to a machine whose clock is off.
 - **Survey data:** OpenDroneMap project folders, LAZ with a ground filter that removes machines, people
@@ -164,11 +165,12 @@ See [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
 | `loam/runtime/bridge.py`, `mavlink.py`, `vda5050.py`, `opera.py` | Real vehicles as Loam machines: one safety loop, three protocols |
 | `loam/sensors.py` | `loam sense`: people from Frigate, rain from rtl_433, as Wire messages |
 | `loam/wirelog.py` | MCAP recorder for Wire messages |
+| `loam/broker.py` | `loam broker`: certificates, passwords, access rules and install script for the site's Mosquitto |
 | `loam/runtime/chrono_soil.py` | Roller compaction curves from Project Chrono's SCM soil model |
 | `tools/integration-envs.sh` | Conda environments for Chrono and ROS 2 (OPERA), for the integration tests |
 | `loam/monitor.py`, `loam/monitor.html` | Live dashboard and replay pages |
 | `loam/target.py`, `loam/export.py` | Next-pass surface; LandXML (Cat Grade 3D), OpenGrade3D `.agd`, AgOpenGPS field folder |
-| `examples/` | Example program and surfaces, comparison plot, Monte Carlo study, a secured Mosquitto configuration |
+| `examples/` | Example program and surfaces, comparison plot, Monte Carlo study |
 | `tests/` | 193 tests: language, I/O, simulator invariants, field adapters, planner, controller loopback, a full multi-process MQTT run with faults, vehicle bridges (ArduPilot SITL and a fake ArduPilot, VDA 5050, RTKLIB, OPERA on Nav2 and ros2_control, ArduPilot fences and failsafe, Nav2's Collision Monitor), e-stop and SIGTERM safety, a TLS broker with access rules, site sensors (a stand-in Frigate, rtl_433 on recorded gauges), Chrono soil, integrations (PDAL cross-check included), parser fuzzing; every test also fails on a leaked thread, process or file |
 
 ## Development

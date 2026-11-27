@@ -1,20 +1,93 @@
 name: ci
+
 on:
   push:
+  pull_request:
+
 permissions:
   contents: read
+
+concurrency:                                   # a newer push to the same ref supersedes a running check
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  probe:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - name: Mosquitto (the end-to-end, bridge and broker-security tests run a real MQTT broker)
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q mosquitto
+          # The package confines Mosquitto to /etc/mosquitto (AppArmor); these tests give it a configuration,
+          # certificates and access rules in a temporary folder. The `broker` job tests it confined.
+          for profile in /etc/apparmor.d/mosquitto /etc/apparmor.d/usr.sbin.mosquitto; do
+            if [ -e "$profile" ]; then sudo apparmor_parser -R "$profile"; fi
+          done
+      - name: RTKLIB str2str (BSD-2) for the positioning-stream test, pinned to the tested commit
+        run: |
+          git init -q /tmp/RTKLIB
+          git -C /tmp/RTKLIB fetch -q --depth 1 https://github.com/rtklibexplorer/RTKLIB.git \
+            38875383435046c3011d60811ee3749072ad72f2
+          git -C /tmp/RTKLIB checkout -q FETCH_HEAD
+          make -s -C /tmp/RTKLIB/app/consapp/str2str/gcc -j4
+          echo "STR2STR=/tmp/RTKLIB/app/consapp/str2str/gcc/str2str" >> "$GITHUB_ENV"
+      - run: pip install -e ".[test,plot,all]"
+      # Every test also fails if it leaves a thread, child process or open file behind (tests/conftest.py).
+      # ArduPilot SITL, ROS 2 (OPERA), Project Chrono and PDAL tests need tools/integration-envs.sh and skip here.
+      - run: pytest -q --cov=loam --cov-report=term --cov-fail-under=85
+
+  broker:
+    # The secured site broker exactly as docs/RUNTIME.md sets it up, on Ubuntu's packaged Mosquitto service with
+    # its AppArmor confinement in force.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - run: sudo apt-get update -q && sudo apt-get install -y -q mosquitto
+      - run: pip install ".[test]"
+      - name: Set up the site broker
+        run: |
+          loam broker examples/pad_north.loam --host localhost --out broker
+          sudo sh broker/install.sh
+          systemctl is-active mosquitto
+          sudo aa-status | grep -i mosquitto || echo "note: Mosquitto is not confined on this runner"
+      - name: Security tests against the installed broker
+        env:
+          LOAM_INSTALLED_BROKER: broker
+          LOAM_INSTALLED_BROKER_RESTART: sudo systemctl restart mosquitto
+        run: pytest -q -rs tests/test_security.py -k installed
+      - name: The broker accepted every file as it was installed
+        if: always()
+        run: |
+          sudo grep -v -E "New c|disconnected|closed its connection" /var/log/mosquitto/mosquitto.log | tail -40
+          ! sudo grep -E "Future versions will refuse|Warning: ACL|Error: " /var/log/mosquitto/mosquitto.log
+
+  lint:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - run: |
-          sudo apt-get update -q >/dev/null && sudo apt-get install -y -q mosquitto >/dev/null
-          echo "== os"; . /etc/os-release; echo "$PRETTY_NAME"; mosquitto -h | head -1; openssl version
-          echo "== profile"; sudo cat /etc/apparmor.d/mosquitto
-          echo "== profile owner"; dpkg -S /etc/apparmor.d/mosquitto || true
-          echo "== default conf"; cat /etc/mosquitto/mosquitto.conf
-          echo "== etc tree"; sudo ls -laR /etc/mosquitto
-          echo "== user"; id mosquitto; systemctl is-active mosquitto || true
-          echo "== unit"; systemctl cat mosquitto | head -40
-          echo "== listening"; sudo ss -ltnp | grep -i mosq || echo none
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -e ".[dev]"
+      - run: ruff check loam tests examples
+      - run: mypy loam
+      - name: example surfaces are reproducible
+        run: |
+          python examples/make_surfaces.py
+          git diff --exit-code examples/*.xml
