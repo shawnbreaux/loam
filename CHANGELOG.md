@@ -3,7 +3,7 @@
 All notable changes are recorded here. The project follows [Semantic Versioning](https://semver.org/);
 before 1.0 any minor release may change the language.
 
-## [Unreleased]
+## [0.0.10] - 2026-11-27
 
 Added
 - **Work along a line.** `along [(x, y), ...]` on a cut or finish task is now planned: each pass is a lane (the

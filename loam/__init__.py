@@ -2,5 +2,5 @@
 from .checker import check, has_errors
 from .parser import parse, parse_file
 
-__version__ = "0.0.9"
+__version__ = "0.0.10"
 __all__ = ["__version__", "check", "has_errors", "parse", "parse_file"]
