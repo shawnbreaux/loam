@@ -313,11 +313,12 @@ def test_offset_polygon():
     from loam.geo import offset_polygon
     square = [(0, 0), (10, 0), (10, 10), (0, 10)]
     grown = [(-2, -2), (12, -2), (12, 12), (-2, 12)]
-    assert offset_polygon(square, 2.0) == pytest.approx(grown)
-    assert offset_polygon(square[::-1], 2.0) == pytest.approx(grown[::-1])                # clockwise
-    assert offset_polygon(square, -2.0) == pytest.approx([(2, 2), (8, 2), (8, 8), (2, 8)])
+    close = np.testing.assert_allclose
+    close(offset_polygon(square, 2.0), grown, atol=1e-9)
+    close(offset_polygon(square[::-1], 2.0), grown[::-1], atol=1e-9)                     # clockwise
+    close(offset_polygon(square, -2.0), [(2, 2), (8, 2), (8, 8), (2, 8)], atol=1e-9)
     ell = [(0, 0), (10, 0), (10, 4), (4, 4), (4, 10), (0, 10)]                           # L-shaped
-    assert offset_polygon(ell, 1.0) == pytest.approx([(-1, -1), (11, -1), (11, 5), (5, 5), (5, 11), (-1, 11)])
+    close(offset_polygon(ell, 1.0), [(-1, -1), (11, -1), (11, 5), (5, 5), (5, 11), (-1, 11)], atol=1e-9)
 
 
 def test_site_limits_become_vehicle_fences():

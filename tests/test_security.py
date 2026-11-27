@@ -98,7 +98,13 @@ def secure_broker(tmp_path):
             with socket.socket() as s:
                 if s.connect_ex(("127.0.0.1", port)) == 0:
                     break
-            assert proc.poll() is None, proc.stderr.read()
+            if proc.poll() is not None:
+                why = proc.stderr.read()
+                if "Unable to open config file" in why:
+                    # Ubuntu's Mosquitto package is confined by AppArmor to /etc/mosquitto and cannot read a
+                    # test folder. CI lifts the confinement (.github/workflows/ci.yml).
+                    pytest.skip("this Mosquitto may not read files outside /etc/mosquitto (AppArmor)")
+                raise AssertionError(why)
             time.sleep(0.05)
         yield port, str(d / "ca.crt")
     finally:

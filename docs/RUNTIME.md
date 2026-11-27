@@ -148,6 +148,9 @@ chmod 600 server.key passwords acl
 mosquitto -c mosquitto.conf
 ```
 
+On Ubuntu the packaged Mosquitto is confined by AppArmor and reads files only under `/etc/mosquitto`:
+put the configuration in `/etc/mosquitto/conf.d/`, the other files beside it, and name them by their full paths.
+
 `subjectAltName` must hold the name or address the clients connect to. Keep `ca.key` off the site server. Every
 client gets a copy of `ca.crt` and connects with `mqtts://`:
 
