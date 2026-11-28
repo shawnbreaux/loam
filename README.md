@@ -40,7 +40,7 @@ replan drift { when deviation() > 0.15 ft }
 | --- | --- |
 | [SPEC.md](SPEC.md) | Language, execution semantics, Loam Wire messages, safety model |
 | [docs/RUNTIME.md](docs/RUNTIME.md) | Running a site: plan, controller, simulated site, secured broker, monitor; what the system tests showed |
-| [docs/FIELD.md](docs/FIELD.md) | Field equipment: grade control, RTK, lidar, cameras; coordinates; levelling a field and cutting a swale with no design; what cannot be connected |
+| [docs/FIELD.md](docs/FIELD.md) | Field equipment: grade control, RTK, lidar, cameras; coordinates; levelling a field and cutting a swale with no design; a grade box beside AgOpenGPS; what cannot be connected |
 | [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) | Every integration, its licence and what it was tested against; what was left out and why |
 | [docs/SIMULATOR.md](docs/SIMULATOR.md) | Reference simulator: model, equations, invariants, limitations |
 | [results/study.md](results/study.md) | Monte Carlo study, 420 seeded runs |
@@ -164,7 +164,45 @@ task ditch {
 ```
 
 The sides of a swale slope across the direction of travel. They need a blade that tilts, or a machine whose own
-grade control takes the surface. Loam's own blade control moves one actuator and cuts the flat bottom.
+grade control takes the surface. `loam blade --tilt-valve` (next section) tilts a blade through a second valve
+board. `loam mavlink --blade-servo` moves one actuator and cuts the flat bottom.
+
+## A grade box beside AgOpenGPS
+
+AgOpenGPS steers the tractor; `loam blade` holds the blade behind it. One program on the tractor's computer reads
+an RTK antenna on the blade, works out how far the cutting edge is above the surface the next pass should leave,
+and sends that to an **OpenGrade** valve board: the Nano board on USB, or OpenGrade3D's Teensy board on the
+network. It needs no controller, no broker and no survey. The board acts only while its work switch is on, so
+the person on the tractor keeps the last word. A board on a serial port needs one extra:
+`pip install "loam-lang[serial]"`.
+
+```bash
+# once: the cutting edge standing level on ground of known site elevation
+loam blade field.loam --valve serial:/dev/ttyUSB0 --gnss udp://:9999 --origin LAT,LON --box box.json --zero 101.25
+
+# once per valve: blade in the air near the middle of its travel, work switch on, everyone clear
+loam blade field.loam --valve serial:/dev/ttyUSB0 --gnss udp://:9999 --origin LAT,LON --box box.json --calibrate lift
+
+# grade, only while AgOpenGPS is steering
+loam blade field.loam --valve serial:/dev/ttyUSB0 --gnss udp://:9999 --origin LAT,LON --box box.json --with-agopengps
+```
+
+- **Valves are measured, not looked up.** A valve's standard size (D03, D05) says how it bolts on. How fast your
+  blade moves also depends on the cylinder, the pump and the hoses. `--calibrate` pulses the valve, watches the
+  antenna and sets the board's eight numbers from what it measured. It recognises an open-and-shut valve,
+  swapped coils, a work switch left off and a valve too quick for the board.
+- **Several passes with no survey.** The ground is followed from the blade's own cuts: each pass may cut one
+  `max_cut` deeper than the last, down to the design and never past it. Fill is not followed.
+- **Tilt.** `--tilt-valve` names a second valve board, on the tilt cylinder. With two antennas on the blade the
+  edge is laid on the cross slope of the wanted surface, which the sides of a swale need.
+- **It does not cut on a guess.** Without an RTK-fixed position the blade is lifted and left alone. Positions
+  from two GPS boards on one port, the tractor's and the blade's, are refused until the blade's is named.
+
+**It has not moved a real blade.** It is tested against stand-ins for both boards that follow the published
+firmware, a simulated valve and cylinder, and a noisy, late antenna, over real serial and network ports. Make
+the first passes in the air. See
+[docs/FIELD.md](docs/FIELD.md#a-grade-box-beside-agopengps-loam-blade) for the links, the box file and
+every case in which it will not cut.
 
 ## On a real site
 
@@ -211,9 +249,8 @@ Loam works with the equipment through files and simple streams, with no vendor S
 surfaces for **Cat Grade with 3D** (and Trimble, Topcon, Leica), `.agd` design grids for **OpenGrade3D**,
 field folders for **AgOpenGPS** (boundary, AB lines, and a curve track for every line a task runs along),
 survey points from **Emlid Reach**, **QField** and **QGIS**, NMEA from any
-RTK receiver, and LAS/PCD scans from a **DJI Zenmuse L2** or **Livox Mid-360**. Beside AgOpenGPS,
-`loam blade` is a grade box of its own: it holds a blade to the next-pass surface through an **OpenGrade**
-valve board, and measures the valve to tune the board. It has not moved a real blade yet. See
+RTK receiver (the `$PANDA` and `$PAOGI` of **AgOpenGPS GPS boards** included), and LAS/PCD scans from a
+**DJI Zenmuse L2** or **Livox Mid-360**. See
 [docs/FIELD.md](docs/FIELD.md) for the commands, the coordinate setup and what cannot be connected
 (Cat Command, closed retrofit kits).
 
@@ -254,6 +291,9 @@ Every integration is an optional, FOSS extra (`pip install "loam-lang[all]"`); t
 - **Vehicles:** ArduPilot Rover and other MAVLink ground vehicles (`loam mavlink`), VDA 5050 3.0 robots
   (`loam vda5050`), and PWRI's OPERA machines on ROS 2 (`loam opera`: IC120 carriers through Nav2, the ZX200's
   arm cutting to grade). Tested against ArduPilot SITL, the official VDA 5050 schemas, Nav2 and ros2_control.
+- **AgOpenGPS and its boards:** field folders with AB lines and curve tracks (`loam export`), GPS boards'
+  `$PANDA` and `$PAOGI` sentences (`loam nmea`, `loam blade`), and both OpenGrade valve boards (`loam blade`).
+  Loam speaks their message formats and copies none of their code.
 - **Site sensors:** people from Frigate's cameras and rain from an rtl_433 gauge (`loam sense`); lidar scans as
   they are written (`loam terrain --watch`).
 - **Broker:** Mosquitto with TLS, set up by `loam broker`; tested in CI on Ubuntu's packaged, AppArmor-confined
