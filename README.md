@@ -322,7 +322,7 @@ tests against it, and runs lint, type checks and a reproducibility check of the 
 
 ## Status and safety
 
-v0.0.10 is an early draft; the language and wire format will change. Releases are pre-releases on
+v0.0.11 is an early draft; the language and wire format will change. Releases are pre-releases on
 [GitHub](https://github.com/shawnbreaux/loam/releases); [CHANGELOG.md](CHANGELOG.md) says what each one changed. **Loam does not make a
 machine safe.** Machines directed by Loam need their own certified safety systems and a site risk
 assessment (ISO 17757). The reference simulator is a test tool, not a planner for real equipment.

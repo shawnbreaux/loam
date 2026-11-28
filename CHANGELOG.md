@@ -3,7 +3,7 @@
 All notable changes are recorded here. The project follows [Semantic Versioning](https://semver.org/);
 before 1.0 any minor release may change the language.
 
-## [Unreleased]
+## [0.0.11] - 2026-11-28
 
 Added
 - **`loam blade`: a grade box that works alone, beside AgOpenGPS.** It reads an RTK antenna on the blade,
