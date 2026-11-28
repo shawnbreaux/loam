@@ -13,7 +13,7 @@ import tracemalloc
 
 import numpy as np
 import pytest
-from conftest import EXAMPLE, EXAMPLES
+from conftest import EXAMPLE, EXAMPLES, wire_valid
 
 from loam import wire
 from loam.checker import check, has_errors
@@ -244,6 +244,9 @@ def test_nmea_states_heading_and_quality():
     assert out[0]["safetyState"] == "ok" and out[4]["safetyState"] == "degraded"
     assert out[4]["errors"][0] == wire.error("gnssQuality", "rtk-float", "warning")
     assert out[0]["pose"]["z"] == pytest.approx(100.0)
+    for m in out:                       # with the receiver's own account of its fix, which the Wire schema allows
+        wire_valid("state", m)
+    assert out[0]["gnss"]["fix"] == "rtk-fixed" and out[4]["gnss"]["fix"] == "rtk-float"
 
 
 def test_read_points_csv_layouts(tmp_path):

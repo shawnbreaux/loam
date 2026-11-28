@@ -354,6 +354,18 @@
           "description": "Blade/bucket/drum pose if known",
           "additionalProperties": true
         },
+        "gnss": {
+          "type": "object",
+          "description": "What the receiver said about its fix, when the state comes from one",
+          "properties": {
+            "fix": {"type": "string", "description": "rtk-fixed, rtk-float, dgps, gps, dead-reckoning, invalid, or the receiver's own quality number"},
+            "sats": {"type": ["integer", "null"], "minimum": 0},
+            "hdop": {"type": ["number", "null"], "minimum": 0},
+            "age": {"type": ["number", "null"], "minimum": 0, "description": "Seconds since the last correction"}
+          },
+          "required": ["fix"],
+          "additionalProperties": false
+        },
         "errors": {
           "type": "array",
           "items": {

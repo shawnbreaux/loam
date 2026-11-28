@@ -174,6 +174,19 @@ def test_a_sensor_on_the_body_uses_the_geometry(tmp_path):
     assert b.at == 0.0 and b.sent == 1100
 
 
+def test_the_last_small_step_to_fully_raised_is_sent(tmp_path):
+    """A step of a microsecond is not worth sending in mid stroke, but the one that ends at the top of the stroke
+    is: a blade one microsecond short of raised was otherwise left there (seen as a last pulse of 1899)."""
+    _, g = yard(tmp_path)
+    b = Blade(g, height=3.0)
+    b.at, b.sent, b.t = 1 - 1 / 800, 1899, 0.0             # one microsecond below the top, and told so
+    assert b.command(None, None, None, 0.1) == 1900        # carried: the last microsecond is sent
+    assert b.command(None, None, None, 0.2) is None        # and then nothing more
+    b.at, b.sent, b.t = 0.5, 1499, 0.0                     # mid stroke, a microsecond from what was last sent
+    assert b.command(None, None, None, 1e-4) is None       # too small a step to send
+    assert b.command(None, None, None, 0.1) is not None    # a real one is
+
+
 def test_the_bridge_holds_the_blade_of_a_vehicle(tmp_path, mqtt_broker, capsys):
     """`loam mavlink --blade-servo` against the fake ArduPilot, over a real broker. Before any order the blade is
     raised. On a cut order the servo is moved to put the edge on the next-pass surface while the vehicle is in the
@@ -207,12 +220,19 @@ def test_the_bridge_holds_the_blade_of_a_vehicle(tmp_path, mqtt_broker, capsys):
                 """The blade servo's pulse widths, in the order the vehicle was sent them."""
                 return [int(p) for c, n, p in rover.commands if c == 183 and n == 9.0]
 
+            def raised(since: int = 0) -> list[int]:
+                """The pulses from number `since` on, once the last of them is fully raised. Raising the whole
+                stroke in small steps takes about 2.5 s, so this waits for it and does not guess how long."""
+                end = time.time() + 8
+                while pulses()[since:][-1:] != [1900] and time.time() < end:
+                    time.sleep(0.05)
+                return pulses()[since:]
+
             time.sleep(0.5)
             assert pulses() == [1900]                                         # raised, and told so once
             ctl.send("order", wire.order("yard", "dz1", 1, "c1", 0, "cut", "cut", WINDOW, {}, {}))
             ctl.wait(lambda s: s["orderId"] == "c1" and s["progress"] == 1.0, timeout=30)
-            time.sleep(2.5)
-            first = pulses()
+            first = raised()
             # In the window: down to mid stroke, which is where the geometry puts the edge at 100.5 ft. Then up.
             assert abs(min(first) - 1500) <= 8 and first[0] > 1850 and first[-1] == 1900    # within the deadband
             assert all(abs(a - c) <= 30 for a, c in pairwise(first))    # in small steps
@@ -228,8 +248,7 @@ def test_the_bridge_holds_the_blade_of_a_vehicle(tmp_path, mqtt_broker, capsys):
             back = [[60, 45], [20, 45], [20, 55], [60, 55]]
             ctl.send("order", wire.order("yard", "dz1", 2, "c2", 0, "cut", "cut", back, {}, {}))
             ctl.wait(lambda s: s["orderId"] == "c2" and s["progress"] == 1.0, timeout=30)
-            time.sleep(2.5)
-            second = pulses()[n:]
+            second = raised(n)
             assert abs(min(second) - 1300) <= 8 and second[-1] == 1900
         finally:
             ctl.close(bridge)

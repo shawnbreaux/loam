@@ -10,8 +10,10 @@ Loam talks to field equipment through files and simple streams, so it works with
 | Trimble, Topcon, Leica machine control | Same | LandXML, as above | `loam export --to landxml` |
 | **OpenGrade3D** | Open-source blade control on a tractor | Loam writes the next-pass surface as an `.agd` design grid | `loam export --to agd` |
 | **AgOpenGPS** | Open-source autosteer | Loam writes a field folder: origin, boundary, exclusion zones, one AB line per work zone, one curve per task that runs `along` a line | `loam export --to agopengps` |
+| **OpenGrade valve boards** (Nano on USB, Teensy on Ethernet) | Move a blade's hydraulic valve | Loam is the grade box: it sends the board how far the edge is from the next-pass surface, and can tune the board by measuring the valve | `loam blade` |
+| **AgOpenGPS GPS boards** (`$PANDA`, `$PAOGI`) | Position, heading and roll | Loam reads their sentences from serial, TCP or the UDP port they broadcast to | `loam blade --gnss`, `loam nmea udp://:9999` |
 | **Emlid Reach RS3** (rover) | Truth surveys | Loam reads Emlid Flow CSV exports (All columns, PNEZD, PENZD) | `loam score`, `--ground survey.csv` |
-| Emlid Reach (or any RTK receiver) on a machine | Live position | Loam reads NMEA GGA (TCP or serial) and emits Wire `state` messages | `loam nmea` |
+| Emlid Reach (or any RTK receiver) on a machine | Live position | Loam reads NMEA GGA (file, stdin, TCP or UDP) and emits Wire `state` messages | `loam nmea` |
 | **QField** (phone or tablet) or QGIS | Survey points | Loam reads GeoJSON points | `loam score`, `--ground points.geojson` |
 | **Livox Mid-360** on a mast | Overhead scans | Record with livox_ros_driver2 and save PCD (or LAS); Loam grids each scan as it is written | `loam terrain --watch`, `--ground scan.pcd` |
 | IP cameras with **Frigate** | Sees people on the site; calibrated to the ground, says where each one stands | Loam reads Frigate's MQTT messages | `loam sense --areas` |
@@ -93,11 +95,91 @@ loam mavlink site.loam --machine dz1 --vehicle /dev/ttyACM0 --origin LAT,LON --b
 - One actuator holds the whole edge level. The edge's length is the machine's `blade` in the program, and the
   edge is held at the highest point wanted anywhere under it. So neither end cuts deeper than its own ground
   allows, and an end that hangs over ground outside the job stays on top of that ground. **It cannot shape a
-  slope across its own width**: the sides of a swale need a blade that tilts, which Loam does not drive yet.
+  slope across its own width**: the sides of a swale need a blade that tilts, which `loam blade` (below) drives
+  through a second valve board and `loam mavlink` does not.
 - The servo output can drive a hobby or linear servo directly, or a hydraulic valve through a driver that takes
   a servo pulse.
 
 Tested against a fake ArduPilot over a real broker. It has not moved a real blade yet.
+
+### A grade box beside AgOpenGPS: `loam blade`
+
+AgOpenGPS steers a tractor; `loam blade` holds the blade behind it. It needs no controller, no broker and no
+survey: one program on the tractor's computer reads an RTK antenna on the blade, works out how far the cutting
+edge is above the surface the next pass should leave, and sends that number, in millimetres, to an **OpenGrade
+valve board**. The board's firmware moves the valve, and it acts only while its work switch is on, so the
+person on the tractor keeps the last word.
+
+```
+# 1. once: the cutting edge standing level on ground of known site elevation
+loam blade field.loam --valve serial:/dev/ttyUSB0 --gnss udp://:9999 --origin LAT,LON --box box.json --zero 101.25
+
+# 2. once per valve: blade in the air near the middle of its travel, work switch on, everyone clear
+loam blade field.loam --valve serial:/dev/ttyUSB0 --gnss udp://:9999 --origin LAT,LON --box box.json --calibrate lift
+
+# 3. grade, only while AgOpenGPS is steering
+loam blade field.loam --valve serial:/dev/ttyUSB0 --gnss udp://:9999 --origin LAT,LON --box box.json --with-agopengps
+```
+
+**What it talks to.**
+
+| Part | Which | Link |
+|---|---|---|
+| Valve board | OpenGrade's Nano board (USB) | `--valve serial:PORT` (needs `pip install "loam-lang[serial]"`) |
+| Valve board | OpenGrade3D's Teensy board (Ethernet), with the blade's antennas on it | `--valve udp://ADDRESS --gnss board` |
+| Blade antenna | Any AgOpenGPS GPS board (`$PANDA`, `$PAOGI`), or any receiver that sends GGA | `--gnss serial:PORT`, `tcp://HOST:PORT`, `udp://:PORT` or `udp://SENDER:PORT` |
+| AgOpenGPS | AgIO's own messages, heard on the network; nothing is sent to it | `--with-agopengps` |
+
+Both valve boards drive one valve section through a motor driver (pulse width and direction), so any 12 V
+valve that driver can power will do: proportional, or plain open-and-shut.
+
+**Valves are measured, not looked up.** A valve's standard size (ISO 4401-03, sold as D03, CETOP 3 or NG6;
+ISO 4401-05, sold as D05, CETOP 5 or NG10) says how it bolts on and roughly how much oil it can pass. How fast
+your blade moves also depends on the cylinder, the pump and the hoses, so no table by valve size can give the
+board's settings. `--calibrate` measures them instead. With the blade in the air it pulses the valve up for a
+second and down for a second at stronger and stronger duties, watches the antenna, and finds for each
+direction the duty at which the blade starts to move and how much speed each further step adds, the valve's
+delay, and the antenna's noise. From those it sets the board's eight numbers: least and greatest duty,
+deadband (two and a half times the noise, at least 3 mm), and a gain that makes the error die away over twice
+the delay. It takes about a minute, stops early once the blade moves 150 mm/s both ways, gives the blade one
+pulse back if it has wandered 200 mm, and gives up at 600 mm. It says so if the blade does not move (the work
+switch is off, or there is no oil), if it moves the wrong way (the coils are swapped), and if the valve is too
+quick for the board to place the blade finely (fit a flow restrictor). An open-and-shut valve is recognised:
+the board is set to switch it fully on outside a deadband as wide as the blade coasts.
+
+**The box file** (`--box`) keeps what `--zero` and `--calibrate` measured, as JSON you can read. The settings
+in it are sent to the board every time grading starts.
+
+**Several passes with no survey.** The ground starts as the program's `existing` surface. Wherever the edge
+passes below the ground as it is known, the ground is now there, so each pass may cut one `max_cut` deeper than
+the last, down to the design and never past it. A piece of ground keeps its target until the edge has left it
+by more than its own length, so one pass cannot chase its own cut down. **Fill is not followed**: a blade
+cannot tell what it spilled, so low ground stays as last known and the edge is carried over it.
+
+**Tilt.** `--tilt-valve` names a second valve board, on the tilt cylinder (`--calibrate tilt` tunes it). It
+needs the blade's roll, so two antennas (`$PAOGI`, or the Teensy board's own pair), and `--mast`, the antenna's
+true height over the edge, so that the lean of the mast is taken out of the position. The edge is tilted to the
+straight line that best fits the wanted surface under it, at most 0.35 across (19 degrees), and its middle is
+held just high enough that neither end cuts deeper than wanted. This is what the sides of a swale need. Two
+Teensy boards cannot share a network (the firmware gives every one the same address), so with a Teensy on the
+lift put a Nano on the tilt.
+
+**When it will not cut.**
+
+- No RTK-fixed position from the blade's antenna in the last half second (`--allow-float` accepts RTK float):
+  the blade is lifted for a second and a half, then left alone. `--hold-on-loss` leaves it where it is.
+- Outside every work zone, or where the task is done: the edge is carried half a foot above the ground.
+- With `--with-agopengps`, whenever AgOpenGPS has not said in the last 2 s that it is steering. The status
+  line shows the pass AgOpenGPS is on.
+- With one antenna, until the tractor has moved 0.2 m: the edge's direction is the direction of travel.
+- The board's work switch is off, or the board has heard nothing for 0.28 s (Nano); both are the firmware's own.
+- Positions arriving on one UDP port from two senders, such as the tractor's GPS board and the blade's: it
+  stops and asks for `--gnss udp://SENDER:PORT`.
+
+**Limits.** Tested against a stand-in for each board that follows the published firmware's arithmetic, a
+simulated cylinder and valve, and a noisy, late antenna, over real serial and network ports. **It has not
+moved a real blade.** Not tested on Windows. The first passes on a real machine should be made in the air,
+with `--zero` given an elevation a foot too low.
 
 ### Machines, by how open they are
 
@@ -366,6 +448,12 @@ loam score site.loam rover.csv --zone pad --world-origin E,N
 
 # Live machine position from a Reach streaming NMEA over TCP
 nc reach.local 9001 | loam nmea site.loam --machine dz1 --origin LAT,LON
+
+# The same from an AgOpenGPS GPS board, which broadcasts $PANDA or $PAOGI to UDP port 9999
+loam nmea site.loam udp://:9999 --machine tr1 --origin LAT,LON --broker mqtts://tr1@site-server
+
+# A grade box beside AgOpenGPS (zero and calibrate first; see "A grade box beside AgOpenGPS")
+loam blade field.loam --valve serial:/dev/ttyUSB0 --gnss udp://:9999 --origin LAT,LON --box box.json --with-agopengps
 ```
 
 Reading and gridding stream in chunks of 250,000 points, so memory stays near 25 MB however large the scan is (measured on 5 million points; the test suite checks 3 million). Gridding runs at roughly 20 million points a second on a laptop.
@@ -378,4 +466,5 @@ Formats were taken from each tool's own source code, and the tests parse Loam's 
 - **OpenGrade3D** (`github.com/Pat-I/OpenGrade3D`): `.agd` rows `lat,lon,existing,proposed,cutfill,code` with codes `MB` (master benchmark), `2PER` (perimeter) and `3GRD` (grid). Heights are metres. `cutfill` is proposed minus existing (positive = fill); OpenGrade3D steers on the proposed height. A blank proposed height means "no design here". The grid is thinned to about 1 m spacing, as OpenGrade3D recommends.
 - **LandXML 1.2** TIN surfaces, which Cat VisionLink lists among its accepted design files alongside Trimble formats.
 - **Emlid Flow** CSV: columns found by name (`Easting`, `Northing`, `Elevation`, `Latitude`, `Longitude`, and a solution-status column if present; only FIX rows are kept). Headerless PNEZD and PENZD also work.
-- **NMEA GGA**: checksums are verified. Anything but an RTK fixed solution is reported in the Wire state as `degraded` with a `gnssQuality` error, so a controller holds the machine instead of trusting the position.
+- **NMEA GGA**, and the `$PANDA` and `$PAOGI` sentences of AgOpenGPS GPS boards: checksums are verified. Anything but an RTK fixed solution is reported in the Wire state as `degraded` with a `gnssQuality` error, so a controller holds the machine instead of trusting the position. The state carries a `gnss` object with what the receiver said about its fix; a field the receiver left empty is `null`.
+- **AgOpenGPS family messages** (`loam/aog.py`): the network frame `0x80 0x81 source pgn length data crc`; an OpenGrade valve board is sent a *cut value*, 100 on grade and one step per millimetre the edge is too high (to 199) or too low (to 1), and eight settings (gain up and down, least and greatest duty up and down, damping, deadband).

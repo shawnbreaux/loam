@@ -20,7 +20,7 @@ import json
 import os
 import sys
 import time
-from typing import TextIO
+from typing import Any
 
 from .checker import check, has_errors
 from .compiler import explain, manifest
@@ -51,7 +51,7 @@ def load(path: str):
 # commands that run until stopped: a service manager's SIGTERM must still run their cleanup (hold the
 # vehicle, cancel its goal, report it offline), which Python's default SIGTERM action skips
 LONG_RUNNING = {"run", "simulate-site", "monitor", "_role", "mavlink", "vda5050", "opera", "nav2", "nmea", "sense",
-                "terrain"}
+                "terrain", "blade"}
 
 
 def _stop_cleanly_on_sigterm() -> None:
@@ -402,6 +402,41 @@ def add_field_commands(sub) -> None:
                    "GPS, whose antenna rides on the blade or its frame (default: the vehicle's own position)")
     g.add_argument("--blade-zero", type=float, metavar="Z", help="measure --blade-height: lower the blade onto a "
                    "mark of site elevation Z, print the height, and exit")
+    p = sub.add_parser("blade", help="a grade box that works alone, beside AgOpenGPS: hold a blade to the next-pass "
+                                     "surface through an OpenGrade valve board")
+    p.add_argument("file")
+    p.add_argument("--valve", required=True, metavar="LINK",
+                   help="the lift valve board: serial:PORT (Nano, USB) or udp://ADDRESS (Teensy, network)")
+    p.add_argument("--tilt-valve", metavar="LINK", help="a second valve board, on the tilt cylinder")
+    p.add_argument("--gnss", required=True, metavar="LINK",
+                   help="the blade antenna's sentences ($PAOGI, $PANDA or GGA): serial:PORT[:BAUD], tcp://HOST:PORT, "
+                        "udp://:PORT, or udp://SENDER:PORT to hear one sender only; or 'board' for a Teensy valve "
+                        "board's own antenna")
+    p.add_argument("--box", metavar="FILE", help="where --zero and --calibrate keep what they measure (JSON)")
+    p.add_argument("--zero", type=float, metavar="Z",
+                   help="measure the antenna's height: stand the cutting edge, level, on ground of site elevation Z; "
+                        "written to --box")
+    p.add_argument("--calibrate", choices=["lift", "tilt"],
+                   help="measure a valve and work out its board's settings: blade in the air near the middle of its "
+                        "travel, work switch on, everyone clear; written to --box")
+    p.add_argument("--machine", help="the machine whose `blade` is the length of the cutting edge (default: the "
+                                     "program's only machine with one)")
+    p.add_argument("--mast", type=float, default=0.0, metavar="LEN",
+                   help="the antenna's true height above the cutting edge, site units, to correct for the mast "
+                        "leaning with the blade (default 0: no correction)")
+    p.add_argument("--reach", type=float, default=0.0, metavar="LEN",
+                   help="how far the cutting edge is ahead of the antenna, site units (default 0)")
+    p.add_argument("--heading-offset", type=float, default=0.0, metavar="DEG",
+                   help="degrees added to a two-antenna heading to get the direction of travel (90 or -90 for "
+                        "antennas side by side, if the board does not already allow for it)")
+    p.add_argument("--roll-invert", action="store_true", help="the board's roll is positive with the left side down")
+    p.add_argument("--allow-float", action="store_true", help="grade on an RTK float position too")
+    p.add_argument("--hold-on-loss", action="store_true",
+                   help="when the position is lost, leave the blade where it is in place of lifting it")
+    p.add_argument("--with-agopengps", type=int, nargs="?", const=8888, metavar="PORT",
+                   help="grade only while AgOpenGPS says it is steering (heard on this UDP port, default 8888)")
+    p.add_argument("--seconds", type=float, help=argparse.SUPPRESS)        # for tests: stop after this long
+    _frame_args(p)
     p = sub.add_parser("conform", help="check that a machine keeps its side of Loam Wire (it will drive short "
                                        "passes: clear the area)")
     p.add_argument("file")
@@ -512,10 +547,12 @@ def add_field_commands(sub) -> None:
     p.add_argument("--name")
     p.add_argument("--index", type=int, default=0)
     p.add_argument("--physics", action="store_true")
-    p = sub.add_parser("nmea", help="turn a GGA stream into Wire state messages")
+    p = sub.add_parser("nmea", help="turn a receiver's position sentences (GGA, $PANDA, $PAOGI) into Wire state "
+                                    "messages")
     p.add_argument("file")
     p.add_argument("input", nargs="?", default="-",
-                   help="NMEA file, - for stdin, or tcp://host:port (RTKLIB str2str/rtkrcv, RTKBase, a receiver)")
+                   help="NMEA file, - for stdin, tcp://host:port (RTKLIB str2str/rtkrcv, RTKBase, a receiver), or "
+                        "udp://:port (an AgOpenGPS GPS board: port 9999; udp://sender:port to hear one board only)")
     p.add_argument("--machine", required=True)
     p.add_argument("-o", "--out", help="write JSON lines here (default stdout)")
     p.add_argument("--broker", help="publish the states to this MQTT broker instead of writing them")
@@ -734,8 +771,8 @@ def cmd_score(model, a) -> None:
 
 
 def cmd_nmea(model, a) -> None:
-    """`loam nmea`: turn a GNSS receiver's GGA sentences (file, stdin or TCP) into machine state messages, written as
-    JSON lines or published to MQTT.
+    """`loam nmea`: turn a receiver's position sentences (file, stdin, TCP or UDP) into machine state messages,
+    written as JSON lines or published to MQTT.
     """
     import json as _json
 
@@ -743,12 +780,16 @@ def cmd_nmea(model, a) -> None:
     from .survey import nmea_states
     grid = _grid(model, a)
     frame = _frame(grid, a)
-    src: TextIO
+    src: Any               # a text file, a socket's file, or a generator of lines: each has close()
     if a.input.startswith("tcp://"):
         import socket
         host, _, port = a.input[6:].rpartition(":")
         conn = socket.create_connection((host or "localhost", int(port)), timeout=30)
         src = conn.makefile("r", encoding="ascii", errors="replace")
+    elif a.input.startswith("udp://"):
+        from .survey import udp_lines
+        sender, _, port = a.input[6:].rpartition(":")
+        src = udp_lines(int(port), only=sender or None)
     else:
         src = sys.stdin if a.input == "-" else open(a.input, encoding="ascii", errors="replace")  # noqa: SIM115
     bus = None
@@ -805,6 +846,24 @@ def cmd_simulate_site(model, a) -> None:
     r = launch(a.file, a.broker, a.speed, a.faults, model, quiet=a.quiet, physics=a.physics,
                soil_table=a.soil_table)
     print(json.dumps(r, indent=2))
+
+
+def cmd_blade(model, a) -> None:
+    """`loam blade`: the standalone grade box, or one of its two one-off measurements."""
+    from .runtime.blade import Surface
+    from .runtime.gradebox import run_blade
+    grid = _grid(model, a)
+    edges = {n: m["blade"] for n, m in model.machines.items() if m.get("blade")}
+    if a.machine and a.machine not in edges:
+        raise ValueError(f"machine '{a.machine}' has no `blade` length in the program")
+    if not a.machine and len(edges) != 1:
+        raise ValueError("say which machine's blade this is (--machine): the program has "
+                         f"{len(edges)} machines with a `blade` length")
+    width = edges[a.machine or next(iter(edges))].to(grid.unit)
+    r = run_blade(Surface(grid, width), _frame(grid, a), a.valve, a.gnss, a.box, a.tilt_valve, a.zero, a.calibrate,
+                  a.mast, a.reach, a.heading_offset, a.roll_invert, a.allow_float, not a.hold_on_loss,
+                  a.with_agopengps, a.seconds)
+    _show(r, False)
 
 
 def cmd_mavlink(model, a) -> None:
@@ -1042,7 +1101,7 @@ def cmd_role(model, a) -> None:
 FIELD_COMMANDS = {"run": cmd_run, "simulate-site": cmd_simulate_site, "mavlink": cmd_mavlink, "vda5050": cmd_vda5050,
                   "soil-calibrate": cmd_soil_calibrate, "opera": cmd_opera,
                   "resume": cmd_resume, "estop": cmd_estop, "sense": cmd_sense, "broker": cmd_broker,
-                  "conform": cmd_conform, "nav2": cmd_nav2,
+                  "conform": cmd_conform, "nav2": cmd_nav2, "blade": cmd_blade,
                   "_role": cmd_role, "monitor": cmd_monitor,
                   "export": cmd_export, "terrain": cmd_terrain, "score": cmd_score, "nmea": cmd_nmea}
 

@@ -97,7 +97,8 @@ These are results of a simplified model with assumed soil factors, not field mea
 | `loam monitor` | Live web dashboard, Prometheus metrics, replay pages, MCAP recording |
 | `loam mavlink`, `vda5050`, `nav2`, `opera` | Drive a real vehicle as a Loam machine: ArduPilot Rover (with its blade, if nobody is aboard), VDA 5050 robots, any ROS 2 vehicle on Nav2, OPERA machines |
 | `loam conform` | Check that a machine keeps its side of Loam Wire, whoever built it |
-| `loam nmea` | Publish an RTK receiver's position as a machine's state |
+| `loam nmea` | Publish an RTK receiver's position as a machine's state (GGA, or an AgOpenGPS GPS board's `$PANDA` and `$PAOGI`) |
+| `loam blade` | A grade box beside AgOpenGPS: hold a blade, and its tilt, to the next-pass surface through OpenGrade valve boards; tune a board by measuring its valve |
 | `loam terrain` | Grid a lidar scan onto the site; publish scans as they are written (`--watch`), with the person-sized things in them (`--objects`) |
 | `loam sense` | People from Frigate cameras, from their phones and trackers, and the two matched; rain from an rtl_433 gauge |
 | `loam wifi-fit` | Measure a site's Wi-Fi signal model from a walk, for locating phones |
@@ -210,7 +211,9 @@ Loam works with the equipment through files and simple streams, with no vendor S
 surfaces for **Cat Grade with 3D** (and Trimble, Topcon, Leica), `.agd` design grids for **OpenGrade3D**,
 field folders for **AgOpenGPS** (boundary, AB lines, and a curve track for every line a task runs along),
 survey points from **Emlid Reach**, **QField** and **QGIS**, NMEA from any
-RTK receiver, and LAS/PCD scans from a **DJI Zenmuse L2** or **Livox Mid-360**. See
+RTK receiver, and LAS/PCD scans from a **DJI Zenmuse L2** or **Livox Mid-360**. Beside AgOpenGPS,
+`loam blade` is a grade box of its own: it holds a blade to the next-pass surface through an **OpenGrade**
+valve board, and measures the valve to tune the board. It has not moved a real blade yet. See
 [docs/FIELD.md](docs/FIELD.md) for the commands, the coordinate setup and what cannot be connected
 (Cat Command, closed retrofit kits).
 
@@ -289,6 +292,7 @@ Every integration is an optional, FOSS extra (`pip install "loam-lang[all]"`); t
 | `loam/runtime/` | Controller over MQTT, simulated world, machines (optionally PyBullet physics) and probe |
 | `loam/runtime/bridge.py`, `mavlink.py`, `vda5050.py`, `opera.py` | Real vehicles as Loam machines: one safety loop, three protocols |
 | `loam/runtime/blade.py` | A blade held to the next-pass surface by the bridge, for a machine with nobody aboard |
+| `loam/runtime/gradebox.py`, `loam/aog.py` | `loam blade`: the grade box, its valve calibration, and the AgOpenGPS family's message formats |
 | `loam/conform.py` | `loam conform`: the eight checks a machine must pass to be driven by Loam |
 | `loam/sensors.py` | `loam sense`: people from Frigate (placed on the ground by calibrated cameras), rain from rtl_433, as Wire messages |
 | `loam/tags.py` | People located by phone, Wi-Fi and tracker; matching them with what lidar and cameras see; the Wi-Fi model learnt on site |
@@ -300,13 +304,13 @@ Every integration is an optional, FOSS extra (`pip install "loam-lang[all]"`); t
 | `loam/monitor.py`, `loam/monitor.html` | Live dashboard and replay pages |
 | `loam/target.py`, `loam/export.py` | Next-pass surface; LandXML (Cat Grade 3D), OpenGrade3D `.agd`, AgOpenGPS field folder with AB lines and curve tracks |
 | `examples/` | Example program and surfaces, comparison plot, Monte Carlo study |
-| `tests/` | 279 tests: language, I/O, simulator invariants, field adapters, planner, field levelling from rasters and boundary files, passes along a line and the swale designer, controller loopback, a full multi-process MQTT run with faults in which every message is validated against the schema, reconnects and restarts, vehicle bridges (ArduPilot SITL and a fake ArduPilot, VDA 5050, RTKLIB, OPERA on Nav2 and ros2_control, ArduPilot fences and failsafe, Nav2's Collision Monitor), e-stop and SIGTERM safety, a TLS broker with access rules (also on a system-installed Mosquitto), site sensors (a stand-in Frigate, rtl_433 on recorded gauges), people located by phone and matched with cameras and scans (3,000 random sites), a blade held by the bridge and the conformance check (both against a fake ArduPilot), Chrono soil, integrations (PDAL cross-check included), parser fuzzing; every test also fails on a leaked thread, process or file |
+| `tests/` | 299 tests: language, I/O, simulator invariants, field adapters, planner, field levelling from rasters and boundary files, passes along a line and the swale designer, controller loopback, a full multi-process MQTT run with faults in which every message is validated against the schema, reconnects and restarts, vehicle bridges (ArduPilot SITL and a fake ArduPilot, VDA 5050, RTKLIB, OPERA on Nav2 and ros2_control, ArduPilot fences and failsafe, Nav2's Collision Monitor), e-stop and SIGTERM safety, a TLS broker with access rules (also on a system-installed Mosquitto), site sensors (a stand-in Frigate, rtl_433 on recorded gauges), people located by phone and matched with cameras and scans (3,000 random sites), a blade held by the bridge and the conformance check (both against a fake ArduPilot), the grade box and its valve calibration against stand-ins for both OpenGrade valve boards on real serial and UDP ports, Chrono soil, integrations (PDAL cross-check included), parser fuzzing; every test also fails on a leaked thread, process or file |
 
 ## Development
 
 ```bash
 pip install -e ".[dev]"
-pytest -q --cov=loam          # 279 tests, about 8 min; the MQTT tests need mosquitto
+pytest -q --cov=loam          # 299 tests, about 8 min; the MQTT tests need mosquitto
 python tools/site_soak.py out/ --speed 60     # a whole simulated site, watched; about 4 min
 ruff check loam tests examples
 mypy loam

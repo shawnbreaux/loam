@@ -3,6 +3,39 @@
 All notable changes are recorded here. The project follows [Semantic Versioning](https://semver.org/);
 before 1.0 any minor release may change the language.
 
+## [Unreleased]
+
+Added
+- **`loam blade`: a grade box that works alone, beside AgOpenGPS.** It reads an RTK antenna on the blade,
+  works out how far the cutting edge is above the surface the next pass should leave, and sends that to an
+  OpenGrade valve board: the Nano board on USB or OpenGrade3D's Teensy board on the network. No controller,
+  broker or survey is needed: the ground is followed from the blade's own cuts, one `max_cut` a pass, down to
+  the design. Without an RTK-fixed position the blade is lifted and left alone. `--with-agopengps` grades
+  only while AgOpenGPS says it is steering.
+- **Valves tuned by measurement.** `loam blade --calibrate` pulses the valve with the blade in the air,
+  measures where it starts to move, its speed, its delay and the antenna's noise, and sets the board's eight
+  numbers from them. It recognises an open-and-shut valve, swapped coils, a work switch left off, and a valve
+  too quick for the board.
+- **Tilt.** A second valve board on the tilt cylinder (`--tilt-valve`) lays the edge on the cross slope of the
+  wanted surface, which the sides of a swale need.
+- **The AgOpenGPS family's messages** (`loam/aog.py`): the network frame, what AgOpenGPS says while it steers,
+  the `$PANDA` and `$PAOGI` position sentences, and both OpenGrade valve boards. `loam nmea` reads `$PANDA` and
+  `$PAOGI`, uses the heading they carry, and listens on UDP (`udp://:9999`). Positions arriving on one port
+  from two senders (a tractor's GPS board and a blade's) are refused until the one to hear is named
+  (`udp://SENDER:PORT`), never mixed.
+- New optional extra `serial` (pyserial, BSD-3-Clause), for a valve board or receiver on a serial port.
+
+Fixed
+- **Loam Wire schema: the `gnss` object of a state.** The specification allowed it and `loam nmea` sent it,
+  but the published JSON Schema refused it. The schema now defines it. A value the receiver left empty is
+  sent as `null`; it was `NaN`, which is not JSON.
+- **A blade left one microsecond short of raised.** `loam mavlink --blade-servo` does not send a step smaller
+  than two microseconds, and that included the last step to the top of the stroke. The step that reaches an
+  end of the stroke is now always sent.
+
+Not yet tested on hardware: `loam blade` has run only against stand-ins for the boards, a simulated valve and
+cylinder, and a simulated antenna.
+
 ## [0.0.10] - 2026-11-27
 
 Added

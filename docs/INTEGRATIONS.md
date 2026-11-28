@@ -16,6 +16,8 @@ never links them.
 | VDA 5050 3.0 robots | `loam vda5050`: a robot is a Loam machine | `.[run]` | paho EPL-2.0/BSD-3 | official VDA 5050 3.0 JSON schemas |
 | openTCS | A VDA 5050 fleet control; see below | — | MIT | — |
 | RTKLIB / RTKBase | `loam nmea tcp://host:port` → Wire states, `--broker` to publish | `.[run]` | BSD-2 (RTKLIB) | RTKLIB `str2str` relay |
+| OpenGrade valve boards (Nano, Teensy) | `loam blade`: a grade box beside AgOpenGPS; lift and tilt; tunes the board by measuring the valve | `.[serial]` for the Nano | pyserial BSD-3 (firmware GPL-3.0, messages only) | a stand-in for each board from its published firmware, on a real serial port and real UDP |
+| AgOpenGPS GPS boards, AgIO | `$PANDA`, `$PAOGI` in `loam nmea` and `loam blade`; `--with-agopengps` hears whether it is steering | core | Apache-2.0 (messages only) | bytes built by hand from the published layouts |
 | OpenDroneMap | `--ground <project folder>`: its DTM, else its LAZ with the ground filter | `.[raster,lidar]` | AGPL-3.0 (ODM, files only) | DTM layout |
 | LAZ (laspy, lazrs) | Compressed point clouds wherever LAS works | `.[lidar]` | BSD-2, MIT | laspy round trip |
 | Ground filter | `--ground-filter`: removes machines, people and brush from clouds | core | Apache-2.0 | synthetic terrain; PDAL's SMRF |
@@ -58,8 +60,9 @@ heartbeat and GNSS rules are therefore the same as for the simulated machines.
 - **Orders a vehicle can't run.** A refused mission, an order the robot never took, aborted navigation or a target out of reach is reported once as an `orderFailed` error, with the reason in `text`. The bridge holds the vehicle and drops the order. The controller withdraws the pass at once and gives that machine its next order a minute later. A failed order is never counted as done, and the vehicle is never sent back onto its previous mission.
 - **Completion.** A pass counts as done only when the vehicle has finished it.
 
-The bridges steer only. Blade height stays with the machine's own grade control,
-which takes the surfaces from `loam export`.
+The bridges steer. Blade height stays with the machine's own grade control, which takes the surfaces from
+`loam export`, except where Loam holds the blade itself: `loam mavlink --blade-servo` on a machine with nobody
+aboard, and `loam blade` beside AgOpenGPS.
 
 ### ArduPilot Rover
 
@@ -200,6 +203,38 @@ machine.
 `com3_msgs` (OPERA's vessel and swing actions) carries no licence. It is never shipped; the dump is used only
 where the machine already has it.
 
+### AgOpenGPS and its boards
+
+AgOpenGPS steers a tractor with a person aboard. Around it is a family of open boards that share a few simple
+message formats. Loam speaks those formats (`loam/aog.py`) and copies none of the family's code.
+
+- **`loam blade`** is a grade box of its own beside AgOpenGPS: it reads the blade's antenna, sends an OpenGrade
+  valve board how far the cutting edge is from the next-pass surface, and can tune the board by measuring the
+  valve. With `--with-agopengps` it grades only while AgOpenGPS says it is steering. See
+  [FIELD.md](FIELD.md#a-grade-box-beside-agopengps-loam-blade).
+- **`loam nmea udp://:9999`** makes a machine's state from a GPS board's `$PANDA` or `$PAOGI` sentences, with
+  the heading the sentence carries.
+- **`loam export --to agopengps`** and **`--to agd`** write the field folder and the design grid.
+
+What was read, and when (November 2026):
+
+| Source | Revision | Licence | What Loam took from it |
+| --- | --- | --- | --- |
+| AgOpenGPS (`agopengps-official/AgOpenGPS`) | 6b609b1 | Apache-2.0 | The frame (`0x80 0x81 source pgn length data crc`), ports 8888 and 9999, steer data (0xFE), steer reply (0xFD), guidance context (0xF4), `$PANDA` and `$PAOGI` |
+| OpenGrade3D (`Pat-I/OpenGrade3D`) | 48cbd89 | GPL-3.0 | The messages of its Nano valve board (serial) and its Teensy valve board (network), and what each setting does |
+| AgOpenGPS Boards (`AgOpenGPS-Official/Boards`) | c8a3da7 | GPL-3.0 | The steer and machine boards' messages and watchdogs |
+| AOG_RC (`SK21/AOG_RC`) | 40c741f | GPL-3.0 | Read to see what else is on the network; nothing used |
+| AOG-Machine (`m-elias/AOG-Machine`) | e69ad2a | no licence file | The same; nothing used |
+
+Message layouts are facts about an interface, and Loam's reader and writer for them are its own, under
+Apache-2.0. The GPL firmware's control arithmetic is not ported: Loam sends the board an error and lets the
+board's firmware act on it, and the tests use a stand-in written from the published behaviour.
+
+**What Loam does not do here.** It does not write to a steer board or a machine board: each obeys whoever
+writes to it, and while AgOpenGPS runs that is AgOpenGPS. It does not replace AgIO. Rate and section control
+(AOG_RC) are outside earthmoving. Two Teensy valve boards cannot share a network, because the firmware gives
+every one the same address. Nothing here has been run on hardware, or on Windows.
+
 ## Soil physics (Project Chrono)
 
 ```
@@ -289,7 +324,10 @@ in a folder, once the file has stopped changing (`--settle`, 2 s by default), st
 ## Positioning
 
 `loam nmea` reads GGA from a file, from stdin, or from `tcp://host:port`. RTKLIB's
-`str2str` and `rtkrcv`, RTKBase and most receivers serve that. With
+`str2str` and `rtkrcv`, RTKBase and most receivers serve that. It also reads the
+`$PANDA` and `$PAOGI` sentences of AgOpenGPS GPS boards, which broadcast them to UDP
+port 9999 (`udp://:9999`, or `udp://SENDER:9999` when two boards share the network:
+sentences from two senders are refused, not mixed). With
 `--broker`, it publishes Wire states straight to MQTT. Anything other than an
 RTK fixed solution is reported as `degraded`, so the controller holds the
 machine.
@@ -387,4 +425,4 @@ permissive schema, so a message that breaks the Wire schema is still recorded.
   already cuts each task into blade-wide strips over its window, so a second planner would add a C++ dependency
   and nothing else. Worth another look for headland turns.
 - **AgIsoStack++** (MIT). An ISOBUS stack in C++. It would matter for commanding implements behind a tractor;
-  the tractor route goes through AgOpenGPS and OpenGrade3D, which Loam feeds by file.
+  the tractor route goes through AgOpenGPS and OpenGrade3D, which Loam feeds by file, and through `loam blade`.

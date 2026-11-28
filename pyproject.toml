@@ -29,9 +29,10 @@ ifc = ["ifcopenshell>=0.8"]                               # LGPL-3.0-or-later, u
 mavlink = ["pymavlink>=2.4", "paho-mqtt>=2.0"]            # LGPL-3.0, used unmodified
 mcap = ["mcap>=1.1"]                                      # MIT
 shp = ["pyshp>=2.3"]                                      # MIT
-all = ["loam-lang[run,physics,crs,lidar,raster,ifc,mavlink,mcap,shp]"]
+serial = ["pyserial>=3.5"]                                # BSD-3-Clause
+all = ["loam-lang[run,physics,crs,lidar,raster,ifc,mavlink,mcap,shp,serial]"]
 test = ["pytest>=7", "pytest-cov>=4", "coverage>=7.10", "hypothesis>=6", "jsonschema>=4", "paho-mqtt>=2.0",
-        "prometheus-client>=0.20", "mcap>=1.1"]
+        "prometheus-client>=0.20", "mcap>=1.1", "pyserial>=3.5"]
 dev = ["loam-lang[test,plot]", "ruff>=0.6", "mypy>=1.10"]
 
 [project.scripts]

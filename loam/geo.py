@@ -93,6 +93,12 @@ class Frame:
         e, n = np.asarray(e, float), np.asarray(n, float)
         return (e * math.cos(t) - n * math.sin(t)) / self.unit_m, (e * math.sin(t) + n * math.cos(t)) / self.unit_m
 
+    def heading_of(self, bearing_deg: float) -> float:
+        """The direction, in radians counter-clockwise from the site +x axis, of a compass bearing in degrees."""
+        b = math.radians(bearing_deg)
+        dx, dy = self.en_to_local(math.sin(b), math.cos(b))
+        return math.atan2(float(dy), float(dx))
+
     def heading_rad(self, dx: float, dy: float) -> float:
         """Bearing in radians (0 = north, clockwise, in [0, 2π)) of a site-axis direction."""
         e, n = self.local_to_en(dx, dy)

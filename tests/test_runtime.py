@@ -499,7 +499,9 @@ def test_site_over_mqtt_with_faults(tmp_path):
     port = _free_port()
     broker = subprocess.Popen([shutil.which("mosquitto") or "/usr/sbin/mosquitto", "-p", str(port)],
                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    faults = {"person": [{"from": 20, "to": 23, "near": "dz1", "distance_m": 9.0}], "probe_outage": [],
+    # The person stays six site minutes: at 300 times real speed that is 1.2 s, long enough that a busy computer
+    # cannot step over the whole visit between two looks (three minutes, 0.6 s, was once missed).
+    faults = {"person": [{"from": 20, "to": 26, "near": "dz1", "distance_m": 9.0}], "probe_outage": [],
               "rain": [], "gnss_float": [{"machine": "dz2", "from": 30, "to": 36}],
               "link_loss": [{"machine": "dz1", "at": 50, "wall_s": 2.0}],
               "estop": [{"at": 70, "for_min": 2, "resume_after_min": 1}],

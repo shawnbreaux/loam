@@ -169,23 +169,63 @@ def parse_gga(line: str) -> dict | None:
             "age": float(f[13]) if len(f) > 13 and f[13] else None}
 
 
+def udp_lines(port: int, idle_s: float | None = None, only: str | None = None) -> Iterator[str]:
+    """Text lines from the datagrams arriving on a UDP port. GPS boards of the AgOpenGPS family send their
+    sentences this way, to port 9999 of their whole subnet. Ends after `idle_s` seconds of silence, if given.
+
+    `only` names the one sender to hear. Without it anyone is heard, until sentences have come from two
+    addresses: two receivers read as one would put a machine in two places, so that is an error.
+    """
+    import socket
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    senders: set[str] = set()
+    try:
+        only = socket.gethostbyname(only) if only else None
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind(("", port))
+        sock.settimeout(idle_s)
+        while True:
+            try:
+                data, sender = sock.recvfrom(4096)
+            except TimeoutError:
+                return
+            if only is not None and sender[0] != only:
+                continue
+            if data.startswith(b"$"):
+                senders.add(sender[0])
+            if len(senders) > 1:
+                raise ValueError(f"sentences are arriving on UDP port {port} from {' and '.join(sorted(senders))}: "
+                                 f"say which to hear (udp://ADDRESS:{port})")
+            yield from data.decode("ascii", "replace").splitlines()
+    finally:
+        sock.close()
+
+
 def nmea_states(lines: Iterable[str], frame: Frame, site: str, machine: str,
                 allow_float: bool = False, min_move: float = 0.05) -> Iterator[dict]:
-    """Turn a GGA stream into Loam Wire `state` messages.
+    """Turn a stream of position sentences into Loam Wire `state` messages: GGA from any receiver, or the
+    `$PANDA` and `$PAOGI` sentences of the AgOpenGPS family's GPS boards.
 
-    Heading (radians, counter-clockwise from the site +x axis) comes from
+    Heading (radians, counter-clockwise from the site +x axis) is the one a `$PANDA` or `$PAOGI` sentence
+    carries, which is good at a standstill too. From GGA alone it comes from
     successive fixes once the antenna has moved `min_move` metres. Anything but
     an RTK fixed solution (RTK float too, unless `allow_float`) is reported with
     safetyState "degraded" and an error, so the controller holds the machine
     rather than trusting the position.
     """
+    from .aog import position
     seq, heading, last = 0, 0.0, None
     for line in lines:
         g = parse_gga(line)
+        if g is None and (fix := position(line)) is not None:
+            g = {"lat": fix.lat, "lon": fix.lon, "alt": fix.alt, "quality": fix.quality, "age": fix.age,
+                 "fix": FIX_QUALITY.get(fix.quality, str(fix.quality)), "heading": fix.heading}
         if g is None:
             continue
         x, y = (float(v) for v in frame.wgs84_to_local(g["lat"], g["lon"]))
-        if last is not None and math.hypot(x - last[0], y - last[1]) * frame.unit_m >= min_move:
+        if g.get("heading") is not None:
+            heading = frame.heading_of(g["heading"])
+        elif last is not None and math.hypot(x - last[0], y - last[1]) * frame.unit_m >= min_move:
             heading = math.atan2(y - last[1], x - last[0])
             last = (x, y)
         elif last is None:
@@ -196,7 +236,9 @@ def nmea_states(lines: Iterable[str], frame: Frame, site: str, machine: str,
                          safety="ok" if ok else "degraded",
                          errors=[] if ok else [wire.error("gnssQuality", g["fix"], "warning")])
         msg["pose"]["z"] = round(float(frame.height_to_local(g["alt"])), 4)
-        msg["gnss"] = {"fix": g["fix"], "sats": g["sats"], "hdop": g["hdop"], "age": g["age"]}
+        hdop = g.get("hdop")                        # absent from the sentence: null, since JSON has no NaN
+        msg["gnss"] = {"fix": g["fix"], "sats": g.get("sats"), "age": g["age"],
+                       "hdop": hdop if hdop is not None and math.isfinite(hdop) else None}
         yield msg
 
 
